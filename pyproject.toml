@@ -1,13 +1,13 @@
 [project]
     authors         = [{ name = "Nathaniel Landau", email = "github@natenate.org" }]
     dependencies    = ["questionary>=2.1.0", "rich>=14.0.0", "sh>=2.2.2"]
-    description     = "Small utility functions and syntactic sugar for building packages and scripts, written and maintained for my own personal use."
+    description     = "Collection of convenience functions used in Python packages and scripts."
     license         = "MIT"
     license-files   = ["LICENSE"]
     name            = "nclutils"
     readme          = "README.md"
     requires-python = ">=3.11"
-    version         = "0.0.1"
+    version         = "0.1.0"
 
 [build-system]
     build-backend = "hatchling.build"
@@ -34,9 +34,9 @@
     ]
 
 [tool.commitizen]
-    bump_message               = "bump(release): v$current_version → v$new_version"
+    bump_message               = "bump(release): v${current_version} → v${new_version}"
     changelog_merge_prerelease = true
-    tag_format                 = "v$version"
+    tag_format                 = "v${version}"
     update_changelog_on_bump   = true
     version_provider           = "pep621"
 

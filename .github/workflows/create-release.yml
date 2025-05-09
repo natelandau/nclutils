@@ -21,7 +21,7 @@ jobs:
         strategy:
             fail-fast: true
             matrix:
-                python-version: ["3.11"]
+                python-version: ["3.12"]
         steps:
             - name: Checkout repository
               uses: actions/checkout@v4
@@ -62,7 +62,7 @@ jobs:
 
             - name: Build the package
               shell: bash
-              run: uvx --from build pyproject-build --installer uv
+              run: uv build
 
             # ----------------------------------------------
             # Generate release notes
@@ -101,7 +101,7 @@ jobs:
             TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
         strategy:
             matrix:
-                python-version: ["3.11"]
+                python-version: ["3.12"]
         steps:
             - name: Checkout repository
               uses: actions/checkout@v4
@@ -111,7 +111,7 @@ jobs:
 
             - name: Build the package
               shell: bash
-              run: uvx --from build pyproject-build --installer uv
+              run: uv build
 
             - name: Upload to PyPi
               shell: bash
