@@ -1,6 +1,6 @@
 # nclutils
 
-Small utility functions and syntactic sugar for building packages and scripts, written and maintained for my own personal use.
+Small Python utility functions and syntactic sugar for creating packages and scripts, written and maintained for my own personal use.
 
 ## Features
 
@@ -16,6 +16,14 @@ Small utility functions and syntactic sugar for building packages and scripts, w
 -   Python 3.10 or higher
 -   Dependencies are managed with [uv](https://github.com/astral-sh/uv)
 
+### Dependencies
+
+nclutils has a few dependencies that are included in the project.
+
+-   [questionary](https://github.com/tmbo/questionary) - For asking questions
+-   [rich](https://github.com/Textualize/rich) - For pretty printing
+-   [sh](https://github.com/amoffat/sh) - For running shell commands
+
 ## Installation
 
 Install using `uv`:
@@ -25,6 +33,60 @@ uv add git+https://github.com/natelandau/nclutils.git
 ```
 
 ## Usage
+
+### Filesystem Utilities
+
+-   **`backup_path(path: Path, raise_on_missing: bool = False, with_progress: bool = False, transient: bool = True) -> Path | None`**
+
+    Create a backup of a file or directory. Silently returns `None` if the source path does not exist by default.
+
+-   **`copy_directory(src: Path, dst: Path, with_progress: bool = False, transient: bool = True, keep_backup: bool = True) -> Path`**
+
+    Copy a directory with an optional progress bar for each file. If the destination directory already exists, it will be backed up with a timestamped suffix.
+
+-   **`copy_file(src: Path, dst: Path, with_progress: bool = False, transient: bool = True, keep_backup: bool = True) -> Path`**
+
+    Copy a file with a progress bar. If the destination file already exists, it will be backed up with a timestamped suffix.
+
+    Raises `FileNotFoundError` if the source file does not exist or is not a file.
+
+-   **`directory_tree(directory: Path, show_hidden: bool = False) -> Tree`**
+
+    Build a [rich.tree](https://rich.readthedocs.io/en/stable/tree.html) representation of a directory's contents.
+
+-   **`find_files(path: Path, globs: list[str] | None = None, ignore_dotfiles: bool = False) -> list[Path]`**
+
+    Search for files within a directory optionally matching specific glob patterns.
+
+-   **`find_subdirectories(directory: Path, depth: int = 1, filter_regex: str = "", ignore_dotfiles: bool = False, leaf_dirs_only: bool = False) -> list[Path]`**
+
+    Find and filter subdirectories with granular control:
+
+    ```python
+    from pathlib import Path
+    from nclutils import find_subdirectories
+
+    root_directory = Path(".")
+
+    # Find subdirectories with specific criteria
+    subdirs = find_subdirectories(
+        root_directory,
+        depth=2, # How deep to search
+        filter_regex=r"^a", # Only dirs starting with 'a'
+        leaf_dirs_only=True, # Furthest down directories only
+        ignore_dotfiles=True # Skip hidden directories
+    )
+    ```
+
+-   **`find_user_home_dir(username: str | None = None) -> Path | None`**
+
+    Find the home directory for a requested user or the current user if no user is requested. When running under sudo, the home directory for the sudo user is returned.
+
+### Network
+
+-   **`network_available(address: str = "8.8.4.4", port: int = 53, timeout: int = 5) -> bool`**
+
+    Check if a network connection is available.
 
 ### Pretty Printing
 
@@ -116,6 +178,84 @@ cli_args_as_dict = {
 print_debug(custom=[config_as_dict, cli_args_as_dict], envar_prefix="NCLUTILS_", packages=["nclutils"])
 ```
 
+### Pytest Fixtures
+
+The `nclutils.pytest_fixtures` module contains convenience functions and fixtures that are useful for testing.
+
+For use in your tests, import these into your `conftest.py` file:
+
+```python
+# tests/conftest.py
+
+# import specific fixtures
+from nclutils.pytest_fixtures import clean_stdout, debug
+
+# or import all fixtures
+from nclutils.pytest_fixtures import *
+```
+
+-   **`clean_stdout`**
+
+    Clean the stdout of the console output by creating a wrapper around `capsys` to capture console output.
+
+    ```python
+    def test_something(clean_stdout):
+        print("Hello, world!")
+        output = clean_stdout()
+        assert output == "Hello, world!"
+    ```
+
+-   **`debug`**
+
+    Prints debug information to the console. Useful for writing and debugging tests.
+
+    ```python
+    def test_something(debug):
+        something = some_complicated_function()
+
+        debug(something)
+
+        assert something == expected
+    ```
+
+-   **`pytest_assertrepr_compare`**
+
+    Patches the default pytest behavior of hiding whitespace differences in assertion failure messages. Replaces spaces and tabs with `[space]` and `[tab]` markers.
+
+### Questions
+
+-   **`choose_one_from_list(choices: list[T] | list[tuple[str, T]] | list[dict[str, T]], message: str) -> T | None`**
+
+    Choose one item from a list of items:
+
+    ```python
+    from nclutils import choose_one_from_list
+
+    choices = ["test", "test2", "test3"]
+    result = choose_one_from_list(choices, "Choose a string")
+    ```
+
+    To use objects, send a list of tuples as choices. The first element of the tuple is the display title, the second element is the object to return.
+
+    ```python
+    from nclutils import choose_from_list
+
+    @dataclass
+    class Something:
+        name: str
+        number: int
+
+    choices = [
+        ("test1", Something(name="test1", number=1)),
+        ("test2", Something(name="test2", number=2)),
+    ]
+    result = choose_from_list(choices, "Choose one")
+    ```
+
+-   **`choose_multiple_from_list(choices: list[T] | list[tuple[str, T]] | list[dict[str, T]], message: str) -> list[T] | None`**
+
+    Choose multiple items from a list of items.
+
 ### Shell Commands
 
 -   **`run_command(cmd: str, args: list[str] = [], quiet: bool = False, pushd: str | Path | None = None, okay_codes: list[int] | None = None, exclude_regex: str | None = None, sudo: bool = False) -> str`**
@@ -196,124 +336,7 @@ if result:
     print(result)
 ```
 
-### Filesystem Utilities
-
--   **`backup_path(path: Path, raise_on_missing: bool = False, with_progress: bool = False, transient: bool = True) -> Path | None`**
-
-    Create a backup of a file or directory. Silently returns `None` if the source path does not exist by default.
-
--   **`copy_directory(src: Path, dst: Path, with_progress: bool = False, transient: bool = True, keep_backup: bool = True) -> Path`**
-
-    Copy a directory with an optional progress bar for each file. If the destination directory already exists, it will be backed up with a timestamped suffix.
-
--   **`copy_file(src: Path, dst: Path, with_progress: bool = False, transient: bool = True, keep_backup: bool = True) -> Path`**
-
-    Copy a file with a progress bar. If the destination file already exists, it will be backed up with a timestamped suffix.
-
-    Raises `FileNotFoundError` if the source file does not exist or is not a file.
-
--   **`directory_tree(directory: Path, show_hidden: bool = False) -> Tree`**
-
-    Build a [rich.tree](https://rich.readthedocs.io/en/stable/tree.html) representation of a directory's contents.
-
--   **`find_files(path: Path, globs: list[str] | None = None, ignore_dotfiles: bool = False) -> list[Path]`**
-
-    Search for files within a directory optionally matching specific glob patterns.
-
--   **`find_subdirectories(directory: Path, depth: int = 1, filter_regex: str = "", ignore_dotfiles: bool = False, leaf_dirs_only: bool = False) -> list[Path]`**
-
-    Find and filter subdirectories with granular control:
-
-    ```python
-    from pathlib import Path
-    from nclutils import find_subdirectories
-
-    root_directory = Path(".")
-
-    # Find subdirectories with specific criteria
-    subdirs = find_subdirectories(
-        root_directory,
-        depth=2, # How deep to search
-        filter_regex=r"^a", # Only dirs starting with 'a'
-        leaf_dirs_only=True, # Furthest down directories only
-        ignore_dotfiles=True # Skip hidden directories
-    )
-    ```
-
--   **`find_user_home_dir(username: str | None = None) -> Path | None`**
-
-    Find the home directory for a requested user or the current user if no user is requested. When running under sudo, the home directory for the sudo user is returned.
-
-### Questions
-
--   **`choose_one_from_list(choices: list[T] | list[tuple[str, T]] | list[dict[str, T]], message: str) -> T | None`**
-
-    Choose one item from a list of items:
-
-    ```python
-    from nclutils import choose_one_from_list
-
-    choices = ["test", "test2", "test3"]
-    result = choose_one_from_list(choices, "Choose a string")
-    ```
-
-    To use objects, send a list of tuples as choices. The first element of the tuple is the display title, the second element is the object to return.
-
-    ```python
-    from nclutils import choose_from_list
-
-    @dataclass
-    class Something:
-        name: str
-        number: int
-
-    choices = [
-        ("test1", Something(name="test1", number=1)),
-        ("test2", Something(name="test2", number=2)),
-    ]
-    result = choose_from_list(choices, "Choose one")
-    ```
-
--   **`choose_multiple_from_list(choices: list[T] | list[tuple[str, T]] | list[dict[str, T]], message: str) -> list[T] | None`**
-
-    Choose multiple items from a list of items.
-
-### Network
-
--   **`network_available(address: str = "8.8.4.4", port: int = 53, timeout: int = 5) -> bool`**
-
-    Check if a network connection is available.
-
-### Utils
-
--   **`check_python_version(major: int, minor: int) -> bool`**
-
-    Check if the current Python version meets minimum requirements.
-
--   **`unique_id(prefix: str = "") -> str`**
-
-    Generate a unique ID with an optional prefix.
-
-    ```python
-    from nclutils import unique_id
-
-    print(unique_id())
-    # 1
-    print(unique_id("id_"))
-    # id_2
-    print(unique_id())
-    # 3
-    ```
-
 ### Strings
-
--   **`iso_timestamp(microseconds: bool = False) -> str`**
-
-    Returns an ISO 8601 timestamp in UTC for the current time. (`2024-03-15T12:34:56Z`)
-
--   **`format_iso_timestamp(datetime_obj: datetime, microseconds: bool = True) -> str`**
-
-    Formats a given datetime object as an ISO 8601 timestamp, ensuring UTC formatting with a trailing Z.
 
 -   **`camel_case(text: str) -> str`**
 
@@ -343,14 +366,6 @@ if result:
     print(list_words("fred, barney, & pebbles", "[^, ]+"))
     # ['fred', 'barney', '&', 'pebbles']
     ```
-
--   **`new_uid(bits: int = 64) -> str`**
-
-    Generate a unique ID with the specified number of bits. (`kgk5mzn`)
-
--   **`new_timestamped_uid(bits: int = 32) -> str`**
-
-    Generate a unique ID with an ISO 8601 timestamp prefix. (`0240315T123456Z-7890120000-kgk5mzn`)
 
 -   **`random_string(length: int) -> str`**
 
@@ -382,6 +397,45 @@ if result:
 
 -   **`strip_ansi(text: str) -> str`**
 
-        Strip ANSI escape sequences from a string. (`\x1b[31mHello, World!\x1b[0m -> Hello, World!`)
+    Strip ANSI escape sequences from a string. (`\x1b[31mHello, World!\x1b[0m -> Hello, World!`)
 
-    w
+### Utils
+
+-   **`check_python_version(major: int, minor: int) -> bool`**
+
+    Check if the current Python version meets minimum requirements.
+
+-   **`format_iso_timestamp(datetime_obj: datetime, microseconds: bool = True) -> str`**
+
+    Formats a given datetime object as an ISO 8601 timestamp, ensuring UTC formatting with a trailing Z.
+
+-   **`iso_timestamp(microseconds: bool = False) -> str`**
+
+    Returns an ISO 8601 timestamp in UTC for the current time. (`2024-03-15T12:34:56Z`)
+
+-   **`new_timestamp_uid(bits: int = 32) -> str`**
+
+    Generate a unique ID with an ISO 8601 timestamp prefix. (`0240315T123456Z-789012-kgk5mzn`)
+
+-   **`new_uid(bits: int = 64) -> str`**
+
+    Generate a unique ID with the specified number of bits. (`kgk5mzn`)
+
+-   **`unique_id(prefix: str = "") -> str`**
+
+    Generate consecutive unique IDs with an optional prefix.
+
+    ```python
+    from nclutils import unique_id
+
+    print(unique_id())
+    # 1
+    print(unique_id("id_"))
+    # id_2
+    print(unique_id())
+    # 3
+    ```
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for more information.

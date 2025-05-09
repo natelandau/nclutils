@@ -16,12 +16,8 @@ from .sh import ShellCommandFailedError, ShellCommandNotFoundError, run_command,
 from .strings import (
     camel_case,
     deburr,
-    format_iso_timestamp,
-    iso_timestamp,
     kebab_case,
     list_words,
-    new_timestamped_uid,
-    new_uid,
     pad,
     pad_end,
     pad_start,
@@ -31,7 +27,14 @@ from .strings import (
     snake_case,
     strip_ansi,
 )
-from .utils import check_python_version, unique_id
+from .utils import (
+    check_python_version,
+    format_iso_timestamp,
+    iso_timestamp,
+    new_timestamp_uid,
+    new_uid,
+    unique_id,
+)
 
 __all__ = [
     "PrintStyle",
@@ -55,7 +58,7 @@ __all__ = [
     "kebab_case",
     "list_words",
     "network_available",
-    "new_timestamped_uid",
+    "new_timestamp_uid",
     "new_uid",
     "pad",
     "pad_end",
