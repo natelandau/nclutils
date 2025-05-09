@@ -1,6 +1,6 @@
 # nclutils
 
-Small Python utility functions and syntactic sugar for creating packages and scripts, written and maintained for my own personal use.
+Python collection of convenience functions used in Python packages and scripts. These are written and maintained for my own personal use. Comprehensive tests are included but I make no guarantees about the quality or correctness of the code.
 
 ## Features
 
@@ -90,13 +90,11 @@ uv add git+https://github.com/natelandau/nclutils.git
 
 ### Pretty Printing
 
-The pretty printing module provides styled console output with configurable log levels and custom styles.
+The pretty printing module provides styled console output with configurable log levels and custom styles. See the [pretty_print docs](docs/pretty_print.md) for more information.
 
 -   **`PrettyPrinter(Class)`**
 
     Styled console output with configurable levels and custom styles.
-
-    See [pretty_print.md](docs/pretty_print.md) for more information.
 
 -   **`print_debug(envar_prefix: str = None, custom: list[dict] = None, packages: list[str] = None, all_packages: bool = False) -> None`**
 
@@ -104,7 +102,7 @@ The pretty printing module provides styled console output with configurable log 
 
 ### Pytest Fixtures
 
-The `nclutils.pytest_fixtures` module contains convenience functions and fixtures that are useful for testing. See [pytest_fixtures.md](docs/pytest_fixtures.md) for more information.
+The `nclutils.pytest_fixtures` module contains convenience functions and fixtures that are useful for testing. See the [pytest_fixtures docs](docs/pytest_fixtures.md) for more information.
 
 -   **`clean_stdout`** Clean the stdout of the console output by creating a wrapper around `capsys` to capture console output.
 -   **`debug`** Prints debug information to the console. Useful for writing and debugging tests.
@@ -114,7 +112,7 @@ The `nclutils.pytest_fixtures` module contains convenience functions and fixture
 
 Convenience functions for working with the [questionary](https://github.com/tmbo/questionary) library.
 
-See [questions.md](docs/questions.md) for more information.
+See the [questions docs](docs/questions.md) for more information.
 
 -   **`choose_one_from_list(choices: list[T] | list[tuple[str, T]] | list[dict[str, T]], message: str) -> T | None`**
 
@@ -126,7 +124,7 @@ See [questions.md](docs/questions.md) for more information.
 
 ### Shell Commands
 
-Convenience functions built on top of the [sh](https://github.com/amoffat/sh) module. See [shell_commands.md](docs/shell_commands.md) for more information.
+Convenience functions built on top of the [sh](https://github.com/amoffat/sh) module. See the [shell_commands docs](docs/shell_commands.md) for more information.
 
 -   **`run_command(cmd: str, args: list[str] = [], quiet: bool = False, pushd: str | Path | None = None, okay_codes: list[int] | None = None, exclude_regex: str | None = None, sudo: bool = False) -> str`**
 
@@ -152,7 +150,7 @@ Convenience functions built on top of the [sh](https://github.com/amoffat/sh) mo
 
 -   **`list_words(text: str, pattern: str = "", strip_apostrophes: bool = False) -> list[str]`**
 
-    Split a string into a list of words.
+    Extract words from text by splitting on word boundaries and handling contractions. Optionally use a custom regex pattern for more control over word splitting. Handles apostrophes, underscores, and mixed case text intelligently.
 
     ```python
     from nclutils import list_words
