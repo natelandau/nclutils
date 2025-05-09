@@ -14,8 +14,7 @@ from rich.tree import Tree
 
 from nclutils.pretty_print import pp
 from nclutils.sh import ShellCommandFailedError, run_command
-from nclutils.strings import new_timestamped_uid
-from nclutils.utils import check_python_version
+from nclutils.utils import check_python_version, new_timestamp_uid
 
 # how many bytes to read at once?
 # shutil.copy uses 1024 * 1024 if _WINDOWS else 64 * 1024
@@ -77,7 +76,7 @@ def backup_path(
         return None
 
     if not backup_suffix:
-        backup_suffix = "." + new_timestamped_uid() + ".bak"
+        backup_suffix = "." + new_timestamp_uid() + ".bak"
 
     backup_path = src.with_name(src.name + backup_suffix)
 

@@ -6,7 +6,7 @@
     license-files   = ["LICENSE"]
     name            = "nclutils"
     readme          = "README.md"
-    requires-python = ">=3.10"
+    requires-python = ">=3.11"
     version         = "0.0.1"
 
 [build-system]
