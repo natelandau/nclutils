@@ -150,14 +150,9 @@ A debug method is available to view all available styles.
 pp.all_styles()
 ```
 
-#### print_debug()
+### Print Debug Information
 
-Print debug information about the current environment. Takes two optional arguments:
-
--   `envar_prefix`: A prefix to filter environment variables. Only variables starting with this prefix will be included.
--   `custom`: A list of dictionaries containing custom debug data. Each dictionary represents a section with key-value pairs.
--   `packages`: A list of installed package names to check versions for.
--   `all_packages`: Whether to show all installed package names and versions.
+**`print_debug(envar_prefix: str | None = None, custom: list[dict[str, dict[str, str]] | dict[str, str]] | None = None, packages: list[str] | None = None, all_packages: bool = False) -> None`**
 
 ```python
 from nclutils import print_debug
@@ -262,79 +257,62 @@ from nclutils.pytest_fixtures import *
 
     Execute shell commands with proper error handling and output control.
 
-    Arguments:
+    ```python
+    from nclutils import run_command
 
-    -   `cmd`: str. The command to execute
-    -   `args`: list[str]. The command arguments
-    -   `quiet`: bool. Whether to suppress output to console (default: False)
-    -   `pushd`: str | Path. The directory to change to before running the command (default: None)
-    -   `okay_codes`: list[int]. A list of exit codes that are considered successful (default: None)
-    -   `exclude_regex`: str | None. A regex to exclude lines from the output (default: None)
-    -   `sudo`: bool. Whether to run the command with sudo (default: False)
+    # Execute a command and print the output to the console
+    run_command("ls", ["-la", "/some/path"])
 
-```python
-from nclutils import run_command
+    # Run quietly (suppress output to console)
+    output = run_command("git", ["status"], quiet=True)
+    ```
 
-# Execute a command and print the output to the console
-run_command("ls", ["-la", "/some/path"])
+    **Changing Directories**
 
-# Run quietly (suppress output to console)
-output = run_command("git", ["status"], quiet=True)
-```
+    The `run_command` function can change directories before running a command.
 
-##### Changing Directories
+    ```python
+    from nclutils import run_command
 
-The `run_command` function can change directories before running a command.
+    # Change to a temporary directory and then run the command
+    run_command("pwd", [], pushd=Path("/tmp"))
+    ```
 
-```python
-from nclutils import run_command
+    **Errors**
 
-# Change to a temporary directory and then run the command
-run_command("pwd", [], pushd=Path("/tmp"))
-```
+    The `run_command` function raises `ShellCommandFailedError` if the command fails and `ShellCommandNotFoundError` if the command is not found.
 
-##### Errors
+    ```python
+    from nclutils import ShellCommandFailedError, ShellCommandNotFoundError
 
-The `run_command` function raises `ShellCommandFailedError` if the command fails and `ShellCommandNotFoundError` if the command is not found.
+    try:
+        run_command("nonexistent", ["arg1"])
+    except ShellCommandNotFoundError as e:
+        print(e)
+    except ShellCommandFailedError as e:
+        print(e.exit_code)
+        print(e.stderr)
+        print(e.stdout)
+        print(e.full_cmd)
 
-```python
-from nclutils import ShellCommandFailedError, ShellCommandNotFoundError
+    # To mark exit codes as successful, pass a list of integers to the `okay_codes` parameter.
+    run_command("ls", ["-l", "/Users"], okay_codes=[0,1])
+    ```
 
-try:
-    run_command("nonexistent", ["arg1"])
-except ShellCommandNotFoundError as e:
-    print(e)
-except ShellCommandFailedError as e:
-    print(e.exit_code)
-    print(e.stderr)
-    print(e.stdout)
-    print(e.full_cmd)
+-   **`which(cmd: str) -> str | None`**
 
-# To mark exit codes as successful, pass a list of integers to the `okay_codes` parameter.
-run_command("ls", ["-l", "/Users"], okay_codes=[0,1])
-```
+    Check if a command exists in the PATH. Returns the absolute path to the command if found, otherwise None.
 
-`ShellCommandFailedError` has the following attributes:
+    ```python
+    from nclutils import which
 
--   `exit_code`: The exit code of the command
--   `stderr`: The stderr output of the command
--   `stdout`: The stdout output of the command
--   `full_cmd`: The full command that was run
+    # Check if a command exists in the PATH
+    result = which("ls")
 
-#### `which()`
-
-Check if a command exists in the PATH. Returns the absolute path to the command if found, otherwise None.
-
-```python
-from nclutils import which
-
-# Check if a command exists in the PATH
-result = which("ls")
-
-# If the command exists, print the path
-if result:
-    print(result)
-```
+    # If the command exists, print the path
+    if result:
+        print(result)
+    ```
 
 ### Strings
 
