@@ -1,3 +1,10 @@
+## v0.2.1 (2025-05-09)
+
+### Fix
+
+- **copy_path**: fix error overwriting directories
+- make split_camel_case importable
+
 ## v0.2.0 (2025-05-09)
 
 ### Feat
