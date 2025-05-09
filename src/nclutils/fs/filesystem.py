@@ -147,6 +147,11 @@ def copy_file(
 
     dst.parent.mkdir(parents=True, exist_ok=True)
 
+    if dst.is_symlink():
+        dst.unlink()
+    elif dst.is_dir():
+        shutil.rmtree(dst)
+
     # Copy file in chunks with progress bar to handle large files efficiently
     if with_progress:
         with Progress(transient=transient) as progress_bar:

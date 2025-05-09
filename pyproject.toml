@@ -107,7 +107,7 @@
 
     [tool.ruff.lint]
         ignore = [
-            "ANN204",  # missing return from special method
+            "ANN204",  # missing return type annotation for special method `__init__`
             "B006",    # mutable-argument-default
             "B008",    # function-call-in-default-argument
             "COM812",  # Trailing comma missing"
