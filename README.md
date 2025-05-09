@@ -1,6 +1,8 @@
+[![Tests](https://github.com/natelandau/nclutils/actions/workflows/test.yml/badge.svg)](https://github.com/natelandau/nclutils/actions/workflows/test.yml) [![codecov](https://codecov.io/gh/natelandau/nclutils/graph/badge.svg?token=Nl1V9jnI60)](https://codecov.io/gh/natelandau/nclutils)
+
 # nclutils
 
-Small Python utility functions and syntactic sugar for creating packages and scripts, written and maintained for my own personal use.
+Collection of convenience functions used in Python packages and scripts. These are written and maintained for my own personal use. Comprehensive tests are included but I make no guarantees about the quality or correctness of the code.
 
 ## Features
 
@@ -32,7 +34,7 @@ Install using `uv`:
 uv add git+https://github.com/natelandau/nclutils.git
 ```
 
-## Usage
+## Included Modules
 
 ### Filesystem Utilities
 
@@ -90,251 +92,49 @@ uv add git+https://github.com/natelandau/nclutils.git
 
 ### Pretty Printing
 
-The pretty printing module provides styled console output with configurable log levels and custom styles.
+The pretty printing module provides styled console output with configurable log levels and custom styles. See the [pretty_print docs](docs/pretty_print.md) for more information.
 
-```python
-from nclutils import pp, console
+-   **`PrettyPrinter(Class)`**
 
-#Configure logging levels
-pp.configure(debug=True, trace=True)
+    Styled console output with configurable levels and custom styles.
 
-# Basic message types
-pp.info("Hello, world!")
-pp.debug("This is a debug message")
-pp.trace("This is a trace message")
-pp.success("This is a success message")
-pp.warning("This is a warning message")
-pp.error("This is an error message")
-pp.critical("This is a critical message")
-pp.dryrun("This is a dry run message")
-pp.notice("This is a notice message")
-pp.secondary("This is a secondary message")
-pp.rule("This is a horizontal rule")
-console.print("This is a console message")
-console.log("This is a log message")
-```
+-   **`print_debug(envar_prefix: str = None, custom: list[dict] = None, packages: list[str] = None, all_packages: bool = False) -> None`**
 
-#### Confirming verbosity state
-
-The `pp` object has attributes `is_debug` and `is_trace` that can be used to check the current verbosity state.
-
-```python
-print(pp.is_debug)
-print(pp.is_trace)
-```
-
-#### Customizing Styles
-
-Create new styles or modify existing ones using the `PrintStyle` class:
-
-```python
-from nclutils import PrintStyle, pp
-
-# Create custom styles
-new_style = PrintStyle(name="new_style", prefix=":smile: ", suffix=" :rocket:")
-new_error = PrintStyle(name="error", style="bold green")
-
-# Apply custom styles
-pp.configure(styles=[new_style, new_error])
-
-# Use custom styles
-pp.new_style("I am new style")
-pp.error("This error message is now bold green")
-```
-
-#### View All Styles
-
-A debug method is available to view all available styles.
-
-```python
-pp.all_styles()
-```
-
-#### print_debug()
-
-Print debug information about the current environment. Takes two optional arguments:
-
--   `envar_prefix`: A prefix to filter environment variables. Only variables starting with this prefix will be included.
--   `custom`: A list of dictionaries containing custom debug data. Each dictionary represents a section with key-value pairs.
--   `packages`: A list of installed package names to check versions for.
--   `all_packages`: Whether to show all installed package names and versions.
-
-```python
-from nclutils import print_debug
-
-config_as_dict = {
-    "Configuration": {
-        "key": "value",
-        "key2": "value2",
-        "key3": "value3",
-    }
-}
-
-cli_args_as_dict = {
-    "somevar": "somevalue",
-    "anothervar": "anothervalue",
-}
-
-print_debug(custom=[config_as_dict, cli_args_as_dict], envar_prefix="NCLUTILS_", packages=["nclutils"])
-```
+    Print debug information about the current environment.
 
 ### Pytest Fixtures
 
-The `nclutils.pytest_fixtures` module contains convenience functions and fixtures that are useful for testing.
+The `nclutils.pytest_fixtures` module contains convenience functions and fixtures that are useful for testing. See the [pytest_fixtures docs](docs/pytest_fixtures.md) for more information.
 
-For use in your tests, import these into your `conftest.py` file:
-
-```python
-# tests/conftest.py
-
-# import specific fixtures
-from nclutils.pytest_fixtures import clean_stdout, debug
-
-# or import all fixtures
-from nclutils.pytest_fixtures import *
-```
-
--   **`clean_stdout`**
-
-    Clean the stdout of the console output by creating a wrapper around `capsys` to capture console output.
-
-    ```python
-    def test_something(clean_stdout):
-        print("Hello, world!")
-        output = clean_stdout()
-        assert output == "Hello, world!"
-    ```
-
--   **`debug`**
-
-    Prints debug information to the console. Useful for writing and debugging tests.
-
-    ```python
-    def test_something(debug):
-        something = some_complicated_function()
-
-        debug(something)
-
-        assert something == expected
-    ```
-
--   **`pytest_assertrepr_compare`**
-
-    Patches the default pytest behavior of hiding whitespace differences in assertion failure messages. Replaces spaces and tabs with `[space]` and `[tab]` markers.
+-   **`clean_stdout`** Clean the stdout of the console output by creating a wrapper around `capsys` to capture console output.
+-   **`debug`** Prints debug information to the console. Useful for writing and debugging tests.
+-   **`pytest_assertrepr_compare`** Patches the default pytest behavior of hiding whitespace differences in assertion failure messages. Replaces spaces and tabs with `[space]` and `[tab]` markers.
 
 ### Questions
 
+Convenience functions for working with the [questionary](https://github.com/tmbo/questionary) library.
+
+See the [questions docs](docs/questions.md) for more information.
+
 -   **`choose_one_from_list(choices: list[T] | list[tuple[str, T]] | list[dict[str, T]], message: str) -> T | None`**
 
-    Choose one item from a list of items:
-
-    ```python
-    from nclutils import choose_one_from_list
-
-    choices = ["test", "test2", "test3"]
-    result = choose_one_from_list(choices, "Choose a string")
-    ```
-
-    To use objects, send a list of tuples as choices. The first element of the tuple is the display title, the second element is the object to return.
-
-    ```python
-    from nclutils import choose_from_list
-
-    @dataclass
-    class Something:
-        name: str
-        number: int
-
-    choices = [
-        ("test1", Something(name="test1", number=1)),
-        ("test2", Something(name="test2", number=2)),
-    ]
-    result = choose_from_list(choices, "Choose one")
-    ```
+    Presents a list of options to the user and returns a single selected option.
 
 -   **`choose_multiple_from_list(choices: list[T] | list[tuple[str, T]] | list[dict[str, T]], message: str) -> list[T] | None`**
 
-    Choose multiple items from a list of items.
+    Presents a list of options to the user and returns a list of selected options.
 
 ### Shell Commands
+
+Convenience functions built on top of the [sh](https://github.com/amoffat/sh) module. See the [shell_commands docs](docs/shell_commands.md) for more information.
 
 -   **`run_command(cmd: str, args: list[str] = [], quiet: bool = False, pushd: str | Path | None = None, okay_codes: list[int] | None = None, exclude_regex: str | None = None, sudo: bool = False) -> str`**
 
     Execute shell commands with proper error handling and output control.
 
-    Arguments:
+-   **`which(cmd: str) -> str | None`**
 
-    -   `cmd`: str. The command to execute
-    -   `args`: list[str]. The command arguments
-    -   `quiet`: bool. Whether to suppress output to console (default: False)
-    -   `pushd`: str | Path. The directory to change to before running the command (default: None)
-    -   `okay_codes`: list[int]. A list of exit codes that are considered successful (default: None)
-    -   `exclude_regex`: str | None. A regex to exclude lines from the output (default: None)
-    -   `sudo`: bool. Whether to run the command with sudo (default: False)
-
-```python
-from nclutils import run_command
-
-# Execute a command and print the output to the console
-run_command("ls", ["-la", "/some/path"])
-
-# Run quietly (suppress output to console)
-output = run_command("git", ["status"], quiet=True)
-```
-
-##### Changing Directories
-
-The `run_command` function can change directories before running a command.
-
-```python
-from nclutils import run_command
-
-# Change to a temporary directory and then run the command
-run_command("pwd", [], pushd=Path("/tmp"))
-```
-
-##### Errors
-
-The `run_command` function raises `ShellCommandFailedError` if the command fails and `ShellCommandNotFoundError` if the command is not found.
-
-```python
-from nclutils import ShellCommandFailedError, ShellCommandNotFoundError
-
-try:
-    run_command("nonexistent", ["arg1"])
-except ShellCommandNotFoundError as e:
-    print(e)
-except ShellCommandFailedError as e:
-    print(e.exit_code)
-    print(e.stderr)
-    print(e.stdout)
-    print(e.full_cmd)
-
-# To mark exit codes as successful, pass a list of integers to the `okay_codes` parameter.
-run_command("ls", ["-l", "/Users"], okay_codes=[0,1])
-```
-
-`ShellCommandFailedError` has the following attributes:
-
--   `exit_code`: The exit code of the command
--   `stderr`: The stderr output of the command
--   `stdout`: The stdout output of the command
--   `full_cmd`: The full command that was run
-
-#### `which()`
-
-Check if a command exists in the PATH. Returns the absolute path to the command if found, otherwise None.
-
-```python
-from nclutils import which
-
-# Check if a command exists in the PATH
-result = which("ls")
-
-# If the command exists, print the path
-if result:
-    print(result)
-```
+    Check if a command exists in the PATH. Returns the absolute path to the command if found, otherwise `None`.
 
 ### Strings
 
@@ -352,7 +152,7 @@ if result:
 
 -   **`list_words(text: str, pattern: str = "", strip_apostrophes: bool = False) -> list[str]`**
 
-    Split a string into a list of words.
+    Extract words from text by splitting on word boundaries and handling contractions. Optionally use a custom regex pattern for more control over word splitting. Handles apostrophes, underscores, and mixed case text intelligently.
 
     ```python
     from nclutils import list_words
