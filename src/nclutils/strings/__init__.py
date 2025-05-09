@@ -12,6 +12,7 @@ from .strings import (
     random_string,
     separator_case,
     snake_case,
+    split_camel_case,
     strip_ansi,
 )
 
@@ -27,5 +28,6 @@ __all__ = [
     "random_string",
     "separator_case",
     "snake_case",
+    "split_camel_case",
     "strip_ansi",
 ]

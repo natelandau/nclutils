@@ -25,6 +25,7 @@ from .strings import (
     random_string,
     separator_case,
     snake_case,
+    split_camel_case,
     strip_ansi,
 )
 from .utils import (
@@ -70,6 +71,7 @@ __all__ = [
     "run_command",
     "separator_case",
     "snake_case",
+    "split_camel_case",
     "strip_ansi",
     "unique_id",
     "which",
