@@ -13,7 +13,7 @@ Small Python utility functions and syntactic sugar for creating packages and scr
 
 ## Requirements
 
--   Python 3.10 or higher
+-   Python 3.11 or higher
 -   Dependencies are managed with [uv](https://github.com/astral-sh/uv)
 
 ### Dependencies
