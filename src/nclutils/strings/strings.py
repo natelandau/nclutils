@@ -362,3 +362,43 @@ def strip_ansi(text: str) -> str:
         'Hello, World!'
     """
     return ANSI_CHARS.sub("", text)
+
+
+def split_camel_case(string_list: list[str], match_case_list: tuple[str, ...] = ()) -> list[str]:
+    """Split strings containing camelCase words into separate words.
+
+    Split each string in the input list into separate words based on camelCase boundaries. Preserve acronyms and any strings specified in match_case_list. For example, 'camelCase' becomes ['camel', 'Case'] but 'CEO' remains intact.
+
+    Args:
+        string_list (list[str]): List of strings to split on camelCase boundaries.
+        match_case_list (tuple[str, ...], optional): Strings that should not be split. Defaults to ().
+
+    Returns:
+        list[str]: List of strings with camelCase words split into separate components.
+
+    Examples:
+        >>> split_camel_case(["CamelCase", "SomethingElse", "hello", "CEO"])
+        ['Camel', 'Case', 'Something', 'Else', 'hello', 'CEO']
+        >>> split_camel_case(["I have a camelCase", "SomethingElse"], ("SomethingElse",))
+        ['I', 'have', 'a', 'camel', 'Case', 'SomethingElse']
+    """
+    result = []
+    for item in string_list:
+        if item in match_case_list:
+            result.append(item)
+            continue
+
+        if item.isupper():
+            result.append(item)
+            continue
+
+        words = re.findall(
+            r"[A-Z]{2,}(?=[A-Z][a-z]+|$|[^a-zA-Z])|[A-Z]?[a-z]+|[A-Z](?=[^A-Z]|$)", item
+        )
+
+        if len(words) > 1:
+            result.extend(words)
+        else:
+            result.append(item)
+
+    return result

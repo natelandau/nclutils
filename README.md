@@ -199,6 +199,10 @@ Convenience functions built on top of the [sh](https://github.com/amoffat/sh) mo
 
     Strip ANSI escape sequences from a string. (`\x1b[31mHello, World!\x1b[0m -> Hello, World!`)
 
+-   **`split_camel_case(string_list: list[str], match_case_list: tuple[str, ...] = ()) -> list[str]`**
+
+    Split camel case strings into into separate words returning a list of words. Optionally, provide a list of strings that should not be split.
+
 ### Utils
 
 -   **`check_python_version(major: int, minor: int) -> bool`**
