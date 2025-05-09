@@ -1,0 +1,7 @@
+---
+github_actions:
+  - changed-files:
+      - any-glob-to-any-file: ".github/**"
+nclutils:
+  - changed-files:
+      - any-glob-to-any-file: "src/**"
