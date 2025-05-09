@@ -1,4 +1,4 @@
-[![Tests](https://github.com/natelandau/nclutils/actions/workflows/test.yml/badge.svg)](https://github.com/natelandau/nclutils/actions/workflows/test.yml) [![codecov](https://codecov.io/gh/natelandau/nclutils/graph/badge.svg?token=Nl1V9jnI60)](https://codecov.io/gh/natelandau/nclutils)
+[![PyPI version](https://badge.fury.io/py/nclutils.svg)](https://badge.fury.io/py/nclutils) ![PyPI - Python Version](https://img.shields.io/pypi/pyversions/nclutils) [![Tests](https://github.com/natelandau/nclutils/actions/workflows/test.yml/badge.svg)](https://github.com/natelandau/nclutils/actions/workflows/test.yml) [![codecov](https://codecov.io/gh/natelandau/nclutils/graph/badge.svg?token=Nl1V9jnI60)](https://codecov.io/gh/natelandau/nclutils)
 
 # nclutils
 
