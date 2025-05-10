@@ -113,7 +113,7 @@ def test_print_debug_all_packages(clean_stdout, debug) -> None:
     print_debug(all_packages=True)
     output = clean_stdout()
 
-    # debug(output)
+    debug(output)
 
     # Then: Output includes all installed packages
     regexes = [
