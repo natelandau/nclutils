@@ -1,7 +1,7 @@
 """Test Utilities."""
 
 import re
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from freezegun import freeze_time
 
@@ -171,7 +171,7 @@ def test_iso_timestamp_without_microseconds() -> None:
 def test_format_iso_timestamp_with_microseconds() -> None:
     """Verify format_iso_timestamp() formats datetime object with microseconds."""
     # Given: A datetime object
-    dt = datetime(2024, 3, 15, 12, 34, 56, 789012, tzinfo=UTC)
+    dt = datetime(2024, 3, 15, 12, 34, 56, 789012, tzinfo=timezone.utc)
 
     # When: Formatting timestamp with microseconds
     timestamp = format_iso_timestamp(dt, microseconds=True)
@@ -183,7 +183,7 @@ def test_format_iso_timestamp_with_microseconds() -> None:
 def test_format_iso_timestamp_without_microseconds() -> None:
     """Verify format_iso_timestamp() formats datetime object without microseconds."""
     # Given: A datetime object
-    dt = datetime(2024, 3, 15, 12, 34, 56, 789012, tzinfo=UTC)
+    dt = datetime(2024, 3, 15, 12, 34, 56, 789012, tzinfo=timezone.utc)
 
     # When: Formatting timestamp without microseconds
     timestamp = format_iso_timestamp(dt, microseconds=False)

@@ -2,7 +2,7 @@
 
 import re
 import sys
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from nclutils.constants import RANDOM
 
@@ -56,7 +56,7 @@ def iso_timestamp(*, microseconds: bool = False) -> str:
         str: An ISO 8601 formatted UTC timestamp string.
     """
     timespec = "microseconds" if microseconds else "seconds"
-    return datetime.now(UTC).isoformat(timespec=timespec).replace("+00:00", "Z")
+    return datetime.now(timezone.utc).isoformat(timespec=timespec).replace("+00:00", "Z")
 
 
 def format_iso_timestamp(datetime_obj: datetime, *, microseconds: bool = False) -> str:
@@ -73,7 +73,7 @@ def format_iso_timestamp(datetime_obj: datetime, *, microseconds: bool = False) 
 
     """
     timespec = "microseconds" if microseconds else "seconds"
-    return datetime_obj.astimezone(UTC).isoformat(timespec=timespec).replace("+00:00", "Z")
+    return datetime_obj.astimezone(timezone.utc).isoformat(timespec=timespec).replace("+00:00", "Z")
 
 
 def new_timestamp_uid(bits: int = 32) -> str:
@@ -89,7 +89,9 @@ def new_timestamp_uid(bits: int = 32) -> str:
     Returns:
         str: A unique ID in format "YYYYMMDDTHHmmssZ-microseconds-randomstring"
     """
-    timestamp = re.sub(r"[^\w.]", "", datetime.now(UTC).isoformat()).replace(".", "Z-")[:23]
+    timestamp = re.sub(r"[^\w.]", "", datetime.now(timezone.utc).isoformat()).replace(".", "Z-")[
+        :23
+    ]
     return f"{timestamp}-{new_uid(bits)}"
 
 
