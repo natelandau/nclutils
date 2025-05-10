@@ -113,15 +113,15 @@ def test_print_debug_all_packages(clean_stdout, debug) -> None:
     print_debug(all_packages=True)
     output = clean_stdout()
 
-    debug(output)
+    # debug(output)
 
     # Then: Output includes all installed packages
     regexes = [
         r"^System: .*$",
         r"^Python: .* (.*)$",
         r"^Installed packages:$",
-        r"^ +rich +\d{1,3}\.\d{1,3}\.\d{1,3} +$",
-        r"^ +questionary +\d{1,3}\.\d{1,3}\.\d{1,3} +$",
+        r"^ +mypy +\d{1,3}\.\d{1,3}\.\d{1,3} +$",
+        r"^ +freezegun +\d{1,3}\.\d{1,3}\.\d{1,3} +$",
     ]
     for regex in regexes:
         assert re.search(regex, output, re.MULTILINE)
@@ -134,7 +134,7 @@ def test_print_debug_specific_packages(clean_stdout, debug) -> None:
     # Given: No arguments
 
     # When: Calling print_debug with no arguments
-    print_debug(packages=["rich"])
+    print_debug(packages=["freezegun"])
     output = clean_stdout()
 
     # debug(output)
@@ -144,10 +144,10 @@ def test_print_debug_specific_packages(clean_stdout, debug) -> None:
         r"^System: .*$",
         r"^Python: .* (.*)$",
         r"^Installed packages:$",
-        r"^ +rich +\d{1,3}\.\d{1,3}\.\d{1,3} +$",
+        r"^ +freezegun +\d{1,3}\.\d{1,3}\.\d{1,3} +$",
     ]
     for regex in regexes:
         assert re.search(regex, output, re.MULTILINE)
 
     assert "Environment variables:" not in output
-    assert "questionary" not in output
+    assert "mypy" not in output
