@@ -15,7 +15,7 @@ Collection of convenience functions used in Python packages and scripts. These a
 
 ## Requirements
 
--   Python 3.11 or higher
+-   Python 3.10 or higher
 -   Dependencies are managed with [uv](https://github.com/astral-sh/uv)
 
 ### Dependencies

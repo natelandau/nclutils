@@ -1,6 +1,7 @@
 [project]
     authors = [{ name = "Nathaniel Landau", email = "github@natenate.org" }]
     classifiers = [
+        "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",
         "Programming Language :: Python :: 3.13",
@@ -11,7 +12,7 @@
     license-files = ["LICENSE"]
     name = "nclutils"
     readme = "README.md"
-    requires-python = ">=3.11"
+    requires-python = ">=3.10"
     version = "0.2.1"
 
 [build-system]
@@ -103,7 +104,7 @@
     line-length    = 100
     output-format  = "grouped"
     src            = ["src", "tests"]
-    target-version = "py311"
+    target-version = "py310"
 
     [tool.ruff.lint]
         ignore = [
