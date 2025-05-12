@@ -70,7 +70,7 @@ Extras can be added to the log message by passing `**kwargs` to the logging meth
 
 ```python
 logger.warning("Hello, world!", somevar="somevalue")
->> 2025-05-11 11:30:43 | WARNING  | Hello, world! | {'somevar': 'somevale'}  (__main__:<module>:19)
+>> 2025-05-11 11:30:43 | WARNING  | Hello, world! | {'somevar': 'somevale'} | __main__:<module>:19
 ```
 
 ## Catching Exceptions

@@ -12,7 +12,7 @@ from rich.progress import Progress, TaskID
 from rich.text import Text
 from rich.tree import Tree
 
-from nclutils.pretty_print import pp
+from nclutils.logging import logger
 from nclutils.sh import ShellCommandFailedError, run_command
 from nclutils.utils import check_python_version, new_timestamp_uid
 
@@ -70,9 +70,12 @@ def backup_path(
     """
     if not src.exists() and raise_on_missing:
         msg = f"skip backup: does not exist `{src}`"
+        logger.error(msg)
         raise FileNotFoundError(msg)
 
     if not src.exists():
+        msg = f"skip backup: does not exist `{src}`"
+        logger.warning(msg)
         return None
 
     if not backup_suffix:
@@ -84,17 +87,22 @@ def backup_path(
     # Note this isn't perfectly atomic, if another thread does a backup
     # to an identical backup directory but this would be very rare.
     if backup_path.is_symlink():
+        logger.trace(f"unlink {backup_path}")
         backup_path.unlink()
     elif backup_path.is_dir():
+        logger.trace(f"rmtree {backup_path}")
         shutil.rmtree(backup_path)
 
     if src.is_dir():
+        logger.debug(f"copytree {src} {backup_path}")
         shutil.copytree(src, backup_path)
     elif with_progress:
         with Progress(transient=transient) as progress_bar:
             copy_task = progress_bar.add_task(f"Backup {src.name}", total=src.stat().st_size)
+            logger.debug(f"copyfile {src} {backup_path}")
             _do_copy_file(src, backup_path, progress_bar=progress_bar, task=copy_task)
     else:
+        logger.debug(f"copyfile {src} {backup_path}")
         _do_copy_file(src, backup_path)
 
     return backup_path
@@ -127,10 +135,12 @@ def copy_file(
     """
     if not src.exists():
         msg = f"source file `{src}` does not exist. Did not copy."
+        logger.error(msg)
         raise FileNotFoundError(msg)
 
     if not src.is_file():
         msg = f"source file `{src}` is not a file. Did not copy."
+        logger.error(msg)
         raise FileNotFoundError(msg)
 
     dst = dst.parent.expanduser().resolve() / dst.name
@@ -138,26 +148,31 @@ def copy_file(
     # Check if source and destination are the same to avoid unnecessary copy
     if src == dst or (dst.exists() and src.samefile(dst)):
         msg = f"source file `{src}` and destination file `{dst}` are the same file. Did not copy."
-        pp.warning(msg)
+        logger.warning(msg)
         return src
 
     # Generate unique filename if destination exists and overwrite is disabled
     if dst.exists() and keep_backup:
+        logger.debug(f"backup {dst}")
         backup_path(dst, with_progress=with_progress, transient=transient)
 
     dst.parent.mkdir(parents=True, exist_ok=True)
 
     if dst.is_symlink():
+        logger.trace(f"unlink {dst}")
         dst.unlink()
     elif dst.is_dir():
+        logger.trace(f"rmtree {dst}")
         shutil.rmtree(dst)
 
     # Copy file in chunks with progress bar to handle large files efficiently
     if with_progress:
         with Progress(transient=transient) as progress_bar:
             copy_task = progress_bar.add_task(f"Copy {src.name}", total=src.stat().st_size)
+            logger.debug(f"copyfile {src} {dst}")
             _do_copy_file(src, dst, progress_bar=progress_bar, task=copy_task)
     else:
+        logger.debug(f"copyfile {src} {dst}")
         _do_copy_file(src, dst)
 
     # Preserve original file permissions
@@ -195,6 +210,7 @@ def copy_directory(
     # Verify Python version requirement for Path.walk() method
     if not check_python_version(3, 12):
         msg = "Copy file requires a minimum of Python version 3.12"
+        logger.error(msg)
         raise ValueError(msg)
 
     src = src.expanduser().resolve()
@@ -203,29 +219,34 @@ def copy_directory(
     # Validate source directory exists and is actually a directory
     if not src.exists() or not src.is_dir():
         msg = f"source directory `{src}` does not exist or is not a directory. Did not copy."
+        logger.error(msg)
         raise FileNotFoundError(msg)
 
     # Prevent copying a directory to itself or into itself to avoid infinite recursion
     if src == dst:
         msg = f"source directory `{src}` and destination directory `{dst}` are the same directory. Did not copy."
-        pp.warning(msg)
+        logger.warning(msg)
         return src
 
     if src in dst.parents or dst in src.parents:
         msg = f"source directory `{src}` and destination directory `{dst}` have parent/child relationship. Did not copy."
-        pp.warning(msg)
+        logger.warning(msg)
         return src
 
     # Generate unique destination name if it exists and we're not overwriting
     if dst.exists() and keep_backup:
+        logger.debug(f"backup {dst}")
         backup_path(dst, with_progress=with_progress, transient=transient)
 
     if dst.is_symlink():
+        logger.trace(f"unlink {dst}")
         dst.unlink()
     elif dst.is_dir():
+        logger.trace(f"rmtree {dst}")
         shutil.rmtree(dst)
 
     # Walk the source directory tree and copy each file while preserving structure
+    logger.debug(f"walk {src}")
     for root, _, files in src.walk():
         new_parent = dst if root == src else dst / root.relative_to(src)
         new_parent.mkdir(parents=True, exist_ok=True)
