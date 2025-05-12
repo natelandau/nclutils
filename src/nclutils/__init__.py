@@ -9,6 +9,7 @@ from .fs import (
     find_subdirectories,
     find_user_home_dir,
 )
+from .logging import logger
 from .network import network_available
 from .pretty_print import PrintStyle, console, pp, print_debug
 from .questions import choose_multiple_from_list, choose_one_from_list
@@ -58,6 +59,7 @@ __all__ = [
     "iso_timestamp",
     "kebab_case",
     "list_words",
+    "logger",
     "network_available",
     "new_timestamp_uid",
     "new_uid",

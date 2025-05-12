@@ -40,6 +40,34 @@ def clean_stdout(
 
 
 @pytest.fixture
+def clean_stderr(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> Callable[[], str]:
+    r"""Return a function that cleans ANSI escape sequences from captured stderr.
+
+    This fixture is useful for testing CLI output where ANSI color codes and other escape sequences need to be stripped to verify the actual text content. The returned callable captures stdout using pytest's capsys fixture and removes all ANSI escape sequences, making it easier to write assertions against the cleaned output.
+
+    Args:
+        capsys (pytest.CaptureFixture[str]): Pytest fixture that captures stdout/stderr streams
+        monkeypatch (pytest.MonkeyPatch): Pytest fixture for monkey patching
+    Returns:
+        Callable[[], str]: A function that when called returns the current stdout with all ANSI escape sequences removed
+
+    Example:
+        def test_cli_output(clean_stdout):
+            print("\033[31mRed Text\033[0m")  # Colored output
+            assert clean_stdout() == "Red Text"  # Test against clean text
+    """
+    # Set the terminal width to 180 columns to avoid unwanted line breaks in the output
+    monkeypatch.setenv("COLUMNS", "180")
+
+    def _get_clean_stdout() -> str:
+        return strip_ansi(capsys.readouterr().err)
+
+    return _get_clean_stdout
+
+
+@pytest.fixture
 def debug() -> Callable[[str | Path, str, int, bool], bool]:
     """Return a debug printing function for test development and troubleshooting.
 

@@ -131,8 +131,6 @@ def test(ctx: Context, *cli_args: str) -> None:
             config_file="pyproject.toml",
             color="yes",
         ).add_args(
-            "-n",
-            "auto",
             "--cov",
             "--cov-config=pyproject.toml",
             "--cov-report=xml",

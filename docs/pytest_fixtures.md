@@ -16,7 +16,7 @@ from nclutils.pytest_fixtures import *
 
 ## clean_stdout
 
-Clean the stdout of the console output by creating a wrapper around `capsys` to capture console output.
+Clean the stdout of the console output by creating a wrapper around `capsys` to capture console stdout output.
 
 ```python
 def test_something(clean_stdout):
@@ -24,6 +24,16 @@ def test_something(clean_stdout):
     output = clean_stdout()
     assert output == "Hello, world!"
 ```
+
+## clean_stderr
+
+Clean the stderr of the console output by creating a wrapper around `capsys` to capture console stderr output.
+
+````python
+def test_something(clean_stderr):
+    print("Hello, world!")
+    output = clean_stderr()
+    assert output == "Hello, world!"
 
 ## debug
 
@@ -36,7 +46,7 @@ def test_something(debug):
     debug(something)
 
     assert something == expected
-```
+````
 
 ## pytest_assertrepr_compare
 

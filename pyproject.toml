@@ -6,7 +6,7 @@
         "Programming Language :: Python :: 3.12",
         "Programming Language :: Python :: 3.13",
     ]
-    dependencies = ["questionary>=2.1.0", "rich>=14.0.0", "sh>=2.2.2"]
+    dependencies = ["loguru>=0.7.3", "questionary>=2.1.0", "rich>=14.0.0", "sh>=2.2.2"]
     description = "Collection of convenience functions used in Python packages and scripts."
     license = "MIT"
     license-files = ["LICENSE"]
@@ -33,7 +33,6 @@
         "pytest-mock>=3.14.0",
         "pytest-pretty-terminal>=1.1.0",
         "pytest-sugar>=1.0.0",
-        "pytest-xdist>=3.6.1",
         "pytest>=8.3.5",
         "ruff>=0.11.8",
         "typos>=1.32.0",
@@ -151,11 +150,8 @@
             "PLR2004",
             "PLR6301",
             "S101",
-        ], "duties.py" = [
-            "ANN001",
-            "FBT001",
-            "FBT002",
-        ] }
+            "SLF001",  # Access a private attribute
+        ], "duties.py" = ["ANN001", "FBT001", "FBT002"] }
         preview = true
         select = ["ALL"]
         unfixable = ["E712", "ERA001", "F401", "F841", "UP007"]

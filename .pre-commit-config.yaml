@@ -5,7 +5,7 @@ default_stages: [pre-commit, manual]
 fail_fast: true
 repos:
   - repo: "https://github.com/commitizen-tools/commitizen"
-    rev: v4.6.3
+    rev: v4.7.0
     hooks:
       - id: commitizen
       - id: commitizen-branch
@@ -60,7 +60,7 @@ repos:
       - id: gitleaks
 
   - repo: "https://github.com/charliermarsh/ruff-pre-commit"
-    rev: "v0.11.8"
+    rev: "v0.11.9"
     hooks:
       - id: ruff
         exclude: tests/

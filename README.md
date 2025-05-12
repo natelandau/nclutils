@@ -25,6 +25,7 @@ nclutils has a few dependencies that are included in the project.
 -   [questionary](https://github.com/tmbo/questionary) - For asking questions
 -   [rich](https://github.com/Textualize/rich) - For pretty printing
 -   [sh](https://github.com/amoffat/sh) - For running shell commands
+-   [Loguru](https://github.com/Delgan/loguru) - For logging
 
 ## Installation
 
@@ -83,6 +84,12 @@ uv add git+https://github.com/natelandau/nclutils.git
 -   **`find_user_home_dir(username: str | None = None) -> Path | None`**
 
     Find the home directory for a requested user or the current user if no user is requested. When running under sudo, the home directory for the sudo user is returned.
+
+### Logging
+
+-   **`logger`**
+
+    A wrapper around the [Loguru](https://github.com/Delgan/loguru) logger with configurable log levels and custom styles. See the [logging docs](docs/logging.md) for more information.
 
 ### Network
 
