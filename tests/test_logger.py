@@ -1,11 +1,9 @@
 """Test logging module."""
 
-import sys
-
 import pytest
 
 from nclutils import logger
-from nclutils.logging.logging import Logger, LogLevel
+from nclutils.logging.logging import Logger
 
 
 @pytest.fixture(autouse=True)

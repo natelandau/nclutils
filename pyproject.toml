@@ -150,11 +150,8 @@
             "PLR2004",
             "PLR6301",
             "S101",
-        ], "duties.py" = [
-            "ANN001",
-            "FBT001",
-            "FBT002",
-        ] }
+            "SLF001",  # Access a private attribute
+        ], "duties.py" = ["ANN001", "FBT001", "FBT002"] }
         preview = true
         select = ["ALL"]
         unfixable = ["E712", "ERA001", "F401", "F841", "UP007"]
