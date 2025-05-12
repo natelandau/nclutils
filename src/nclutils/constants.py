@@ -13,5 +13,6 @@ CHOICE_STYLE = QuestionaryStyle(
     ]
 )
 
+
 RANDOM = random.SystemRandom()
 RANDOM.seed()
