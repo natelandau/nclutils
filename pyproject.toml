@@ -21,7 +21,7 @@
 
 [dependency-groups]
     dev = [
-        "commitizen>=4.6.3",
+        "commitizen>=4.7.0",
         "coverage>=7.8.0",
         "duty>=1.6.0",
         "freezegun>=1.5.1",
@@ -34,7 +34,7 @@
         "pytest-pretty-terminal>=1.1.0",
         "pytest-sugar>=1.0.0",
         "pytest>=8.3.5",
-        "ruff>=0.11.8",
+        "ruff>=0.11.10",
         "typos>=1.32.0",
     ]
 
@@ -154,7 +154,11 @@
         ], "duties.py" = ["ANN001", "FBT001", "FBT002"] }
         preview = true
         select = ["ALL"]
-        unfixable = ["E712", "ERA001", "F401", "F841", "UP007"]
+        unfixable = [
+            "ERA001", # Commented out code
+            "F401",   # unused-import
+            "F841",   # unused-variable
+        ]
         [tool.ruff.lint.mccabe]
             # Unlike Flake8, default to a complexity level of 10.
             max-complexity = 10
