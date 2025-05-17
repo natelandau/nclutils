@@ -113,7 +113,8 @@ The pretty printing module provides styled console output with configurable log 
 
 The `nclutils.pytest_fixtures` module contains convenience functions and fixtures that are useful for testing. See the [pytest_fixtures docs](docs/pytest_fixtures.md) for more information.
 
--   **`clean_stdout`** Clean the stdout of the console output by creating a wrapper around `capsys` to capture console output.
+-   **`clean_stdout`** Clean the stdout of the console output by creating a wrapper around `capsys` to capture console stdout output.
+-   **`clean_stderr`** Clean the stderr of the console output by creating a wrapper around `capsys` to capture console stderr output.
 -   **`debug`** Prints debug information to the console. Useful for writing and debugging tests.
 -   **`pytest_assertrepr_compare`** Patches the default pytest behavior of hiding whitespace differences in assertion failure messages. Replaces spaces and tabs with `[space]` and `[tab]` markers.
 
