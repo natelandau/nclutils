@@ -16,7 +16,9 @@ from nclutils.pytest_fixtures import *
 
 ## clean_stdout
 
-Clean the stdout of the console output by creating a wrapper around `capsys` to capture console stdout output.
+Clean the stdout of the console output by creating a wrapper around `capsys` to capture console stdout output. Mutually exclusive with `clean_stderr`.
+
+By default, the `tmp_path` is stripped from the output to keep the output clean. To keep the `tmp_path` in the output, set `strip_tmp_path=False`.
 
 ```python
 def test_something(clean_stdout):
@@ -27,17 +29,27 @@ def test_something(clean_stdout):
 
 ## clean_stderr
 
-Clean the stderr of the console output by creating a wrapper around `capsys` to capture console stderr output.
+Clean the stderr of the console output by creating a wrapper around `capsys` to capture console stderr output. Mutually exclusive with `clean_stdout`.
+
+By default, the `tmp_path` is stripped from the output to keep the output clean. To keep the `tmp_path` in the output, set `strip_tmp_path=False`.
 
 ````python
 def test_something(clean_stderr):
     print("Hello, world!")
-    output = clean_stderr()
+    output = clean_stderr(strip_tmp_path=False)
     assert output == "Hello, world!"
 
 ## debug
 
-Prints debug information to the console. Useful for writing and debugging tests.
+Prints debug information to the console. Useful for writing and debugging tests. By default, the `tmp_path` is stripped from the output to keep the output clean.
+
+Possible arguments:
+
+- `value`: (required) The value to debug.
+- `label`: The label to display above the debug output.
+- `width`: The width of the debug output.
+- `pause`: If True, pause test execution after printing the debug output.
+- `strip_tmp_path`: If False, do not strip the `tmp_path` from the output.
 
 ```python
 def test_something(debug):
