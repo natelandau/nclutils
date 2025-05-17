@@ -18,6 +18,8 @@ from nclutils.pytest_fixtures import *
 
 Clean the stdout of the console output by creating a wrapper around `capsys` to capture console stdout output. Mutually exclusive with `clean_stderr`.
 
+By default, the `tmp_path` is stripped from the output to keep the output clean. To keep the `tmp_path` in the output, set `strip_tmp_path=False`.
+
 ```python
 def test_something(clean_stdout):
     print("Hello, world!")
@@ -29,10 +31,12 @@ def test_something(clean_stdout):
 
 Clean the stderr of the console output by creating a wrapper around `capsys` to capture console stderr output. Mutually exclusive with `clean_stdout`.
 
+By default, the `tmp_path` is stripped from the output to keep the output clean. To keep the `tmp_path` in the output, set `strip_tmp_path=False`.
+
 ````python
 def test_something(clean_stderr):
     print("Hello, world!")
-    output = clean_stderr()
+    output = clean_stderr(strip_tmp_path=False)
     assert output == "Hello, world!"
 
 ## debug
