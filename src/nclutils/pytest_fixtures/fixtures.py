@@ -93,7 +93,7 @@ def debug(tmp_path: Path) -> Callable[[str | Path, str, int, bool], bool]:
         width: int = 80,
         *,
         pause: bool = False,
-        strip_tmp_path: bool = False,
+        strip_tmp_path: bool = True,
     ) -> bool:
         """Print debug information during test development and debugging sessions.
 
@@ -104,7 +104,7 @@ def debug(tmp_path: Path) -> Callable[[str | Path, str, int, bool], bool]:
             label (str): Optional header text to display above the debug output for context.
             pause (bool, optional): If True, raises a pytest.fail() after printing to pause execution. Defaults to False.
             width (int, optional): Maximum width in characters for the console output. Matches pytest's default width of 80 when running without the -s flag. Defaults to 80.
-            strip_tmp_path (bool, optional): If True, strip the tmp_path from the output. Defaults to False.
+            strip_tmp_path (bool, optional): If True, strip the tmp_path from the output. Defaults to True.
 
         Returns:
             bool: Always returns True unless pause=True, in which case raises pytest.fail()
@@ -123,13 +123,13 @@ def debug(tmp_path: Path) -> Callable[[str | Path, str, int, bool], bool]:
         if isinstance(value, Path) and value.is_dir():
             for p in value.rglob("*"):
                 if strip_tmp_path and p.relative_to(tmp_path):
-                    console.print(p.relative_to(tmp_path), width=width)
+                    console.print(f"…/{p.relative_to(tmp_path)!s}", width=width)
                     continue
 
                 console.print(p, width=width)
         else:
             if strip_tmp_path:
-                value = str(value).replace(str(tmp_path), "")
+                value = str(value).replace(str(tmp_path), "…")
             console.print(value, width=width)
 
         console.rule()

@@ -26,7 +26,7 @@ def test_debug_string_strip_tmp_path(debug, clean_stdout, tmp_path) -> None:
     output = clean_stdout()
 
     # Then the output contains the string and label
-    assert "Hello, world!" in output
+    assert "Hello, …world!" in output
 
 
 def test_debug_path(debug, clean_stdout, tmp_path) -> None:
@@ -36,7 +36,7 @@ def test_debug_path(debug, clean_stdout, tmp_path) -> None:
     testfile.touch()
 
     # When debugging the file path
-    debug(tmp_path, "Test", width=200)
+    debug(tmp_path, "Test", width=200, strip_tmp_path=False)
     output = clean_stdout()
 
     # Then the output contains the file path and label
@@ -58,4 +58,4 @@ def test_debug_path_strip_tmp_path(debug, clean_stdout, tmp_path) -> None:
 
     # Then the output excludes tmp_path but includes relative path
     assert str(tmp_path) not in output
-    assert str(testfile.relative_to(tmp_path)) in output
+    assert f"…/{testfile.relative_to(tmp_path)!s}" in output
