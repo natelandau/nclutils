@@ -68,7 +68,7 @@ def clean_stderr(
 
 
 @pytest.fixture
-def debug() -> Callable[[str | Path, str, int, bool], bool]:
+def debug(tmp_path: Path) -> Callable[[str | Path, str, int, bool], bool]:
     """Return a debug printing function for test development and troubleshooting.
 
     Create and return a function that prints formatted debug output to the console during test development and debugging. The returned function allows printing variables, file contents, or directory structures with clear visual separation and optional breakpoints.
@@ -91,7 +91,9 @@ def debug() -> Callable[[str | Path, str, int, bool], bool]:
         value: str | Path,
         label: str = "",
         width: int = 80,
-        pause: bool = False,  # noqa: FBT001,FBT002
+        *,
+        pause: bool = False,
+        strip_tmp_path: bool = False,
     ) -> bool:
         """Print debug information during test development and debugging sessions.
 
@@ -102,6 +104,7 @@ def debug() -> Callable[[str | Path, str, int, bool], bool]:
             label (str): Optional header text to display above the debug output for context.
             pause (bool, optional): If True, raises a pytest.fail() after printing to pause execution. Defaults to False.
             width (int, optional): Maximum width in characters for the console output. Matches pytest's default width of 80 when running without the -s flag. Defaults to 80.
+            strip_tmp_path (bool, optional): If True, strip the tmp_path from the output. Defaults to False.
 
         Returns:
             bool: Always returns True unless pause=True, in which case raises pytest.fail()
@@ -119,18 +122,24 @@ def debug() -> Callable[[str | Path, str, int, bool], bool]:
         # If a directory is passed, print the contents
         if isinstance(value, Path) and value.is_dir():
             for p in value.rglob("*"):
+                if strip_tmp_path and p.relative_to(tmp_path):
+                    console.print(p.relative_to(tmp_path), width=width)
+                    continue
+
                 console.print(p, width=width)
         else:
+            if strip_tmp_path:
+                value = str(value).replace(str(tmp_path), "")
             console.print(value, width=width)
 
         console.rule()
 
-        if pause:
+        if pause:  # pragma: no cover
             return pytest.fail("Breakpoint")
 
         return True
 
-    return _debug_inner
+    return _debug_inner  # type: ignore [return-value]
 
 
 def pytest_assertrepr_compare(config: object, op: str, left: str, right: str) -> list[str]:  # noqa: ARG001
