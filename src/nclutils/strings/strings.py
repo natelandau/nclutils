@@ -140,6 +140,69 @@ def kebab_case(text: str) -> str:
     )
 
 
+def int_to_emoji(num: int, *, markdown: bool = False, images: bool = False) -> str:
+    """Convert integers to emoji representations or formatted strings.
+
+    Transform integers between 0-10 into their corresponding emoji codes or image representations. For numbers outside this range, return the number as a string with optional markdown formatting. Use this to create visually appealing number displays in chat applications or documentation.
+
+    Args:
+        num (int): The integer to convert to an emoji or string
+        markdown (bool, optional): Wrap numbers larger than 10 in markdown code blocks. Defaults to False
+        images (bool, optional): Use emoji images instead of Discord emoji codes. Defaults to False
+
+    Returns:
+        str: The emoji representation, image, or formatted string for the given number
+
+    Examples:
+        >>> int_to_emoji(1)
+        ':one:'
+        >>> int_to_emoji(10)
+        ':keycap_ten:'
+        >>> int_to_emoji(11)
+        '11'
+        >>> int_to_emoji(11, markdown=True)
+        '`11`'
+        >>> int_to_emoji(10, images=True)
+        '🔟'
+    """
+    if 0 <= num <= 10:  # noqa: PLR2004
+        if images:
+            return (
+                str(num)
+                .replace("10", "🔟")
+                .replace("0", "0️⃣")
+                .replace("1", "1️⃣")
+                .replace("2", "2️⃣")
+                .replace("3", "3️⃣")
+                .replace("4", "4️⃣")
+                .replace("5", "5️⃣")
+                .replace("6", "6️⃣")
+                .replace("7", "7️⃣")
+                .replace("8", "8️⃣")
+                .replace("9", "9️⃣")
+            )
+
+        return (
+            str(num)
+            .replace("10", ":keycap_ten:")
+            .replace("0", ":zero:")
+            .replace("1", ":one:")
+            .replace("2", ":two:")
+            .replace("3", ":three:")
+            .replace("4", ":four:")
+            .replace("5", ":five:")
+            .replace("6", ":six:")
+            .replace("7", ":seven:")
+            .replace("8", ":eight:")
+            .replace("9", ":nine:")
+        )
+
+    if markdown:
+        return f"`{num}`"
+
+    return str(num)
+
+
 def list_words(text: str, pattern: str = "", *, strip_apostrophes: bool = False) -> list[str]:
     r"""Split text into a list of words using regex pattern matching.
 

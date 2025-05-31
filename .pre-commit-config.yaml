@@ -5,7 +5,7 @@ default_stages: [pre-commit, manual]
 fail_fast: true
 repos:
   - repo: "https://github.com/commitizen-tools/commitizen"
-    rev: v4.7.0
+    rev: v4.8.2
     hooks:
       - id: commitizen
       - id: commitizen-branch
@@ -60,13 +60,13 @@ repos:
       - id: gitleaks
 
   - repo: "https://github.com/charliermarsh/ruff-pre-commit"
-    rev: "v0.11.10"
+    rev: "v0.11.12"
     hooks:
       - id: ruff
         exclude: tests/
       - id: ruff-format
 
-  - repo: "https://github.com/crate-ci/typos"
+  - repo: "https://github.com/adhtruong/mirrors-typos"
     rev: v1.32.0
     hooks:
       - id: typos

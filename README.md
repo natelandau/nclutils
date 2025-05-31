@@ -158,6 +158,10 @@ Convenience functions built on top of the [sh](https://github.com/amoffat/sh) mo
 
     Convert a string to kebab case. (`hello world -> hello-world`)
 
+-   **`int_to_emoji(num: int, markdown: bool = False, images: bool = False) -> str`**
+
+    Transform integers between 0-10 into their corresponding emoji codes or image representations. For numbers outside this range, return the number as a string with optional markdown formatting.
+
 -   **`list_words(text: str, pattern: str = "", strip_apostrophes: bool = False) -> list[str]`**
 
     Extract words from text by splitting on word boundaries and handling contractions. Optionally use a custom regex pattern for more control over word splitting. Handles apostrophes, underscores, and mixed case text intelligently.
