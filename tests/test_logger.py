@@ -117,6 +117,30 @@ def test_log_to_file(clean_stderr, tmp_path, debug):
     )
 
 
+def test_suppress_source_reference(clean_stderr, tmp_path, debug):
+    """Verify that source references can be suppressed."""
+    # Given logger configured to write to file
+    log_path = tmp_path / "somedir" / "test.log"
+    logger.configure(log_level="info", log_file=str(log_path), show_source_reference=False)
+
+    # When logging messages
+    logger.info("Hello world1")
+    logger.info("Hello world2", somevar="somevalue")
+
+    # Then messages should appear in stderr and log file
+    output = clean_stderr()
+    assert "INFO     | Hello world1" in output
+    assert "INFO     | Hello world2 | {'somevar': 'somevalue'}" in output
+    assert "tests.test_logger" not in output
+
+    assert log_path.exists()
+    logfile_text = log_path.read_text()
+
+    assert "| INFO     | Hello world1" in logfile_text
+    assert "| INFO     | Hello world2 | {'somevar': 'somevalue'}" in logfile_text
+    assert "tests.test_logger" not in logfile_text
+
+
 def test_catch_decorator(clean_stderr, tmp_path, debug):
     """Verify that the catch decorator works."""
     # Given logger configured to write to file
@@ -157,3 +181,12 @@ def test_catch_decorator(clean_stderr, tmp_path, debug):
 """
         in logfile_text
     )
+
+
+def test_no_log_level_no_output(clean_stderr, tmp_path, debug):
+    """Verify that an exception is raised if the log level is not set."""
+    # Given logger configured to write to file
+    log_path = tmp_path / "somedir" / "test.log"
+
+    with pytest.raises(TypeError):
+        logger.configure(log_file=str(log_path))

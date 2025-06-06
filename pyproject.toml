@@ -33,9 +33,9 @@
         "pytest-mock>=3.14.1",
         "pytest-pretty-terminal>=1.1.0",
         "pytest-sugar>=1.0.0",
-        "pytest>=8.3.5",
-        "ruff>=0.11.12",
-        "typos>=1.32.0",
+        "pytest>=8.4.0",
+        "ruff>=0.11.13",
+        "typos>=1.33.1",
     ]
 
 [tool.commitizen]
@@ -43,6 +43,7 @@
     changelog_merge_prerelease = true
     tag_format                 = "v${version}"
     update_changelog_on_bump   = true
+    version_files              = ["src/nclutils/constants.py:VERSION"]
     version_provider           = "pep621"
 
 [tool.coverage.report] # https://coverage.readthedocs.io/en/latest/config.html#report

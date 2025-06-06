@@ -55,19 +55,21 @@ repos:
         types: [python]
 
   - repo: "https://github.com/gitleaks/gitleaks"
-    rev: v8.26.0
+    rev: v8.27.0
     hooks:
       - id: gitleaks
 
-  - repo: "https://github.com/charliermarsh/ruff-pre-commit"
-    rev: "v0.11.12"
+  - repo: "https://github.com/astral-sh/ruff-pre-commit"
+    rev: "v0.11.13"
     hooks:
-      - id: ruff
+      - id: ruff-check
         exclude: tests/
+        args: [--no-fix]
       - id: ruff-format
+        args: [--check]
 
   - repo: "https://github.com/adhtruong/mirrors-typos"
-    rev: v1.32.0
+    rev: v1.33.1
     hooks:
       - id: typos
         stages: [commit-msg, pre-commit]
