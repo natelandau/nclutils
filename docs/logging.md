@@ -37,7 +37,8 @@ Configure the logger with the given log level, log file, rotation, retention, an
 -   `log_file (str | None)`: The log file to use. If not provided, logs will not be written to a file.
 -   `rotation (str, int, datetime.time, datetime.timedelta or callable, optional)`: A condition indicating whenever the current logged file should be closed and a new one started. Defaults to "5 MB". See [Loguru's documentation](https://loguru.readthedocs.io/en/stable/api/logger.html#loguru.logger.add) for more information.
 -   `retention (str, int, datetime.timedelta or callable, optional)`: A directive filtering old files that should be removed during rotation or end of program. Defaults to 3. See [Loguru's documentation](https://loguru.readthedocs.io/en/stable/api/logger.html#loguru.logger.add) for more information.
--   `stderr (bool)`: Whether to log to stderr. Defaults to True.
+-   `show_source_reference (bool)`: Whether to show source code references in the output. Defaults to `True`.
+-   `stderr (bool)`: Whether to log to stderr. If `False`, no logs will be output to stderr. Defaults to `True`.
 
 > [!IMPORTANT]\
 > If `log_level` is not set, no logs will be output.

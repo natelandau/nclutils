@@ -8,3 +8,4 @@ alwaysApply: false
 [python-docstring-rules.mdc](mdc:.cursor/rules/python-docstring-rules.mdc)
 [python-naming-conventions.mdc](mdc:.cursor/rules/python-naming-conventions.mdc)
 [use-pathlib.mdc](mdc:.cursor/rules/use-pathlib.mdc)
+[exception_rules.mdc](mdc:.cursor/rules/exception_rules.mdc)

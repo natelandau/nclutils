@@ -67,6 +67,7 @@ class Logger:
             self.retention = 3
             self.enqueue = False
             self.path_to_log_file: Path | None = None
+            self.show_source_reference = True
             Logger._initialized = True
 
     def configure(
@@ -76,6 +77,7 @@ class Logger:
         rotation: str = "5 MB",
         retention: int = 3,
         *,
+        show_source_reference: bool = True,
         stderr: bool = True,
         enqueue: bool = False,
         stderr_timestamp: bool = False,
@@ -91,6 +93,7 @@ class Logger:
             rotation (str, int, datetime.time, datetime.timedelta or callable, optional): A condition indicating whenever the current logged file should be closed and a new one started. Defaults to "10 MB".
             retention (str, int, datetime.timedelta or callable, optional): A directive filtering old files that should be removed during rotation or end of program. Defaults to 3.
             enqueue (bool): Whether the messages to be logged should first pass through a multiprocessing-safe queue before reaching the sink. This is useful while logging to a file through multiple processes. This also has the advantage of making logging calls non-blocking
+            show_source_reference (bool): Whether to show source code references in the output. Defaults to True.
             stderr_timestamp (bool): Whether to include a timestamp in the stderr output. Defaults to False.
         """
         self.log_level = LogLevel.from_name(log_level)
@@ -99,6 +102,7 @@ class Logger:
         self.retention = retention
         self.enqueue = enqueue
         self.stderr_timestamp = stderr_timestamp
+        self.show_source_reference = show_source_reference
         if self.log_level == LogLevel.NOTSET:
             return
 
@@ -142,11 +146,15 @@ class Logger:
         extras = " | <level>{extra}</level>" if record["extra"] else ""
         exception = "\n{exception}" if record["exception"] else ""
         timestamp = "{time:YYYY-MM-DD HH:mm:ss} | " if self.stderr_timestamp else ""
+        source_reference = (
+            " | <fg #c5c5c5>{name}:{function}:{line}</fg #c5c5c5>"
+            if self.show_source_reference
+            else ""
+        )
 
-        return f"{timestamp}<level>{{level: <8}}</level> | <level>{{message}}</level>{extras} | <fg #c5c5c5>{{name}}:{{function}}:{{line}}</fg #c5c5c5>{exception}\n"
+        return f"{timestamp}<level>{{level: <8}}</level> | <level>{{message}}</level>{extras}{source_reference}{exception}\n"
 
-    @staticmethod
-    def _log_file_formatter(record: dict) -> str:
+    def _log_file_formatter(self, record: dict) -> str:
         """Format log records for log file output with color and metadata.
 
         Format log records with timestamp, level, message, extra fields, and source location. Prints the raw record for debugging and returns a formatted string with color tags for the level and metadata.
@@ -159,8 +167,9 @@ class Logger:
         """
         extras = " | {extra}" if record["extra"] else ""
         exception = "\n{exception}" if record["exception"] else ""
+        source_reference = " | {name}:{function}:{line}" if self.show_source_reference else ""
 
-        return f"{{time:YYYY-MM-DD HH:mm:ss}} | {{level: <8}} | {{message}}{extras} | {{name}}:{{function}}:{{line}}{exception}\n"
+        return f"{{time:YYYY-MM-DD HH:mm:ss}} | {{level: <8}} | {{message}}{extras}{source_reference}{exception}\n"
 
     def __getattr__(self, name: str) -> Any:  # noqa: ANN401
         """Create logging methods dynamically based on style names.
