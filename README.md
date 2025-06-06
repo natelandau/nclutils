@@ -6,11 +6,12 @@ Collection of convenience functions used in Python packages and scripts. These a
 
 ## Features
 
--   **Pretty Printing**: Rich text formatting for console output with customizable styles
--   **Shell Commands**: Safe execution of shell commands with proper error handling
 -   **Filesystem Utilities**: Common filesystem operations
--   **Questions**: Short-cut functions for asking questions and getting user input using the [questionary library](https://github.com/tmbo/questionary).
+-   **Logging**: A wrapper around the [Loguru](https://github.com/Delgan/loguru) logger with configurable log levels and custom styles.
 -   **Network**: Helper functions for working with network connections.
+-   **Pretty Printing**: Rich text formatting for console output with customizable styles
+-   **Questions**: Short-cut functions for asking questions and getting user input using the [questionary library](https://github.com/tmbo/questionary).
+-   **Shell Commands**: Safe execution of shell commands with proper error handling
 -   Other miscellaneous utilities.
 
 ## Requirements
@@ -29,10 +30,12 @@ nclutils has a few dependencies that are included in the project.
 
 ## Installation
 
-Install using `uv`:
-
 ```bash
-uv add git+https://github.com/natelandau/nclutils.git
+# With uv
+uv add nclutils
+
+# With pip
+pip install nclutils
 ```
 
 ## Included Modules
