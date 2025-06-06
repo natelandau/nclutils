@@ -1,3 +1,11 @@
+## v0.4.0 (2025-06-06)
+
+### Feat
+
+- **logger**: add option to suppress source references (#6)
+- **strings**: add int_to_emoji
+- **fixtures**: strip `tmp_path` from test output (#5)
+
 ## v0.3.0 (2025-05-15)
 
 ### Feat
