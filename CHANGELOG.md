@@ -1,3 +1,10 @@
+## v0.5.0 (2025-06-18)
+
+### Feat
+
+- **fixtures**: add clean_stderrout fixture (#8)
+- **filesystem**: add clean_directory()
+
 ## v0.4.0 (2025-06-06)
 
 ### Feat
