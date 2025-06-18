@@ -108,6 +108,24 @@ def backup_path(
     return backup_path
 
 
+def clean_directory(directory: Path) -> None:
+    """Recursively cleans up the contents of a directory, deleting all files and subdirectories without deleting the directory itself.
+
+    Args:
+        directory (Path): The directory to clean up.
+    """
+    if not directory.is_dir():
+        msg = f"{directory} is not a directory. Did not clean up."
+        logger.warning(msg)
+        return
+
+    for child in directory.iterdir():
+        if child.is_file():
+            child.unlink()
+        else:
+            shutil.rmtree(child)
+
+
 def copy_file(
     src: Path,
     dst: Path,
