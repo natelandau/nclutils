@@ -2,8 +2,6 @@
 
 import sys
 
-from nclutils import console, logger
-
 
 def test_debug_string(debug, clean_stdout) -> None:
     """Verify that the debug fixture works with a simple string."""
