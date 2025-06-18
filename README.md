@@ -46,6 +46,10 @@ pip install nclutils
 
     Create a backup of a file or directory. Silently returns `None` if the source path does not exist by default.
 
+-   **`clean_directory(directory: Path) -> None`**
+
+    Recursively cleans up the contents of a directory, deleting all files and subdirectories without deleting the directory itself.
+
 -   **`copy_directory(src: Path, dst: Path, with_progress: bool = False, transient: bool = True, keep_backup: bool = True) -> Path`**
 
     Copy a directory with an optional progress bar for each file. If the destination directory already exists, it will be backed up with a timestamped suffix.

@@ -5,7 +5,14 @@ from pathlib import Path
 
 import pytest
 
-from nclutils import console, directory_tree, find_files, find_subdirectories
+from nclutils import (
+    clean_directory,
+    console,
+    directory_tree,
+    find_files,
+    find_subdirectories,
+    logger,
+)
 
 
 @pytest.fixture
@@ -240,3 +247,32 @@ def test_directory_tree(temp_directory: Path, clean_stdout) -> None:
     assert "│   ├── 📄" in output
     assert "│   └── 📄" in output
     assert "(0 bytes)" in output
+
+
+def test_clean_directory(temp_directory: Path, clean_stdout) -> None:
+    """Verify that a directory is cleaned up."""
+    # Given: A directory with files and subdirectories
+    # When: Cleaning up a directory
+    clean_directory(temp_directory)
+
+    # Then: The directory should be empty
+    assert temp_directory.exists()
+    assert temp_directory.is_dir()
+    assert not list(temp_directory.iterdir())
+
+
+def test_clean_directory_not_a_directory(tmp_path: Path, clean_stderr, debug) -> None:
+    """Verify that a directory is cleaned up."""
+    logger.configure(log_level="WARNING")
+    test_file = tmp_path / "test.txt"
+    test_file.touch()
+
+    # When: Cleaning up a directory
+    clean_directory(test_file)
+    output = clean_stderr()
+    debug(output)
+
+    # Then: The directory should be empty
+    assert test_file.exists()
+    assert test_file.is_file()
+    assert "test.txt is not a directory. Did not clean" in output

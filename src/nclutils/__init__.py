@@ -2,6 +2,7 @@
 
 from .fs import (
     backup_path,
+    clean_directory,
     copy_directory,
     copy_file,
     directory_tree,
@@ -48,6 +49,7 @@ __all__ = [
     "check_python_version",
     "choose_multiple_from_list",
     "choose_one_from_list",
+    "clean_directory",
     "console",
     "copy_directory",
     "copy_file",
