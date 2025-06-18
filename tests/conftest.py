@@ -4,7 +4,12 @@ import pytest
 from loguru import logger as _logger
 
 from nclutils.logging.logging import Logger
-from nclutils.pytest_fixtures import clean_stderr, clean_stdout, debug  # noqa: F401
+from nclutils.pytest_fixtures import (  # noqa: F401
+    clean_stderr,
+    clean_stderrout,
+    clean_stdout,
+    debug,
+)
 
 
 @pytest.fixture(autouse=True)

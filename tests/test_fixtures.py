@@ -2,6 +2,8 @@
 
 import sys
 
+from nclutils import console, logger
+
 
 def test_debug_string(debug, clean_stdout) -> None:
     """Verify that the debug fixture works with a simple string."""
@@ -97,6 +99,32 @@ def test_clean_stderr_without_tmp_path(debug, clean_stderr, tmp_path) -> None:
 
     # When cleaning the stderr
     output = clean_stderr(strip_tmp_path=True)
+
+    # Then the output contains the string
+    assert "Hello, …world!" in output
+
+
+def test_clean_stderrout(debug, clean_stderrout) -> None:
+    """Verify that the clean_stderr fixture works."""
+    sys.stdout.write("this is stdout\n")
+    sys.stderr.write("this is stderr\n")
+
+    # When cleaning the stderr
+    output = clean_stderrout(strip_tmp_path=False)
+
+    # Then the output contains the string
+    assert "this is stderr" in output
+    assert "this is stdout" in output
+
+
+def test_clean_stderrout_without_tmp_path(debug, clean_stderrout, tmp_path) -> None:
+    """Verify that the clean_stderr fixture works."""
+    # Given a test string
+    test_string = f"Hello, {tmp_path}world!"
+    sys.stderr.write(test_string)
+
+    # When cleaning the stderr
+    output = clean_stderrout(strip_tmp_path=True)
 
     # Then the output contains the string
     assert "Hello, …world!" in output

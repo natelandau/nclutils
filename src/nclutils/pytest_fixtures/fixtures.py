@@ -51,7 +51,7 @@ def clean_stderr(
 
     Example:
         def test_cli_output(clean_stderr):
-            print("\033[31mRed Text\033[0m")  # Colored output
+            print("\033[31mRed Text\033[0m", file=sys.stderr)  # Colored output
             assert clean_stderr() == "Red Text"  # Test against clean text
     """
     # Set the terminal width to 180 columns to avoid unwanted line breaks in the output
@@ -63,6 +63,36 @@ def clean_stderr(
         return strip_ansi(capsys.readouterr().err)
 
     return _get_clean_stdout
+
+
+@pytest.fixture
+def clean_stderrout(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> Callable[[], str]:
+    r"""Return a function that cleans ANSI escape sequences from captured stdout and stderr.
+
+    This fixture is useful for testing CLI output where ANSI color codes and other escape sequences need to be stripped to verify the actual text content. The returned callable captures both stdout and stderr using pytest's capsys fixture and removes all ANSI escape sequences, making it easier to write assertions against the cleaned output.
+
+    Returns:
+        Callable[[], str]: A function that when called returns the current stdout and stderr combined with all ANSI escape sequences removed
+
+    Example:
+        def test_cli_output(clean_stderrout):
+            print("\033[31mRed Text\033[0m")  # Colored output to stdout
+            print("\033[32mGreen Text\033[0m", file=sys.stderr)  # Colored output to stderr
+            assert clean_stderrout() == "Red Text\nGreen Text"  # Test against clean text
+    """
+    # Set the terminal width to 180 columns to avoid unwanted line breaks in the output
+    monkeypatch.setenv("COLUMNS", "180")
+
+    def _get_clean_stderrout(*, strip_tmp_path: bool = True) -> str:
+        captured = capsys.readouterr()
+        output = f"{captured.out}{captured.err}"
+        if strip_tmp_path:
+            return strip_ansi(output).replace(str(tmp_path), "…")
+        return strip_ansi(output)
+
+    return _get_clean_stderrout
 
 
 @pytest.fixture

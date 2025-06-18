@@ -122,6 +122,7 @@ The `nclutils.pytest_fixtures` module contains convenience functions and fixture
 
 -   **`clean_stdout`** Clean the stdout of the console output by creating a wrapper around `capsys` to capture console stdout output.
 -   **`clean_stderr`** Clean the stderr of the console output by creating a wrapper around `capsys` to capture console stderr output.
+-   **`clean_stderrout`** Clean the stdout and stderr of the console output by creating a wrapper around `capsys` to capture both stdout and stderr output.
 -   **`debug`** Prints debug information to the console. Useful for writing and debugging tests.
 -   **`pytest_assertrepr_compare`** Patches the default pytest behavior of hiding whitespace differences in assertion failure messages. Replaces spaces and tabs with `[space]` and `[tab]` markers.
 
