@@ -117,6 +117,33 @@ def test_log_to_file(clean_stderr, tmp_path, debug):
     )
 
 
+def test_prefix(clean_stderr, tmp_path, debug):
+    """Verify that the logger respects the log level."""
+    # Given logger configured to write to file
+    log_path = tmp_path / "somedir" / "test.log"
+    logger.configure(log_level="info", log_file=str(log_path), prefix="TEST")
+
+    # When logging messages
+    logger.info("Hello world1")
+    logger.info("Hello world2", somevar="somevalue")
+
+    # Then messages should appear in stderr and log file
+    output = clean_stderr()
+    # debug(output)
+    assert "INFO     | TEST | Hello world1 | tests.test_logger" in output
+    assert "INFO     | TEST | Hello world2 | {'somevar': 'somevalue'} | tests.test_logger" in output
+
+    assert log_path.exists()
+    logfile_text = log_path.read_text()
+    # debug(logfile_text)
+
+    assert "| INFO     | TEST | Hello world1 | tests.test_logger" in logfile_text
+    assert (
+        "| INFO     | TEST | Hello world2 | {'somevar': 'somevalue'} | tests.test_logger"
+        in logfile_text
+    )
+
+
 def test_suppress_source_reference(clean_stderr, tmp_path, debug):
     """Verify that source references can be suppressed."""
     # Given logger configured to write to file

@@ -73,14 +73,15 @@ class Logger:
     def configure(
         self,
         log_level: str,
+        *,
         log_file: str | None = None,
         rotation: str = "5 MB",
         retention: int = 3,
-        *,
         show_source_reference: bool = True,
         stderr: bool = True,
         enqueue: bool = False,
         stderr_timestamp: bool = False,
+        prefix: str = "",
     ) -> None:
         """Configure and initialize a Loguru logger with console and optional file output.
 
@@ -95,6 +96,7 @@ class Logger:
             enqueue (bool): Whether the messages to be logged should first pass through a multiprocessing-safe queue before reaching the sink. This is useful while logging to a file through multiple processes. This also has the advantage of making logging calls non-blocking
             show_source_reference (bool): Whether to show source code references in the output. Defaults to True.
             stderr_timestamp (bool): Whether to include a timestamp in the stderr output. Defaults to False.
+            prefix (str): A prefix to add to all log messages. Defaults to "".
         """
         self.log_level = LogLevel.from_name(log_level)
         self.log_file = log_file
@@ -103,6 +105,7 @@ class Logger:
         self.enqueue = enqueue
         self.stderr_timestamp = stderr_timestamp
         self.show_source_reference = show_source_reference
+        self.prefix = prefix
         if self.log_level == LogLevel.NOTSET:
             return
 
@@ -143,16 +146,19 @@ class Logger:
         Returns:
             str: A formatted log string with color tags and metadata.
         """
+        timestamp = "{time:YYYY-MM-DD HH:mm:ss} | " if self.stderr_timestamp else ""
+        level = "<level>{level: <8}</level> | "
+        prefix = f"{self.prefix} | " if self.prefix else ""
+        message = "<level>{message}</level>"
         extras = " | <level>{extra}</level>" if record["extra"] else ""
         exception = "\n{exception}" if record["exception"] else ""
-        timestamp = "{time:YYYY-MM-DD HH:mm:ss} | " if self.stderr_timestamp else ""
         source_reference = (
             " | <fg #c5c5c5>{name}:{function}:{line}</fg #c5c5c5>"
             if self.show_source_reference
             else ""
         )
 
-        return f"{timestamp}<level>{{level: <8}}</level> | <level>{{message}}</level>{extras}{source_reference}{exception}\n"
+        return f"{timestamp}{level}{prefix}{message}{extras}{source_reference}{exception}\n"
 
     def _log_file_formatter(self, record: dict) -> str:
         """Format log records for log file output with color and metadata.
@@ -165,11 +171,15 @@ class Logger:
         Returns:
             str: A formatted log string with color tags and metadata.
         """
+        timestamp = "{time:YYYY-MM-DD HH:mm:ss} | "
+        level = "{level: <8} | "
+        prefix = f"{self.prefix} | " if self.prefix else ""
+        message = "{message}"
         extras = " | {extra}" if record["extra"] else ""
         exception = "\n{exception}" if record["exception"] else ""
         source_reference = " | {name}:{function}:{line}" if self.show_source_reference else ""
 
-        return f"{{time:YYYY-MM-DD HH:mm:ss}} | {{level: <8}} | {{message}}{extras}{source_reference}{exception}\n"
+        return f"{timestamp}{level}{prefix}{message}{extras}{source_reference}{exception}\n"
 
     def __getattr__(self, name: str) -> Any:  # noqa: ANN401
         """Create logging methods dynamically based on style names.
