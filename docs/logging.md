@@ -39,6 +39,7 @@ Configure the logger with the given log level, log file, rotation, retention, an
 -   `retention (str, int, datetime.timedelta or callable, optional)`: A directive filtering old files that should be removed during rotation or end of program. Defaults to 3. See [Loguru's documentation](https://loguru.readthedocs.io/en/stable/api/logger.html#loguru.logger.add) for more information.
 -   `show_source_reference (bool)`: Whether to show source code references in the output. Defaults to `True`.
 -   `stderr (bool)`: Whether to log to stderr. If `False`, no logs will be output to stderr. Defaults to `True`.
+-   `prefix (str)`: A prefix to add to all log messages after the log level. Defaults to `""`.
 
 > [!IMPORTANT]\
 > If `log_level` is not set, no logs will be output.
