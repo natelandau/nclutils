@@ -1,3 +1,9 @@
+## v0.6.0 (2025-06-21)
+
+### Feat
+
+- **logger**: add an optional prefix to logs (#9)
+
 ## v0.5.0 (2025-06-18)
 
 ### Feat
