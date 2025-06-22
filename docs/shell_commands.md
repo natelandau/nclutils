@@ -19,7 +19,7 @@ Execute shell commands with proper error handling and output control.
 -   sudo: bool. Whether to run the command with sudo (default: False)
 
 ```python
-from script_utilities import run_command
+from nclutils import run_command
 
 # Execute a command and print the output to the console
 run_command("ls", ["-la", "/some/path"])
@@ -33,7 +33,7 @@ output = run_command("git", ["status"], quiet=True)
 The run_command function can change directories before running a command.
 
 ```python
-from script_utilities import run_command
+from nclutils import run_command
 
 # Change to a temporary directory and then run the command
 run_command("pwd", [], pushd=Path("/tmp"))
@@ -51,7 +51,7 @@ The run_command function raises `ShellCommandFailedError` if the command fails a
 -   `full_cmd`: The full command that was run
 
 ```python
-from script_utilities import ShellCommandFailedError, ShellCommandNotFoundError
+from nclutils import ShellCommandFailedError, ShellCommandNotFoundError
 
 try:
     run_command("nonexistent", ["arg1"])
@@ -74,7 +74,7 @@ run_command("ls", ["-l", "/Users"], okay_codes=[0,1])
 Check if a command exists in the PATH. Returns the absolute path to the command if found, otherwise None.
 
 ```python
-from script_utilities import which
+from nclutils import which
 
 # Check if a command exists in the PATH
 result = which("ls")
