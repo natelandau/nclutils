@@ -80,7 +80,7 @@ class Logger:
         show_source_reference: bool = True,
         stderr: bool = True,
         enqueue: bool = False,
-        stderr_timestamp: bool = False,
+        stderr_timestamp: bool = True,
         prefix: str = "",
     ) -> None:
         """Configure and initialize a Loguru logger with console and optional file output.
@@ -95,7 +95,7 @@ class Logger:
             retention (str, int, datetime.timedelta or callable, optional): A directive filtering old files that should be removed during rotation or end of program. Defaults to 3.
             enqueue (bool): Whether the messages to be logged should first pass through a multiprocessing-safe queue before reaching the sink. This is useful while logging to a file through multiple processes. This also has the advantage of making logging calls non-blocking
             show_source_reference (bool): Whether to show source code references in the output. Defaults to True.
-            stderr_timestamp (bool): Whether to include a timestamp in the stderr output. Defaults to False.
+            stderr_timestamp (bool): Whether to include a timestamp in the stderr output. Defaults to True.
             prefix (str): A prefix to add to all log messages. Defaults to "".
         """
         self.log_level = LogLevel.from_name(log_level)

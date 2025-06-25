@@ -1,5 +1,7 @@
 """Test logging module."""
 
+import re
+
 import pytest
 
 from nclutils import logger
@@ -75,6 +77,31 @@ def test_logger_respects_stderr_false(clean_stderr):
     # Then no output should be produced
     output = clean_stderr()
     assert not output
+
+
+def test_logger_stderr_timestamp(clean_stderr, debug):
+    """Verify that the logger respects the log level."""
+    # Given logger configured with stderr timestamp enabled
+    logger.configure(log_level="info", stderr_timestamp=True)
+
+    # When logging a message
+    logger.info("Hello, world!")
+
+    # Then timestamp should be present
+    output = clean_stderr()
+    debug(output)
+    assert re.search(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", output) is not None
+
+    # Given logger configured with stderr timestamp enabled
+    logger.configure(log_level="info", stderr_timestamp=False)
+
+    # When logging a message
+    logger.info("Hello, world!")
+
+    # Then timestamp should be absent
+    output = clean_stderr()
+    debug(output)
+    assert re.search(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", output) is None
 
 
 def test_logger_extra_attributes(clean_stderr, debug):
