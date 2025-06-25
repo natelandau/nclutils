@@ -14,6 +14,7 @@ from rich.table import Table
 from rich.text import Text
 
 console = Console()
+err_console = Console(stderr=True)
 
 P = ParamSpec("P")
 R = TypeVar("R")

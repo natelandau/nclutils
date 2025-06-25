@@ -108,6 +108,14 @@ pip install nclutils
 
 The pretty printing module provides styled console output with configurable log levels and custom styles. See the [pretty_print docs](docs/pretty_print.md) for more information.
 
+-   **`console`**
+
+    A rich console object for styled console output.
+
+-   **`err_console`**
+
+    A rich console object for styled console output to stderr.
+
 -   **`PrettyPrinter(Class)`**
 
     Styled console output with configurable levels and custom styles.

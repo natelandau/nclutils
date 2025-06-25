@@ -12,7 +12,7 @@ from .fs import (
 )
 from .logging import logger
 from .network import network_available
-from .pretty_print import PrintStyle, console, pp, print_debug
+from .pretty_print import PrintStyle, console, err_console, pp, print_debug
 from .questions import choose_multiple_from_list, choose_one_from_list
 from .sh import ShellCommandFailedError, ShellCommandNotFoundError, run_command, which
 from .strings import (
@@ -55,6 +55,7 @@ __all__ = [
     "copy_file",
     "deburr",
     "directory_tree",
+    "err_console",
     "find_files",
     "find_subdirectories",
     "find_user_home_dir",

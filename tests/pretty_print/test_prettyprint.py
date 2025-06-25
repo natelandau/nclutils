@@ -5,7 +5,7 @@ from textwrap import dedent
 
 import pytest
 
-from nclutils import PrintStyle, pp
+from nclutils import PrintStyle, console, err_console, pp
 from nclutils.pretty_print.pretty_print import PrettyPrinter
 
 
@@ -161,3 +161,15 @@ def test_initialization_happens_once() -> None:
     assert instance2.debug_enabled is True
     assert instance2.trace_enabled is True
     assert instance1 is instance2
+
+
+def test_console(clean_stdout):
+    """Test that console and err_console are correctly defined."""
+    console.print("hello world")
+    assert clean_stdout() == "hello world\n"
+
+
+def test_err_console(clean_stderr):
+    """Test that err_console is correctly defined."""
+    err_console.print("hello world")
+    assert clean_stderr() == "hello world\n"
