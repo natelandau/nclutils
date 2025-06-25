@@ -1,3 +1,15 @@
+## v1.0.0 (2025-06-25)
+
+### BREAKING CHANGE
+
+- Inverts the previous default behavior when configuring
+the logger.
+
+### Feat
+
+- **logger**: change default to print timestamps to stderr (#11)
+- add `err_console` to print to stderr (#10)
+
 ## v0.6.0 (2025-06-21)
 
 ### Feat
