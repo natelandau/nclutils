@@ -1,3 +1,9 @@
+## v1.0.1 (2025-06-25)
+
+### Fix
+
+- **ci**: fix broken workflow
+
 ## v1.0.0 (2025-06-25)
 
 ### BREAKING CHANGE
