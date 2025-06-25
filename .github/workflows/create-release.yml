@@ -15,13 +15,34 @@ permissions:
     contents: write
 
 jobs:
-    auto-release:
-        name: Create Release
-        runs-on: "ubuntu-latest"
+    test-package:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
         strategy:
             fail-fast: true
             matrix:
-                python-version: ["3.12"]
+                python-version: ["3.13"]
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Setup Python, uv, and the package
+              uses: ./.github/actions/setup_python_env
+
+            - name: Run tests
+              shell: bash
+              run: uv run --frozenduty test
+
+    auto-release:
+        name: Create Release
+        runs-on: "ubuntu-latest"
+        needs:
+            - test-package
+        strategy:
+            fail-fast: true
+            matrix:
+                python-version: ["3.13"]
         steps:
             - name: Checkout repository
               uses: actions/checkout@v4

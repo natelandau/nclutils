@@ -30,6 +30,7 @@ concurrency:
 
 jobs:
     test-python-code:
+        if: ${{ !contains(github.event.head_commit.message, 'bump(release)') }}
         runs-on: ubuntu-latest
         strategy:
             fail-fast: true
@@ -59,6 +60,7 @@ jobs:
                   CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
     lint-project:
+        if: ${{ !contains(github.event.head_commit.message, 'bump(release)') }}
         runs-on: ubuntu-latest
         steps:
             - name: Checkout repository
