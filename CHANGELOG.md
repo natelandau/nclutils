@@ -1,3 +1,17 @@
+## v1.1.0 (2025-07-02)
+
+### Feat
+
+- add text processing utilities
+
+### Fix
+
+- **fs**: ensure file copy completeness and integrity (#14)
+
+### Refactor
+
+- **linting**: enable more ruff rules (#15)
+
 ## v1.0.1 (2025-06-25)
 
 ### Fix
