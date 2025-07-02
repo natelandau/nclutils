@@ -1,6 +1,7 @@
 tmp.py
 tmp/
-.cursor
+.cursor/
+GEMINI.md
 
 # ---> Python
 # Byte-compiled / optimized / DLL files

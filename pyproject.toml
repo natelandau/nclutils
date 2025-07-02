@@ -34,8 +34,8 @@
         "pytest-pretty-terminal>=1.1.0",
         "pytest-sugar>=1.0.0",
         "pytest>=8.4.1",
-        "ruff>=0.12.0",
-        "typos>=1.33.1",
+        "ruff>=0.12.1",
+        "typos>=1.34.0",
     ]
 
 [tool.commitizen]
@@ -44,7 +44,7 @@
     tag_format                 = "v${version}"
     update_changelog_on_bump   = true
     version_files              = ["src/nclutils/constants.py:VERSION"]
-    version_provider           = "pep621"
+    version_provider           = "uv"
 
 [tool.coverage.report] # https://coverage.readthedocs.io/en/latest/config.html#report
     exclude_lines = [
