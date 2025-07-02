@@ -37,7 +37,7 @@ def which(cmd: str) -> str | None:
     return str(result).strip()
 
 
-def run_command(  # noqa: C901
+def run_command(  # noqa: C901, PLR0913
     cmd: str,
     args: list[str],
     pushd: str | Path = "",

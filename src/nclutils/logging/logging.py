@@ -70,7 +70,7 @@ class Logger:
             self.show_source_reference = True
             Logger._initialized = True
 
-    def configure(
+    def configure(  # noqa: PLR0913
         self,
         log_level: str,
         *,
