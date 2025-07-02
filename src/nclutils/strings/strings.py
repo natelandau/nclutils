@@ -363,7 +363,7 @@ def random_string(length: int) -> str:
     Returns:
         str: A string of random ASCII letters with the specified length
     """
-    return "".join(random.choice(string.ascii_letters) for _ in range(length))
+    return "".join(random.choice(string.ascii_letters) for _ in range(length))  # noqa: S311
 
 
 def separator_case(text: str, separator: str = "-") -> str:
