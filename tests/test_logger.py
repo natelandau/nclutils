@@ -203,7 +203,7 @@ def test_catch_decorator(clean_stderr, tmp_path, debug):
 
     # When a decorated function raises an exception
     @logger.catch
-    def divide(a: int, b: int) -> float:  # noqa: FURB118
+    def divide(a: int, b: int) -> float:
         return a / b
 
     divide(1, 0)
