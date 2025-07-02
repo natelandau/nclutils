@@ -32,7 +32,12 @@ def _do_copy_file(
         dst (Path): Destination file to write to
         progress_bar (Progress | None, optional): Progress bar instance for tracking. Defaults to None
         task (TaskID | None, optional): Task ID for progress updates. Defaults to None
+
+    Raises:
+        RuntimeError: If the copy operation fails or results in incomplete data
     """
+    src_size = src.stat().st_size
+
     with src.open("rb") as src_bytes, dst.open("wb") as dst_bytes:
         total_bytes_copied = 0
         while True:
@@ -43,6 +48,19 @@ def _do_copy_file(
             total_bytes_copied += len(buf)
             if progress_bar is not None and task is not None:
                 progress_bar.update(task, completed=total_bytes_copied)
+
+    # Verify the copy was complete by checking file sizes
+    if total_bytes_copied != src_size:
+        msg = f"copy file incomplete: expected {src_size} bytes, copied {total_bytes_copied} bytes"
+        logger.error(msg)
+        raise RuntimeError(msg)
+
+    # Double-check destination file size matches source
+    dst_size = dst.stat().st_size
+    if dst_size != src_size:
+        msg = f"copy file incomplete: destination file size mismatch: source {src_size} bytes, destination {dst_size} bytes"
+        logger.error(msg)
+        raise RuntimeError(msg)
 
 
 def backup_path(
@@ -187,11 +205,11 @@ def copy_file(
     if with_progress:
         with Progress(transient=transient) as progress_bar:
             copy_task = progress_bar.add_task(f"Copy {src.name}", total=src.stat().st_size)
-            logger.debug(f"copyfile {src} {dst}")
             _do_copy_file(src, dst, progress_bar=progress_bar, task=copy_task)
+            logger.trace(f"copyfile {src} {dst}")
     else:
-        logger.debug(f"copyfile {src} {dst}")
         _do_copy_file(src, dst)
+        logger.trace(f"copyfile {src} {dst}")
 
     # Preserve original file permissions
     shutil.copymode(str(src), str(dst))

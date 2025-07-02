@@ -66,7 +66,7 @@ def run_command(  # noqa: C901
     Raises:
         ShellCommandNotFoundError: When the command is not found in PATH
         ShellCommandFailedError: When the command exits with a non-zero status code
-    """  # noqa: DOC502
+    """
     output_lines: list[str] = []
 
     def _process_output(line: str, exclude_regex: str | None = None) -> None:

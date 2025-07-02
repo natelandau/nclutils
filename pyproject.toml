@@ -54,7 +54,6 @@
         'except [\w\s\._]+ as .*:',
         'if TYPE_CHECKING:',
         'if __name__ == .__main__.:',
-        'if typing.TYPE_CHECKING:',
         'pragma: no cover',
     ]
     # fail_under = 50
@@ -153,7 +152,6 @@
             "S101",
             "SLF001",  # Access a private attribute
         ], "duties.py" = ["ANN001", "FBT001", "FBT002"] }
-        preview = true
         select = ["ALL"]
         unfixable = [
             "ERA001", # Commented out code
