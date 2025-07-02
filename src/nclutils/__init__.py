@@ -31,6 +31,7 @@ from .strings import (
     split_camel_case,
     strip_ansi,
 )
+from .text_processing import ensure_lines_in_file, replace_in_file
 from .utils import (
     check_python_version,
     format_iso_timestamp,
@@ -55,6 +56,7 @@ __all__ = [
     "copy_file",
     "deburr",
     "directory_tree",
+    "ensure_lines_in_file",
     "err_console",
     "find_files",
     "find_subdirectories",
@@ -75,6 +77,7 @@ __all__ = [
     "pp",
     "print_debug",
     "random_string",
+    "replace_in_file",
     "run_command",
     "separator_case",
     "snake_case",

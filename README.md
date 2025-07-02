@@ -10,8 +10,11 @@ Collection of convenience functions used in Python packages and scripts. These a
 -   **Logging**: A wrapper around the [Loguru](https://github.com/Delgan/loguru) logger with configurable log levels and custom styles.
 -   **Network**: Helper functions for working with network connections.
 -   **Pretty Printing**: Rich text formatting for console output with customizable styles
+-   **Pytest Fixtures**: Convenience functions and fixtures for testing.
 -   **Questions**: Short-cut functions for asking questions and getting user input using the [questionary library](https://github.com/tmbo/questionary).
 -   **Shell Commands**: Safe execution of shell commands with proper error handling
+-   **Strings**: Convenience functions for working with strings.
+-   **Text Processing**: Convenience functions for working with text files.
 -   Other miscellaneous utilities.
 
 ## Requirements
@@ -230,6 +233,27 @@ Convenience functions built on top of the [sh](https://github.com/amoffat/sh) mo
 -   **`split_camel_case(string_list: list[str], match_case_list: tuple[str, ...] = ()) -> list[str]`**
 
     Split camel case strings into into separate words returning a list of words. Optionally, provide a list of strings that should not be split.
+
+### Text Processing
+
+-   **`replace_in_file(path: str | Path, replacements: dict[str, str], *, use_regex: bool = False) -> bool`**
+
+    Replace text in a file with a dictionary of replacements.
+
+    ```python
+    from nclutils import replace_in_file
+
+    replacements = {"old": "new"}
+    replace_in_file(path="test.txt", replacements=replacements)
+
+    # Or use regex
+    replacements = {"^old": "new"}
+    replace_in_file(path="test.txt", replacements=replacements, use_regex=True)
+    ```
+
+-   **`ensure_lines_in_file(path: str | Path, lines: list[str], *, at_top: bool = False) -> bool`**
+
+    Ensure lines are in a file. If the lines are not present, they will be added to the file.
 
 ### Utils
 
