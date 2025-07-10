@@ -93,9 +93,11 @@ def test_new_timestamp_uid_format(debug) -> None:
     """Verify new_timestamp_uid() generates correctly formatted string."""
     # When: Generating a timestamped UID
     uid = new_timestamp_uid()
+    # debug(uid)
 
     # Then: String matches expected format
-    assert re.match(r"^20240315T123456Z-789012-[0-9a-z]+$", uid)
+
+    assert re.match(r"^20240315T123456-[0-9a-z]+$", uid)
 
 
 @freeze_time("2024-03-15 12:34:56.789012")
@@ -132,20 +134,9 @@ def test_new_timestamp_uid_components() -> None:
 
     # Then: UID contains timestamp, microseconds, and random parts
     parts = uid.split("-")
-    assert len(parts) == 3
-    assert parts[0] == "20240315T123456Z"  # timestamp
-    assert parts[1] == "789012"  # microseconds
-    assert re.match(r"^[0-9a-z]+$", parts[2])  # random part
-
-
-@freeze_time("2024-03-15 12:34:56.000000")
-def test_new_timestamp_uid_zero_microseconds(debug) -> None:
-    """Verify new_timestamp_uid() handles zero microseconds correctly."""
-    # When: Generating a timestamped UID with zero microseconds
-    uid = new_timestamp_uid()
-
-    # Then: UID contains zero microseconds
-    assert uid.startswith("20240315T1234560000-")
+    assert len(parts) == 2
+    assert parts[0] == "20240315T123456"  # timestamp
+    assert re.match(r"^[0-9a-z]+$", parts[1])  # random part
 
 
 @freeze_time("2024-03-15 12:34:56.789012")

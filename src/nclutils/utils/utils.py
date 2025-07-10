@@ -1,6 +1,5 @@
 """Utility functions."""
 
-import re
 import sys
 from datetime import datetime, timezone
 
@@ -77,9 +76,9 @@ def format_iso_timestamp(datetime_obj: datetime, *, microseconds: bool = False) 
 
 
 def new_timestamp_uid(bits: int = 32) -> str:
-    """Generate a unique ID prefixed with an ISO timestamp.
+    """Generate a unique ID prefixed with a timestamp.
 
-    Create a unique identifier that combines an ISO 8601 UTC timestamp with random bits for uniqueness. The timestamp prefix enables chronological sorting while the random suffix ensures uniqueness.
+    Create a unique identifier that combines a UTC timestamp with random bits for uniqueness. The timestamp prefix enables chronological sorting while the random suffix ensures uniqueness.
 
     Inspired by https://github.com/jlevy/strif/
 
@@ -87,11 +86,9 @@ def new_timestamp_uid(bits: int = 32) -> str:
         bits (int, optional): Number of random bits to append after timestamp. Defaults to 32.
 
     Returns:
-        str: A unique ID in format "YYYYMMDDTHHmmssZ-microseconds-randomstring"
+        str: A unique ID in format "YYYYMMDDTHHmmss-randomstring"
     """
-    timestamp = re.sub(r"[^\w.]", "", datetime.now(timezone.utc).isoformat()).replace(".", "Z-")[
-        :23
-    ]
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
     return f"{timestamp}-{new_uid(bits)}"
 
 

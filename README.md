@@ -271,7 +271,7 @@ Convenience functions built on top of the [sh](https://github.com/amoffat/sh) mo
 
 -   **`new_timestamp_uid(bits: int = 32) -> str`**
 
-    Generate a unique ID with an ISO 8601 timestamp prefix. (`0240315T123456Z-789012-kgk5mzn`)
+    Generate a unique ID with a UTC timestamp prefix. (`0240315T123456-kgk5mzn`)
 
 -   **`new_uid(bits: int = 64) -> str`**
 
