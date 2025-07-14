@@ -74,7 +74,7 @@ def test_run_command_not_found_quiet_mode(debug, capsys) -> None:
     assert not captured.out
 
 
-def test_run_command_with_error(capsys, debug) -> None:
+def test_run_command_with_error(capsys, debug, clean_stderrout) -> None:
     """Handle command execution errors appropriately."""
     # Given: A command that will fail (ls with invalid path)
     cmd = "ls"
@@ -82,7 +82,7 @@ def test_run_command_with_error(capsys, debug) -> None:
 
     # When: Running the command
     with pytest.raises(ShellCommandFailedError) as excinfo:
-        run_command(cmd, args)
+        run_command(cmd, args, err_to_out=False)
 
     # debug(excinfo.value.__dict__)
 
@@ -91,8 +91,31 @@ def test_run_command_with_error(capsys, debug) -> None:
     assert "ls /some/nonexistent/path" in excinfo.value.full_cmd
     assert "No such file or directory" in excinfo.value.stderr
     assert not excinfo.value.stdout
-    captured = capsys.readouterr()
-    assert not captured.out
+    stderrout = clean_stderrout()
+    # debug(stderrout)
+    assert not stderrout
+
+
+def test_run_command_with_error_print_stderr(capsys, debug, clean_stderrout) -> None:
+    """Handle command execution errors appropriately."""
+    # Given: A command that will fail (ls with invalid path)
+    cmd = "ls"
+    args = ["/some/nonexistent/path"]
+
+    # When: Running the command
+    with pytest.raises(ShellCommandFailedError) as excinfo:
+        run_command(cmd, args, err_to_out=True)
+
+    # debug(excinfo.value.__dict__)
+
+    # Then: Command fails with non-zero return code and error message
+    assert excinfo.value.exit_code == 2
+    assert "ls /some/nonexistent/path" in excinfo.value.full_cmd
+    assert "No such file or directory" in excinfo.value.stderr
+    assert not excinfo.value.stdout
+    stderrout = clean_stderrout()
+    # debug(stderrout)
+    assert "ls: cannot access '/some/nonexistent/path': No such file or directory" in stderrout
 
 
 def test_run_command_with_error_quiet_mode(capsys) -> None:
