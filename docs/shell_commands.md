@@ -49,6 +49,7 @@ The run_command function raises `ShellCommandFailedError` if the command fails a
 -   `stderr`: The stderr output of the command
 -   `stdout`: The stdout output of the command
 -   `full_cmd`: The full command that was run
+-   `err_to_out`: Whether to redirect stderr to stdout for printing command output to the console.
 
 ```python
 from nclutils import ShellCommandFailedError, ShellCommandNotFoundError

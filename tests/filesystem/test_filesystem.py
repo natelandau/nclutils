@@ -270,7 +270,7 @@ def test_clean_directory_not_a_directory(tmp_path: Path, clean_stderr, debug) ->
     # When: Cleaning up a directory
     clean_directory(test_file)
     output = clean_stderr()
-    debug(output)
+    # debug(output)
 
     # Then: The directory should be empty
     assert test_file.exists()

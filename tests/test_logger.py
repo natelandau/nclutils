@@ -89,7 +89,7 @@ def test_logger_stderr_timestamp(clean_stderr, debug):
 
     # Then timestamp should be present
     output = clean_stderr()
-    debug(output)
+    # debug(output)
     assert re.search(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", output) is not None
 
     # Given logger configured with stderr timestamp enabled
@@ -100,7 +100,7 @@ def test_logger_stderr_timestamp(clean_stderr, debug):
 
     # Then timestamp should be absent
     output = clean_stderr()
-    debug(output)
+    # debug(output)
     assert re.search(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", output) is None
 
 

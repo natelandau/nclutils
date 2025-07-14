@@ -46,6 +46,7 @@ def run_command(  # noqa: C901, PLR0913
     *,
     quiet: bool = False,
     sudo: bool = False,
+    err_to_out: bool = True,
 ) -> str:
     """Execute a shell command and capture its output with ANSI color support.
 
@@ -59,6 +60,7 @@ def run_command(  # noqa: C901, PLR0913
         exclude_regex (str | None): Regex to exclude lines from the output. Defaults to None.
         quiet (bool): Whether to suppress real-time output to console. Defaults to False.
         sudo (bool): Whether to run the command with sudo. Defaults to False.
+        err_to_out (bool): Whether to redirect stderr to stdout. Defaults to True.
 
     Returns:
         str: The complete command output as a string with ANSI color codes preserved
@@ -106,14 +108,20 @@ def run_command(  # noqa: C901, PLR0913
                 with sh.contrib.sudo(k=True, _with=True):
                     command(
                         *args,
+                        _err=lambda line: _process_output(line, exclude_regex)
+                        if err_to_out
+                        else None,
                         _out=lambda line: _process_output(line, exclude_regex),
                         _ok_code=okay_codes or [0],
+                        _tee="err",
                     )
             else:
                 command(
                     *args,
+                    _err=lambda line: _process_output(line, exclude_regex) if err_to_out else None,
                     _out=lambda line: _process_output(line, exclude_regex),
                     _ok_code=okay_codes or [0],
+                    _tee="err",
                 )
 
             return "".join(output_lines)
