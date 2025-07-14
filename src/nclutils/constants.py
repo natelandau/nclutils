@@ -1,4 +1,4 @@
-"""Constants for script utilities."""
+"""Constants for nclutils."""
 
 import random
 

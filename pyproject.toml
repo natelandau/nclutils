@@ -13,7 +13,7 @@
     name = "nclutils"
     readme = "README.md"
     requires-python = ">=3.10"
-    version = "1.1.0"
+    version = "2.0.0"
 
 [build-system]
     build-backend = "hatchling.build"
@@ -24,7 +24,7 @@
         "commitizen>=4.8.3",
         "coverage>=7.9.2",
         "duty>=1.6.0",
-        "freezegun>=1.5.2",
+        "freezegun>=1.5.3",
         "mypy>=1.16.1",
         "pre-commit>=4.2.0",
         "pytest-clarity>=1.0.1",
@@ -43,7 +43,6 @@
     changelog_merge_prerelease = true
     tag_format                 = "v${version}"
     update_changelog_on_bump   = true
-    version_files              = ["src/nclutils/constants.py:VERSION"]
     version_provider           = "uv"
 
 [tool.coverage.report] # https://coverage.readthedocs.io/en/latest/config.html#report
