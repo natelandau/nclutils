@@ -1,23 +1,23 @@
 # Shell Commands
 
-Convenience functions built on top of the [sh](https://github.com/amoffat/sh) module.
+A light wrapper built on top of the [sh](https://github.com/amoffat/sh) module.
 
 ## Run Command
 
-`run_command(cmd: str, args: list[str] = [], quiet: bool = False, pushd: str | Path | None = None, okay_codes: list[int] | None = None, exclude_regex: str | None = None, sudo: bool = False) -> str`
+`run_command(cmd: str, args: list[str] = [], quiet: bool = False, pushd: str | Path | None = None, okay_codes: list[int] | None = None, exclude_regex: str | None = None, sudo: bool = False, fg: bool = False) -> str`
 
 Execute shell commands with proper error handling and output control.
 
 **Arguments:**
 
--   `cmd`: str. The command to execute
--   `args`: list[str]. The command arguments
--   `quiet`: bool. Whether to suppress output to console (default: `False`)
--   `pushd`: str | Path. The directory to change to before running the command (default: `None`)
--   `okay_codes`: list[int]. A list of exit codes that are considered successful (default: `None`)
--   `exclude_regex`: str | None. A regex to exclude lines from the output (default: `None`)
--   `sudo`: bool. Whether to run the command with sudo (default: `False`)
--   `fg`: bool. Whether to run the command in foreground mode. When `True`, the command runs in the foreground and does not capture output. This is useful for commands that require user interaction or produce real-time output. (default: `False`)
+-   `cmd: str`. The command to execute
+-   `args: list[str]`. The command arguments
+-   `quiet: bool`. Whether to suppress output to console (default: `False`)
+-   `pushd: str | Path`. The directory to change to before running the command (default: `None`)
+-   `okay_codes: list[int]`. A list of exit codes that are considered successful (default: `None`)
+-   `exclude_regex: str | None`. A regex to exclude lines from the output (default: `None`)
+-   `sudo: bool`. Whether to run the command with sudo (default: `False`)
+-   `fg: bool`. Whether to run the command in foreground mode. When `True`, the command runs in the foreground and does not capture output. This is useful for commands that require user interaction or produce real-time output. (default: `False`)
 
 ```python
 from nclutils import run_command

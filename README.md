@@ -155,7 +155,7 @@ See the [questions docs](docs/questions.md) for more information.
 
 Convenience functions built on top of the [sh](https://github.com/amoffat/sh) module. See the [shell_commands docs](docs/shell_commands.md) for more information.
 
--   **`run_command(cmd: str, args: list[str] = [], quiet: bool = False, pushd: str | Path | None = None, okay_codes: list[int] | None = None, exclude_regex: str | None = None, sudo: bool = False) -> str`**
+-   **`run_command(cmd: str, args: list[str] = [], quiet: bool = False, pushd: str | Path | None = None, okay_codes: list[int] | None = None, exclude_regex: str | None = None, sudo: bool = False, fg: bool = False) -> str`**
 
     Execute shell commands with proper error handling and output control.
 
