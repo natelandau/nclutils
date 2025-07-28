@@ -31,7 +31,7 @@ def test_run_command_successful_execution(capsys) -> None:
 
 def test_run_command_quiet_mode(capsys) -> None:
     """Execute a command in quiet mode and verify no console output."""
-    # Given: A simple echo command with quiet mode
+    # Given: A simple echo command
     cmd = "echo"
     args = ["Hello World"]
 
@@ -42,6 +42,21 @@ def test_run_command_quiet_mode(capsys) -> None:
     assert "Hello World" in str(output)
     captured = capsys.readouterr()
     assert not captured.out
+
+
+def test_run_command_fg_is_true(capsys, debug, clean_stderrout) -> None:
+    """Execute a command in foreground mode."""
+    # Given: A simple echo command
+    cmd = "echo"
+    args = ["Hello World"]
+
+    # When: Running the command in foreground mode
+    output = run_command(cmd, args, quiet=True, fg=True)
+    captured = clean_stderrout()
+
+    # Then: Command executes successfully but produces no console output
+    assert not output  # No output expected in foreground mode
+    assert not captured  # A new tty is spawned for the command, so no output is captured
 
 
 def test_run_command_not_found(capsys) -> None:
