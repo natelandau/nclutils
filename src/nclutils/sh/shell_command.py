@@ -2,6 +2,7 @@
 
 import re
 from pathlib import Path
+from typing import Any
 
 import sh
 from rich.console import Console
@@ -47,6 +48,7 @@ def run_command(  # noqa: C901, PLR0913
     quiet: bool = False,
     sudo: bool = False,
     err_to_out: bool = True,
+    fg: bool = False,
 ) -> str:
     """Execute a shell command and capture its output with ANSI color support.
 
@@ -61,6 +63,7 @@ def run_command(  # noqa: C901, PLR0913
         quiet (bool): Whether to suppress real-time output to console. Defaults to False.
         sudo (bool): Whether to run the command with sudo. Defaults to False.
         err_to_out (bool): Whether to redirect stderr to stdout. Defaults to True.
+        fg (bool): Whether to run the command in foreground. Defaults to False
 
     Returns:
         str: The complete command output as a string with ANSI color codes preserved
@@ -102,27 +105,36 @@ def run_command(  # noqa: C901, PLR0913
             ShellCommandNotFoundError: When the command is not found in PATH
             ShellCommandFailedError: When the command exits with a non-zero status code
         """
+        # Build kwargs conditionally
+        cmd_kwargs: dict[str, Any] = {}
+
+        if fg:
+            cmd_kwargs.update(
+                {
+                    "_fg": True,
+                    "_ok_code": okay_codes or [0],
+                }
+            )
+        else:
+            # Only add these kwargs when NOT in foreground mode
+            cmd_kwargs.update(
+                {
+                    "_err": lambda line: _process_output(line, exclude_regex)
+                    if err_to_out
+                    else None,
+                    "_out": lambda line: _process_output(line, exclude_regex),
+                    "_ok_code": okay_codes or [0],
+                    "_tee": "err",
+                }
+            )
+
         try:
             command = sh.Command(cmd)
             if sudo:
                 with sh.contrib.sudo(k=True, _with=True):
-                    command(
-                        *args,
-                        _err=lambda line: _process_output(line, exclude_regex)
-                        if err_to_out
-                        else None,
-                        _out=lambda line: _process_output(line, exclude_regex),
-                        _ok_code=okay_codes or [0],
-                        _tee="err",
-                    )
+                    command(*args, **cmd_kwargs)
             else:
-                command(
-                    *args,
-                    _err=lambda line: _process_output(line, exclude_regex) if err_to_out else None,
-                    _out=lambda line: _process_output(line, exclude_regex),
-                    _ok_code=okay_codes or [0],
-                    _tee="err",
-                )
+                command(*args, **cmd_kwargs)
 
             return "".join(output_lines)
         except sh.CommandNotFound as e:

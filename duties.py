@@ -107,18 +107,17 @@ def precommit(ctx: Context) -> None:
     )
 
 
-@duty(pre=[ruff, mypy, typos, precommit])
+@duty(pre=[ruff, mypy, typos, precommit], capture=CI)
 def lint(ctx: Context) -> None:
     """Run all linting duties."""
 
 
-@duty
+@duty(capture=CI)
 def update(ctx: Context) -> None:
     """Update the project."""
-    out = ctx.run(["uv", "lock", "--upgrade"], title="update uv lock")
-    rprint(strip_ansi(out))
-    out = ctx.run(["pre-commit", "autoupdate"], title="pre-commit autoupdate")
-    rprint(strip_ansi(out))
+    ctx.run(["uv", "lock", "--upgrade"], title="update uv lock")
+    ctx.run(["uv", "sync"], title="sync uv")
+    ctx.run(["pre-commit", "autoupdate"], title="pre-commit autoupdate")
 
 
 @duty()
