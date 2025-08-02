@@ -1,3 +1,9 @@
+## v2.1.0 (2025-08-02)
+
+### Feat
+
+- **sh**: add foreground support to run_command (#18)
+
 ## v2.0.0 (2025-07-14)
 
 ### Feat
