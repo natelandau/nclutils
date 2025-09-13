@@ -35,12 +35,9 @@ class LogLevel(Enum):
             LogLevel: The LogLevel enum value matching the provided name
 
         Examples:
-            >>> LogLevel.from_name("trace")
-            <LogLevel.TRACE: 5>
-            >>> LogLevel.from_name("DEBUG")
-            <LogLevel.DEBUG: 10>
-            >>> LogLevel.from_name("Info")
-            <LogLevel.INFO: 20>
+            >>> assert LogLevel.from_name("trace") == LogLevel.TRACE
+            >>> assert LogLevel.from_name("DEBUG") == LogLevel.DEBUG
+            >>> assert LogLevel.from_name("Info") == LogLevel.INFO
         """
         return cls[name.upper()]
 

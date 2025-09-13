@@ -17,12 +17,9 @@ def network_available(address: str = "8.8.4.4", port: int = 53, timeout: int = 5
         bool: True if connection succeeds, False if connection fails or times out.
 
     Examples:
-        >>> network_available()
-        True
-        >>> network_available("1.1.1.1", 53, 10)
-        True
-        >>> network_available("10.10.10000.10000", 53, 1)
-        False
+        >>> assert network_available()
+        >>> assert network_available("1.1.1.1", 53, 10)
+        >>> assert not network_available("10.10.10000.10000", 53, 1)
     """
     try:
         conn = socket.create_connection((address, port), timeout=timeout)

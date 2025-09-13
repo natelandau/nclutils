@@ -91,8 +91,8 @@ def camel_case(text: str) -> str:
         String converted to camel case.
 
     Example:
-        >>> camel_case("FOO BAR_bAz")
-        'fooBarBaz'
+        >>> assert camel_case("FOO BAR_bAz") == "fooBarBaz"
+        >>> assert camel_case("Something") == "something"
     """
     text = "".join(word.title() for word in list_words(deburr(text), strip_apostrophes=True))
     return text[:1].lower() + text[1:]
@@ -112,10 +112,8 @@ def deburr(text: str) -> str:
         str: The text with latin-1 supplementary letters converted to basic latin equivalents.
 
     Examples:
-        >>> deburr("déjà vu")
-        'deja vu'
-        >>> deburr("crème brûlée")
-        'creme brulee'
+        >>> assert deburr("déjà vu") == "deja vu"
+        >>> assert deburr("crème brûlée") == "creme brulee"
     """
     return RS_LATIN1.sub(lambda match: DEBURRED_LETTERS.get(match.group(), match.group()), text)
 
@@ -131,9 +129,8 @@ def kebab_case(text: str) -> str:
     Returns:
         str: The text converted to kebab case with words joined by hyphens.
 
-    Example:
-        >>> kebab_case("The b c_d-e!f")
-        'the-b-c-d-e-f'
+    Examples:
+        >>> assert kebab_case("The b c_d-e!f") == "the-b-c-d-e-f"
     """
     return "-".join(
         word.lower() for word in list_words(deburr(text), strip_apostrophes=True) if word
@@ -154,16 +151,11 @@ def int_to_emoji(num: int, *, markdown: bool = False, images: bool = False) -> s
         str: The emoji representation, image, or formatted string for the given number
 
     Examples:
-        >>> int_to_emoji(1)
-        ':one:'
-        >>> int_to_emoji(10)
-        ':keycap_ten:'
-        >>> int_to_emoji(11)
-        '11'
-        >>> int_to_emoji(11, markdown=True)
-        '`11`'
-        >>> int_to_emoji(10, images=True)
-        '🔟'
+        >>> assert int_to_emoji(1) == ":one:"
+        >>> assert int_to_emoji(10) == ":keycap_ten:"
+        >>> assert int_to_emoji(11) == "11"
+        >>> assert int_to_emoji(11, markdown=True) == "`11`"
+        >>> assert int_to_emoji(10, images=True) == "🔟"
     """
     if 0 <= num <= 10:  # noqa: PLR2004
         if images:
@@ -217,18 +209,12 @@ def list_words(text: str, pattern: str = "", *, strip_apostrophes: bool = False)
         list[str]: List of words extracted from the text.
 
     Examples:
-        >>> list_words("a b, c; d-e")
-        ['a', 'b', 'c', 'd', 'e']
-        >>> list_words("fred, barney, & pebbles", "[^, ]+")
-        ['fred', 'barney', '&', 'pebbles']
-        >>> list_words("fred's horse is fast", strip_apostrophes=True)
-        ['freds', 'horse', 'is', 'fast']
-        >>> list_words("fred's horse is fast")
-        ["fred's", 'horse', 'is', 'fast']
-        >>> list_words("this_is_a_test")
-        ['this', 'is', 'a', 'test']
-        >>> list_words("'They're 1st on the_hunt'")
-        ["They're", '1st', 'on', 'the', 'hunt']
+        >>> assert list_words("a b, c; d-e") == ['a', 'b', 'c', 'd', 'e']
+        >>> assert list_words("fred, barney, & pebbles", "[^, ]+") == ['fred', 'barney', '&', 'pebbles']
+        >>> assert list_words("fred's horse is fast", strip_apostrophes=True) == ['freds', 'horse', 'is', 'fast']
+        >>> assert list_words("fred's horse is fast") == ["fred's", 'horse', 'is', 'fast']
+        >>> assert list_words("this_is_a_test") == ['this', 'is', 'a', 'test']
+        >>> assert list_words("'They're 1st on the_hunt'") == ["They're", '1st', 'on', 'the', 'hunt']
     """
     p = (
         re.compile(pattern)
@@ -263,14 +249,10 @@ def pad(text: str, length: int, chars: str = " ") -> str:
         str: The text padded on both sides to reach the specified length
 
     Example:
-        >>> pad("abc", 5)
-        ' abc '
-        >>> pad("abc", 6, "x")
-        'xabcxx'
-        >>> pad("abc", 5, "...")
-        '.abc.'
-        >>> pad("abcdefg", 5, "...")
-        'abcdefg'
+        >>> assert pad("abc", 5) == " abc "
+        >>> assert pad("abc", 6, "x") == "xabcxx"
+        >>> assert pad("abc", 5, "...") == ".abc."
+        >>> assert pad("abcdefg", 5, "...") == "abcdefg"
     """
     text_len = len(text)
 
@@ -299,10 +281,8 @@ def pad_end(text: str, length: int, chars: str = " ") -> str:
         str: The text padded on the right side to reach the specified length
 
     Example:
-        >>> pad_end("abc", 5)
-        'abc  '
-        >>> pad_end("abc", 5, ".")
-        'abc..'
+        >>> assert pad_end("abc", 5) == "abc  "
+        >>> assert pad_end("abc", 5, ".") == "abc.."
     """
     # pylint: disable=redefined-outer-name
     length = max((length, len(text)))
@@ -323,10 +303,8 @@ def pad_start(text: str, length: int, chars: str = " ") -> str:
         str: The text padded on the left side to reach the specified length
 
     Example:
-        >>> pad_start("abc", 5)
-        '  abc'
-        >>> pad_start("abc", 5, ".")
-        '..abc'
+        >>> assert pad_start("abc", 5) == "  abc"
+        >>> assert pad_start("abc", 5, ".") == "..abc"
     """
     # pylint: disable=redefined-outer-name
     length = max(length, len(text))
@@ -345,8 +323,7 @@ def pascal_case(text: str) -> str:
         str: The input string converted to PascalCase format
 
     Example:
-        >>> pascal_case("FOO BAR_bAz")
-        'FooBarBaz'
+        >>> assert pascal_case("FOO BAR_bAz") == "FooBarBaz"
     """
     text = camel_case(text)
     return text[:1].upper() + text[1:]
@@ -362,6 +339,9 @@ def random_string(length: int) -> str:
 
     Returns:
         str: A string of random ASCII letters with the specified length
+
+    Example:
+        >>> assert len(random_string(10)) == 10
     """
     return "".join(random.choice(string.ascii_letters) for _ in range(length))  # noqa: S311
 
@@ -379,10 +359,8 @@ def separator_case(text: str, separator: str = "-") -> str:
         str: The text split into words and joined with the separator
 
     Example:
-        >>> separator_case("a!!B___c.d")
-        'a-b-c-d'
-        >>> separator_case("a!!b___c.d", "_")
-        'a_b_c_d'
+        >>> assert separator_case("a!!B___c.d") == "a-b-c-d"
+        >>> assert separator_case("a!!b___c.d", "_") == "a_b_c_d"
     """
     return separator.join(
         word.lower() for word in list_words(deburr(text), strip_apostrophes=True) if word
@@ -401,8 +379,7 @@ def snake_case(text: str) -> str:
         str: The text converted to snake case with words joined by underscores
 
     Example:
-        >>> snake_case("This is Snake Case!")
-        'this_is_snake_case'
+        >>> assert snake_case("This is Snake Case!") == "this_is_snake_case"
     """
     return "_".join(
         word.lower() for word in list_words(deburr(text), strip_apostrophes=True) if word
@@ -421,8 +398,7 @@ def strip_ansi(text: str) -> str:
         str: The cleaned text with all ANSI escape sequences removed.
 
     Example:
-        >>> strip_ansi("\x1b[31mHello, World!\x1b[0m")
-        'Hello, World!'
+        >>> assert strip_ansi("\x1b[31mHello, World!\x1b[0m") == "Hello, World!"
     """
     return ANSI_CHARS.sub("", text)
 
@@ -440,10 +416,8 @@ def split_camel_case(string_list: list[str], match_case_list: tuple[str, ...] = 
         list[str]: List of strings with camelCase words split into separate components.
 
     Examples:
-        >>> split_camel_case(["CamelCase", "SomethingElse", "hello", "CEO"])
-        ['Camel', 'Case', 'Something', 'Else', 'hello', 'CEO']
-        >>> split_camel_case(["I have a camelCase", "SomethingElse"], ("SomethingElse",))
-        ['I', 'have', 'a', 'camel', 'Case', 'SomethingElse']
+        >>> assert split_camel_case(["CamelCase", "SomethingElse", "hello", "CEO"]) == ['Camel', 'Case', 'Something', 'Else', 'hello', 'CEO']
+        >>> assert split_camel_case(["I have a camelCase", "SomethingElse"], ("SomethingElse",)) == ['I', 'have', 'a', 'camel', 'Case', 'SomethingElse']
     """
     result = []
     for item in string_list:
