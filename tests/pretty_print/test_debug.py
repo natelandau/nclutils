@@ -3,16 +3,18 @@
 import os
 import re
 
+import pytest
+
 from nclutils import print_debug
 
 
-def test_print_debug(clean_stdout, debug) -> None:
+def test_print_debug(capsys: pytest.CaptureFixture) -> None:
     """Verify print_debug outputs basic debug info."""
     # Given: No arguments
 
     # When: Calling print_debug with no arguments
     print_debug()
-    output = clean_stdout()
+    output = capsys.readouterr().out
 
     # Then: Output contains expected debug sections and formatting
     assert "debug info" in output
@@ -27,7 +29,7 @@ def test_print_debug(clean_stdout, debug) -> None:
     assert "Installed packages:" not in output
 
 
-def test_print_debug_custom(clean_stdout, debug) -> None:
+def test_print_debug_custom(capsys: pytest.CaptureFixture) -> None:
     """Verify print_debug handles custom debug sections."""
     # Given: Custom debug dictionaries
     config_as_dict = {
@@ -54,7 +56,7 @@ def test_print_debug_custom(clean_stdout, debug) -> None:
 
     # When: Calling print_debug with custom sections
     print_debug(custom=[config_as_dict, cli_args_as_dict, single_variables])
-    output = clean_stdout()
+    output = capsys.readouterr().out
 
     # debug(output)
 
@@ -82,14 +84,14 @@ def test_print_debug_custom(clean_stdout, debug) -> None:
     assert "Installed packages:" not in output
 
 
-def test_print_debug_envars(clean_stdout, debug) -> None:
+def test_print_debug_envars(capsys: pytest.CaptureFixture) -> None:
     """Verify print_debug filters environment variables by prefix."""
     # Given: An environment variable with the target prefix
     os.environ["NCLUTILS_TEST_KEY"] = "test_value"
 
     # When: Calling print_debug with an environment variable prefix
     print_debug(envar_prefix="NCLUTILS_")
-    output = clean_stdout()
+    output = capsys.readouterr().out
 
     # Then: Output includes filtered environment variables
     assert "debug info" in output
@@ -105,13 +107,13 @@ def test_print_debug_envars(clean_stdout, debug) -> None:
     assert "Installed packages:" not in output
 
 
-def test_print_debug_all_packages(clean_stdout, debug) -> None:
+def test_print_debug_all_packages(capsys: pytest.CaptureFixture) -> None:
     """Verify print_debug includes all installed packages."""
     # Given: No arguments
 
     # When: Calling print_debug with no arguments
     print_debug(all_packages=True)
-    output = clean_stdout()
+    output = capsys.readouterr().out
 
     # debug(output)
 
@@ -129,13 +131,13 @@ def test_print_debug_all_packages(clean_stdout, debug) -> None:
     assert "Environment variables:" not in output
 
 
-def test_print_debug_specific_packages(clean_stdout, debug) -> None:
+def test_print_debug_specific_packages(capsys: pytest.CaptureFixture) -> None:
     """Verify print_debug includes specific installed packages."""
     # Given: No arguments
 
     # When: Calling print_debug with no arguments
     print_debug(packages=["freezegun"])
-    output = clean_stdout()
+    output = capsys.readouterr().out
 
     # debug(output)
 

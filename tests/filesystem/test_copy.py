@@ -4,11 +4,12 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
+from pytest_mock import MockerFixture
 
 from nclutils import check_python_version, copy_directory, copy_file, logger
 
 
-def test_copy_file_file_not_found(tmp_path: Path):
+def test_copy_file_file_not_found(tmp_path: Path) -> None:
     """Verify copy_file raises FileNotFoundError when source file doesn't exist."""
     # Given: Source and destination paths
     src = tmp_path / "test.txt"
@@ -19,9 +20,7 @@ def test_copy_file_file_not_found(tmp_path: Path):
         copy_file(src, dst)
 
 
-def test_copy_file_not_transient(
-    tmp_path: Path, clean_stdout: pytest.CaptureFixture, debug: Callable
-):
+def test_copy_file_not_transient(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
     """Verify copy_file shows progress bar when transient=False."""
     # Given: Source file with content
     src = tmp_path / "test.txt"
@@ -30,7 +29,7 @@ def test_copy_file_not_transient(
 
     # When: Copying file with visible progress bar
     copy_file(src, dst, transient=False, with_progress=True)
-    output = clean_stdout()
+    output = capsys.readouterr().out
 
     # Then: Progress bar was displayed and file was copied
     assert "Copy test.txt" in output
@@ -38,7 +37,7 @@ def test_copy_file_not_transient(
     assert dst.read_text() == "Hello, world!"
 
 
-def test_copy_file_transient(tmp_path: Path, clean_stdout: pytest.CaptureFixture, debug: Callable):
+def test_copy_file_transient(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
     """Verify copy_file hides progress bar when transient=True."""
     # Given: Source file with content
     src = tmp_path / "test.txt"
@@ -47,14 +46,14 @@ def test_copy_file_transient(tmp_path: Path, clean_stdout: pytest.CaptureFixture
 
     # When: Copying file with hidden progress bar
     copy_file(src, dst, transient=True, with_progress=True)
-    output = clean_stdout()
+    output = capsys.readouterr().out
 
     # Then: Progress bar was hidden and file was copied
     assert output == "\n"
     assert dst.read_text() == "Hello, world!"
 
 
-def test_copy_file_overwrite(tmp_path: Path, clean_stdout: pytest.CaptureFixture, debug: Callable):
+def test_copy_file_overwrite(tmp_path: Path) -> None:
     """Verify copy_file overwrites existing destination file."""
     # Given: Source and destination files with content
     src = tmp_path / "test.txt"
@@ -68,9 +67,7 @@ def test_copy_file_overwrite(tmp_path: Path, clean_stdout: pytest.CaptureFixture
     assert dst.read_text() == "Hello, world!"
 
 
-def test_copy_file_keep_backup(
-    tmp_path: Path, clean_stdout: pytest.CaptureFixture, debug: Callable
-):
+def test_copy_file_keep_backup(tmp_path: Path) -> None:
     """Verify copy_file overwrites existing destination file."""
     # Given: Source and destination files with content
     src = tmp_path / "test.txt"
@@ -90,7 +87,9 @@ def test_copy_file_keep_backup(
             assert file.read_text() == "Old content"
 
 
-def test_copy_file_same_file(tmp_path: Path, clean_stderr: pytest.CaptureFixture, debug: Callable):
+def test_copy_file_same_file(
+    tmp_path: Path, capsys: pytest.CaptureFixture, debug: Callable
+) -> None:
     """Verify copy_file handles same file as destination."""
     # Given: Source and destination files with same content
     logger.configure(log_level="WARNING")
@@ -101,7 +100,7 @@ def test_copy_file_same_file(tmp_path: Path, clean_stderr: pytest.CaptureFixture
     # When: Copying file to itself
 
     copy_file(src, src)
-    output = clean_stderr().replace(str(tmp_path), "")
+    output = capsys.readouterr().err.replace(str(tmp_path), "")
     # debug(output)
 
     # Then: No progress bar was displayed
@@ -110,7 +109,7 @@ def test_copy_file_same_file(tmp_path: Path, clean_stderr: pytest.CaptureFixture
     assert src.exists()
 
 
-def test_copy_directory(tmp_path: Path, clean_stderr):
+def test_copy_directory(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
     """Verify copy_file raises error when copying directory."""
     logger.configure(log_level="WARNING")
     # Given: Source directory with files
@@ -124,14 +123,14 @@ def test_copy_directory(tmp_path: Path, clean_stderr):
     with pytest.raises(FileNotFoundError):
         copy_file(src, dst)
 
-    output = clean_stderr()
+    output = capsys.readouterr().err
 
     assert "is not a file. Did not copy" in output
 
 
 def test_copy_file_with_no_progress(
-    tmp_path: Path, clean_stdout: pytest.CaptureFixture, debug: Callable
-):
+    tmp_path: Path, capsys: pytest.CaptureFixture, debug: Callable
+) -> None:
     """Verify copy_file works without progress bar."""
     # Given: Source file with content
     src = tmp_path / "test.txt"
@@ -140,7 +139,7 @@ def test_copy_file_with_no_progress(
 
     # When: Copying file without progress bar
     copy_file(src, dst, with_progress=False, transient=False)
-    output = clean_stdout()
+    output = capsys.readouterr().out
 
     # Then: File is copied without progress output
     assert not output
@@ -148,7 +147,7 @@ def test_copy_file_with_no_progress(
     assert dst.read_text() == "Hello, world!"
 
 
-def test_copy_directory_basic(tmp_path: Path):
+def test_copy_directory_basic(tmp_path: Path) -> None:
     """Verify copy_directory copies files and structure correctly."""
     if not check_python_version(3, 12):
         pytest.skip("Skipping test for Python version < 3.12")
@@ -172,7 +171,7 @@ def test_copy_directory_basic(tmp_path: Path):
     assert (dst / "subdir" / "file2.txt").read_text() == "World"
 
 
-def test_copy_directory_same_destination(debug, tmp_path, clean_stderr):
+def test_copy_directory_same_destination(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
     """Verify copy_directory handles copying to same directory."""
     logger.configure(log_level="WARNING")
     if not check_python_version(3, 12):
@@ -185,7 +184,7 @@ def test_copy_directory_same_destination(debug, tmp_path, clean_stderr):
 
     # When: Copying directory to itself
     result = copy_directory(src, src)
-    output = clean_stderr()
+    output = capsys.readouterr().err
     # debug(output)
 
     # Then: Warning is shown and original returned
@@ -193,7 +192,7 @@ def test_copy_directory_same_destination(debug, tmp_path, clean_stderr):
     assert result == src
 
 
-def test_copy_directory_parent_destination(debug, tmp_path: Path, clean_stderr):
+def test_copy_directory_parent_destination(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
     """Verify copy_directory prevents copying to parent directory."""
     logger.configure(log_level="WARNING")
     if not check_python_version(3, 12):
@@ -208,7 +207,7 @@ def test_copy_directory_parent_destination(debug, tmp_path: Path, clean_stderr):
 
     # When: Attempting to copy to parent directory
     result = copy_directory(child, parent)
-    output = clean_stderr().replace(str(tmp_path), "")
+    output = capsys.readouterr().err.replace(str(tmp_path), "")
     # debug(output)
 
     # Then: Warning is shown and original returned
@@ -216,7 +215,7 @@ def test_copy_directory_parent_destination(debug, tmp_path: Path, clean_stderr):
     assert result == child
 
 
-def test_copy_directory_dst_in_src(debug, tmp_path: Path, clean_stderr):
+def test_copy_directory_dst_in_src(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
     """Verify copy_directory prevents copying when destination is inside source."""
     logger.configure(log_level="WARNING")
     if not check_python_version(3, 12):
@@ -230,14 +229,14 @@ def test_copy_directory_dst_in_src(debug, tmp_path: Path, clean_stderr):
 
     # When: Attempting to copy directory into itself
     result = copy_directory(src, dst)
-    output = clean_stderr().replace(str(tmp_path), "")
+    output = capsys.readouterr().err.replace(str(tmp_path), "")
 
     # Then: Warning is shown and original directory returned
     assert "have parent/child relationship" in output
     assert result == src
 
 
-def test_copy_directory_missing_source(tmp_path, clean_stderr):
+def test_copy_directory_missing_source(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
     """Verify copy_directory raises error when source directory does not exist."""
     logger.configure(log_level="WARNING")
     if not check_python_version(3, 12):
@@ -251,11 +250,11 @@ def test_copy_directory_missing_source(tmp_path, clean_stderr):
     with pytest.raises(FileNotFoundError, match="does not exist"):
         copy_directory(src, dst)
 
-    output = clean_stderr().replace(str(tmp_path), "")
+    output = capsys.readouterr().err.replace(str(tmp_path), "")
     assert "does not exist" in output
 
 
-def test_copy_directory_with_progress(tmp_path: Path):
+def test_copy_directory_with_progress(tmp_path: Path) -> None:
     """Verify copy_directory displays progress bar when enabled."""
     if not check_python_version(3, 12):
         pytest.skip("Skipping test for Python version < 3.12")
@@ -274,7 +273,7 @@ def test_copy_directory_with_progress(tmp_path: Path):
     assert (dst / "test.txt").read_text() == "test content"
 
 
-def test_copy_directory_unique_name(tmp_path: Path):
+def test_copy_directory_unique_name(tmp_path: Path) -> None:
     """Verify copy_directory generates unique name when destination exists."""
     if not check_python_version(3, 12):
         pytest.skip("Skipping test for Python version < 3.12")
@@ -302,7 +301,9 @@ def test_copy_directory_unique_name(tmp_path: Path):
             assert (d / "test.txt").read_text() == "old"
 
 
-def test_copy_directory_python_version(mocker, tmp_path: Path, clean_stderr):
+def test_copy_directory_python_version(
+    mocker: MockerFixture, tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
     """Verify copy_directory requires Python 3.12 or higher."""
     # Given: Python version below 3.12
     logger.configure(log_level="WARNING")
@@ -312,5 +313,5 @@ def test_copy_directory_python_version(mocker, tmp_path: Path, clean_stderr):
     with pytest.raises(ValueError, match=r"requires a minimum of Python version 3\.12"):
         copy_directory("src", "dst")
 
-    output = clean_stderr()
+    output = capsys.readouterr().err
     assert "requires a minimum of Python version 3.12" in output

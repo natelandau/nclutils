@@ -12,7 +12,7 @@ from nclutils import (
 )
 
 
-def test_run_command_successful_execution(capsys) -> None:
+def test_run_command_successful_execution(capsys: pytest.CaptureFixture) -> None:
     """Execute a command successfully and verify output."""
     # Given: A simple echo command
     cmd = "echo"
@@ -29,7 +29,7 @@ def test_run_command_successful_execution(capsys) -> None:
     assert "Hello World" in str(captured.out)
 
 
-def test_run_command_quiet_mode(capsys) -> None:
+def test_run_command_quiet_mode(capsys: pytest.CaptureFixture) -> None:
     """Execute a command in quiet mode and verify no console output."""
     # Given: A simple echo command
     cmd = "echo"
@@ -44,7 +44,7 @@ def test_run_command_quiet_mode(capsys) -> None:
     assert not captured.out
 
 
-def test_run_command_fg_is_true(capsys, debug, clean_stderrout) -> None:
+def test_run_command_fg_is_true(capsys: pytest.CaptureFixture) -> None:
     """Execute a command in foreground mode."""
     # Given: A simple echo command
     cmd = "echo"
@@ -52,14 +52,14 @@ def test_run_command_fg_is_true(capsys, debug, clean_stderrout) -> None:
 
     # When: Running the command in foreground mode
     output = run_command(cmd, args, quiet=True, fg=True)
-    captured = clean_stderrout()
+    captured = capsys.readouterr().err
 
     # Then: Command executes successfully but produces no console output
     assert not output  # No output expected in foreground mode
     assert not captured  # A new tty is spawned for the command, so no output is captured
 
 
-def test_run_command_not_found(capsys) -> None:
+def test_run_command_not_found(capsys: pytest.CaptureFixture) -> None:
     """Handle non-existent command gracefully."""
     # Given: A non-existent command
     cmd = "nonexistentcommand"
@@ -74,7 +74,7 @@ def test_run_command_not_found(capsys) -> None:
     assert not captured.out
 
 
-def test_run_command_not_found_quiet_mode(debug, capsys) -> None:
+def test_run_command_not_found_quiet_mode(capsys: pytest.CaptureFixture) -> None:
     """Handle non-existent command gracefully in quiet mode."""
     # Given: A non-existent command
     cmd = "nonexistentcommand"
@@ -89,7 +89,7 @@ def test_run_command_not_found_quiet_mode(debug, capsys) -> None:
     assert not captured.out
 
 
-def test_run_command_with_error(capsys, debug, clean_stderrout) -> None:
+def test_run_command_with_error(capsys: pytest.CaptureFixture) -> None:
     """Handle command execution errors appropriately."""
     # Given: A command that will fail (ls with invalid path)
     cmd = "ls"
@@ -106,12 +106,12 @@ def test_run_command_with_error(capsys, debug, clean_stderrout) -> None:
     assert "ls /some/nonexistent/path" in excinfo.value.full_cmd
     assert "No such file or directory" in excinfo.value.stderr
     assert not excinfo.value.stdout
-    stderrout = clean_stderrout()
+    stderrout = capsys.readouterr().err
     # debug(stderrout)
     assert not stderrout
 
 
-def test_run_command_with_error_print_stderr(capsys, debug, clean_stderrout) -> None:
+def test_run_command_with_error_print_stderr(capsys: pytest.CaptureFixture) -> None:
     """Handle command execution errors appropriately."""
     # Given: A command that will fail (ls with invalid path)
     cmd = "ls"
@@ -128,12 +128,12 @@ def test_run_command_with_error_print_stderr(capsys, debug, clean_stderrout) -> 
     assert "ls /some/nonexistent/path" in excinfo.value.full_cmd
     assert "No such file or directory" in excinfo.value.stderr
     assert not excinfo.value.stdout
-    stderrout = clean_stderrout()
-    # debug(stderrout)
-    assert "ls: cannot access '/some/nonexistent/path': No such file or directory" in stderrout
+    stdout = capsys.readouterr().out
+
+    assert "ls: cannot access '/some/nonexistent/path': No such file or directory" in stdout
 
 
-def test_run_command_with_error_quiet_mode(capsys) -> None:
+def test_run_command_with_error_quiet_mode(capsys: pytest.CaptureFixture) -> None:
     """Handle command execution errors appropriately in quiet mode."""
     # Given: A command that will fail (ls with invalid path)
     cmd = "ls"
@@ -152,7 +152,7 @@ def test_run_command_with_error_quiet_mode(capsys) -> None:
     assert not captured.out
 
 
-def test_which_success(debug) -> None:
+def test_which_success() -> None:
     """Test the which function with a successful command."""
     # Given: A command that exists in the PATH
     cmd = "ls"
@@ -165,7 +165,7 @@ def test_which_success(debug) -> None:
     assert Path(result).exists()
 
 
-def test_which_failure(debug) -> None:
+def test_which_failure() -> None:
     """Test the which function with a command that does not exist in the PATH."""
     # Given: A command that does not exist in the PATH
     cmd = "nonexistentcommand"
@@ -177,7 +177,7 @@ def test_which_failure(debug) -> None:
     assert result is None
 
 
-def test_run_command_with_pushd(tmp_path: Path, capsys) -> None:
+def test_run_command_with_pushd(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
     """Execute a command in a different directory using pushd."""
     # Given: A temporary directory and pwd command
     cmd = "pwd"
@@ -193,7 +193,7 @@ def test_run_command_with_pushd(tmp_path: Path, capsys) -> None:
     assert str(tmp_path) in captured.out.replace("\r", "").replace("\n", "")
 
 
-def test_run_command_with_pushd_quiet_mode(tmp_path: Path, capsys) -> None:
+def test_run_command_with_pushd_quiet_mode(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
     """Execute a command with pushd in quiet mode."""
     cmd = "pwd"
     original_dir = Path.cwd()
@@ -208,7 +208,7 @@ def test_run_command_with_pushd_quiet_mode(tmp_path: Path, capsys) -> None:
     assert not captured.out
 
 
-def test_run_command_with_pushd_nonexistent_dir(capsys) -> None:
+def test_run_command_with_pushd_nonexistent_dir(capsys: pytest.CaptureFixture) -> None:
     """Handle pushd to nonexistent directory gracefully."""
     # Given: A nonexistent directory
     nonexistent_dir = Path("/some/nonexistent/directory")
@@ -222,7 +222,7 @@ def test_run_command_with_pushd_nonexistent_dir(capsys) -> None:
     assert not captured.out
 
 
-def test_exclude_lines(tmp_path: Path, capsys) -> None:
+def test_exclude_lines(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
     """Test the exclude_lines parameter."""
     # Given: A temporary file
     tmpfile = tmp_path / "tmpfile.txt"

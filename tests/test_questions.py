@@ -4,11 +4,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import questionary
+from pytest_mock import MockerFixture
 
 from nclutils import choose_multiple_from_list, choose_one_from_list
 
 
-def test_choose_from_list_path(mocker):
+def test_choose_from_list_path(mocker: MockerFixture) -> None:
     """Test the choose_from_list function with a list of paths."""
     # Given: A list of path choices
     choices = [
@@ -26,7 +27,7 @@ def test_choose_from_list_path(mocker):
     assert result == Path("test2")
 
 
-def test_choose_from_list_tuple(mocker):
+def test_choose_from_list_tuple(mocker: MockerFixture) -> None:
     """Test the choose_from_list function with a list of tuples."""
 
     @dataclass
@@ -50,7 +51,7 @@ def test_choose_from_list_tuple(mocker):
     assert result == Something(name="test2", number=2)
 
 
-def test_choose_from_list_dict(mocker):
+def test_choose_from_list_dict(mocker: MockerFixture) -> None:
     """Test the choose_from_list function with a list of dictionaries."""
 
     @dataclass
@@ -74,7 +75,7 @@ def test_choose_from_list_dict(mocker):
     assert result == Something(name="test2", number=2)
 
 
-def test_choose_from_list_path_multiple(mocker):
+def test_choose_from_list_path_multiple(mocker: MockerFixture) -> None:
     """Test the choose_from_list function with a list of paths."""
     # Given: A list of path choices
     choices = [
@@ -92,7 +93,7 @@ def test_choose_from_list_path_multiple(mocker):
     assert result == [Path("test"), Path("test2")]
 
 
-def test_choose_from_list_tuple_multiple(mocker):
+def test_choose_from_list_tuple_multiple(mocker: MockerFixture) -> None:
     """Test the choose_from_list function with a list of tuples."""
 
     @dataclass
@@ -122,7 +123,7 @@ def test_choose_from_list_tuple_multiple(mocker):
     ]
 
 
-def test_choose_from_list_dict_multiple(mocker):
+def test_choose_from_list_dict_multiple(mocker: MockerFixture) -> None:
     """Test the choose_from_list function with a list of dictionaries."""
 
     @dataclass
@@ -152,7 +153,7 @@ def test_choose_from_list_dict_multiple(mocker):
     ]
 
 
-def test_choose_from_list_string(mocker):
+def test_choose_from_list_string(mocker: MockerFixture) -> None:
     """Test the choose_from_list function with a list of strings."""
     # Given: A list of string choices
     choices = [
@@ -170,7 +171,7 @@ def test_choose_from_list_string(mocker):
     assert result == "test2"
 
 
-def test_choose_from_list_string_multiple(mocker):
+def test_choose_from_list_string_multiple(mocker: MockerFixture) -> None:
     """Test the choose_from_list function with a list of strings."""
     # Given: A list of string choices
     choices = [
@@ -188,7 +189,7 @@ def test_choose_from_list_string_multiple(mocker):
     assert result == ["test", "test2"]
 
 
-def test_choose_from_list_choice(mocker):
+def test_choose_from_list_choice(mocker: MockerFixture) -> None:
     """Test the choose_from_list function with a list of choices."""
     # Given: A list of questionary Choice objects
     choices = [
@@ -206,7 +207,7 @@ def test_choose_from_list_choice(mocker):
     assert result == "test"
 
 
-def test_choose_from_list_no_choices(mocker):
+def test_choose_from_list_no_choices(mocker: MockerFixture) -> None:
     """Test the choose_from_list function with no choices."""
     # Given: An empty list of choices
     choices = []
@@ -218,7 +219,7 @@ def test_choose_from_list_no_choices(mocker):
     assert result is None
 
 
-def test_choose_from_list_no_choices_multiple(mocker):
+def test_choose_from_list_no_choices_multiple(mocker: MockerFixture) -> None:
     """Test the choose_from_list function with no choices."""
     # Given: An empty list of choices
     choices = []
@@ -230,7 +231,7 @@ def test_choose_from_list_no_choices_multiple(mocker):
     assert result is None
 
 
-def test_choose_from_list_no_selection(mocker):
+def test_choose_from_list_no_selection(mocker: MockerFixture) -> None:
     """Test the choose_from_list function with no selection."""
     # Given: A list of string choices
     choices = [
@@ -248,7 +249,7 @@ def test_choose_from_list_no_selection(mocker):
     assert result is None
 
 
-def test_choose_from_list_no_selection_multiple(mocker):
+def test_choose_from_list_no_selection_multiple(mocker: MockerFixture) -> None:
     """Test the choose_from_list function with no selection."""
     # Given: A list of string choices
     choices = [

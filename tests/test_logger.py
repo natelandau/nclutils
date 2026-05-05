@@ -1,6 +1,7 @@
 """Test logging module."""
 
 import re
+from pathlib import Path
 
 import pytest
 
@@ -8,7 +9,7 @@ from nclutils import logger
 from nclutils.logging.logging import Logger
 
 
-def test_no_output_when_log_level_is_notset(clean_stderr, debug):
+def test_no_output_when_log_level_is_notset(capsys: pytest.CaptureFixture) -> None:
     """Verify that no output is produced when the logger is not configured."""
     # Given a logger instance without configuration
     logger = Logger()
@@ -23,11 +24,11 @@ def test_no_output_when_log_level_is_notset(clean_stderr, debug):
     logger.critical("Hello, world!")
 
     # Then no output should be produced
-    output = clean_stderr()
+    output = capsys.readouterr().err
     assert not output
 
 
-def test_exception_if_level_not_known():
+def test_exception_if_level_not_known() -> None:
     """Verify that an exception is raised if an unknown log level is used."""
     # When configuring logger with unknown level
     # Then KeyError should be raised
@@ -35,7 +36,7 @@ def test_exception_if_level_not_known():
         logger.configure(log_level="unknown")
 
 
-def test_logger_respects_log_level(clean_stderr):
+def test_logger_respects_log_level(capsys: pytest.CaptureFixture) -> None:
     """Verify that the logger respects the log level."""
     # Given logger configured at INFO level
     logger.configure(log_level="info")
@@ -50,7 +51,7 @@ def test_logger_respects_log_level(clean_stderr):
     logger.critical("Hello, world!")
 
     # Then only messages at INFO and above should appear
-    output = clean_stderr()
+    output = capsys.readouterr().err
     assert "DEBUG" not in output
     assert "TRACE" not in output
     assert "INFO" in output
@@ -60,7 +61,7 @@ def test_logger_respects_log_level(clean_stderr):
     assert "CRITICAL" in output
 
 
-def test_logger_respects_stderr_false(clean_stderr):
+def test_logger_respects_stderr_false(capsys: pytest.CaptureFixture) -> None:
     """Verify that the logger respects the log level."""
     # Given logger configured with stderr disabled
     logger.configure(log_level="info", stderr=False)
@@ -75,11 +76,11 @@ def test_logger_respects_stderr_false(clean_stderr):
     logger.critical("Hello, world!")
 
     # Then no output should be produced
-    output = clean_stderr()
+    output = capsys.readouterr().err
     assert not output
 
 
-def test_logger_stderr_timestamp(clean_stderr, debug):
+def test_logger_stderr_timestamp(capsys: pytest.CaptureFixture) -> None:
     """Verify that the logger respects the log level."""
     # Given logger configured with stderr timestamp enabled
     logger.configure(log_level="info", stderr_timestamp=True)
@@ -88,7 +89,7 @@ def test_logger_stderr_timestamp(clean_stderr, debug):
     logger.info("Hello, world!")
 
     # Then timestamp should be present
-    output = clean_stderr()
+    output = capsys.readouterr().err
     # debug(output)
     assert re.search(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", output) is not None
 
@@ -99,12 +100,12 @@ def test_logger_stderr_timestamp(clean_stderr, debug):
     logger.info("Hello, world!")
 
     # Then timestamp should be absent
-    output = clean_stderr()
+    output = capsys.readouterr().err
     # debug(output)
     assert re.search(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", output) is None
 
 
-def test_logger_extra_attributes(clean_stderr, debug):
+def test_logger_extra_attributes(capsys: pytest.CaptureFixture) -> None:
     """Verify that the logger respects the log level."""
     # Given logger configured at INFO level
     logger.configure(log_level="info")
@@ -114,13 +115,13 @@ def test_logger_extra_attributes(clean_stderr, debug):
     logger.info("Hello world2", somevar="somevalue")
 
     # Then output should contain the messages and attributes
-    output = clean_stderr()
-    # debug(output)
+    output = capsys.readouterr().err
+
     assert "INFO     | Hello world1 | tests.test_logger" in output
     assert "INFO     | Hello world2 | {'somevar': 'somevalue'} | tests.test_logger" in output
 
 
-def test_log_to_file(clean_stderr, tmp_path, debug):
+def test_log_to_file(capsys: pytest.CaptureFixture, tmp_path: Path) -> None:
     """Verify that the logger respects the log level."""
     # Given logger configured to write to file
     log_path = tmp_path / "somedir" / "test.log"
@@ -131,7 +132,7 @@ def test_log_to_file(clean_stderr, tmp_path, debug):
     logger.info("Hello world2", somevar="somevalue")
 
     # Then messages should appear in stderr and log file
-    output = clean_stderr()
+    output = capsys.readouterr().err
     assert "INFO     | Hello world1 | tests.test_logger" in output
     assert "INFO     | Hello world2 | {'somevar': 'somevalue'} | tests.test_logger" in output
 
@@ -144,7 +145,7 @@ def test_log_to_file(clean_stderr, tmp_path, debug):
     )
 
 
-def test_prefix(clean_stderr, tmp_path, debug):
+def test_prefix(capsys: pytest.CaptureFixture, tmp_path: Path) -> None:
     """Verify that the logger respects the log level."""
     # Given logger configured to write to file
     log_path = tmp_path / "somedir" / "test.log"
@@ -155,7 +156,7 @@ def test_prefix(clean_stderr, tmp_path, debug):
     logger.info("Hello world2", somevar="somevalue")
 
     # Then messages should appear in stderr and log file
-    output = clean_stderr()
+    output = capsys.readouterr().err
     # debug(output)
     assert "INFO     | TEST | Hello world1 | tests.test_logger" in output
     assert "INFO     | TEST | Hello world2 | {'somevar': 'somevalue'} | tests.test_logger" in output
@@ -171,7 +172,7 @@ def test_prefix(clean_stderr, tmp_path, debug):
     )
 
 
-def test_suppress_source_reference(clean_stderr, tmp_path, debug):
+def test_suppress_source_reference(capsys: pytest.CaptureFixture, tmp_path: Path) -> None:
     """Verify that source references can be suppressed."""
     # Given logger configured to write to file
     log_path = tmp_path / "somedir" / "test.log"
@@ -182,7 +183,7 @@ def test_suppress_source_reference(clean_stderr, tmp_path, debug):
     logger.info("Hello world2", somevar="somevalue")
 
     # Then messages should appear in stderr and log file
-    output = clean_stderr()
+    output = capsys.readouterr().err
     assert "INFO     | Hello world1" in output
     assert "INFO     | Hello world2 | {'somevar': 'somevalue'}" in output
     assert "tests.test_logger" not in output
@@ -195,7 +196,7 @@ def test_suppress_source_reference(clean_stderr, tmp_path, debug):
     assert "tests.test_logger" not in logfile_text
 
 
-def test_catch_decorator(clean_stderr, tmp_path, debug):
+def test_catch_decorator(capsys: pytest.CaptureFixture, tmp_path: Path) -> None:
     """Verify that the catch decorator works."""
     # Given logger configured to write to file
     log_path = tmp_path / "test.log"
@@ -209,7 +210,7 @@ def test_catch_decorator(clean_stderr, tmp_path, debug):
     divide(1, 0)
 
     # Then error details should be logged to stderr and file
-    output = clean_stderr()
+    output = capsys.readouterr().err
 
     assert "ERROR    | An error has been caught in function 'test_catch_decorator'" in output
     assert (
@@ -237,7 +238,7 @@ def test_catch_decorator(clean_stderr, tmp_path, debug):
     )
 
 
-def test_no_log_level_no_output(clean_stderr, tmp_path, debug):
+def test_no_log_level_no_output(tmp_path: Path) -> None:
     """Verify that an exception is raised if the log level is not set."""
     # Given logger configured to write to file
     log_path = tmp_path / "somedir" / "test.log"

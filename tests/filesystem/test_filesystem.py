@@ -236,12 +236,12 @@ def test_find_files_no_matches(temp_directory: Path) -> None:
     assert result == []
 
 
-def test_directory_tree(temp_directory: Path, clean_stdout) -> None:
+def test_directory_tree(temp_directory: Path, capsys: pytest.CaptureFixture) -> None:
     """Build a rich.tree representation of a directory's contents."""
     # When: Building a directory tree
     result = directory_tree(temp_directory)
     console.print(result)
-    output = clean_stdout()
+    output = capsys.readouterr().out
 
     assert "├── 📂 " in output
     assert "│   ├── 📄" in output
@@ -249,7 +249,7 @@ def test_directory_tree(temp_directory: Path, clean_stdout) -> None:
     assert "(0 bytes)" in output
 
 
-def test_clean_directory(temp_directory: Path, clean_stdout) -> None:
+def test_clean_directory(temp_directory: Path) -> None:
     """Verify that a directory is cleaned up."""
     # Given: A directory with files and subdirectories
     # When: Cleaning up a directory
@@ -261,7 +261,7 @@ def test_clean_directory(temp_directory: Path, clean_stdout) -> None:
     assert not list(temp_directory.iterdir())
 
 
-def test_clean_directory_not_a_directory(tmp_path: Path, clean_stderr, debug) -> None:
+def test_clean_directory_not_a_directory(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
     """Verify that a directory is cleaned up."""
     logger.configure(log_level="WARNING")
     test_file = tmp_path / "test.txt"
@@ -269,7 +269,7 @@ def test_clean_directory_not_a_directory(tmp_path: Path, clean_stderr, debug) ->
 
     # When: Cleaning up a directory
     clean_directory(test_file)
-    output = clean_stderr()
+    output = capsys.readouterr().err
     # debug(output)
 
     # Then: The directory should be empty

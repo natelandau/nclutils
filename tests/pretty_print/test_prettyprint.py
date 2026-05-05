@@ -9,7 +9,7 @@ from nclutils import PrintStyle, console, err_console, pp
 from nclutils.pretty_print.pretty_print import PrettyPrinter
 
 
-def test_default_styles(clean_stdout):
+def test_default_styles(capsys: pytest.CaptureFixture) -> None:
     """Test that the default styles are correctly defined."""
     pp.trace("trace")
     pp.debug("debug")
@@ -21,7 +21,8 @@ def test_default_styles(clean_stdout):
     pp.dryrun("dryrun")
     pp.notice("notice")
     pp.secondary("secondary")
-    assert clean_stdout() == dedent("""\
+    output = capsys.readouterr().out
+    assert output == dedent("""\
         info
         🚧 Warning: warning
         ❌ Error: error
@@ -33,10 +34,11 @@ def test_default_styles(clean_stdout):
         """)
 
 
-def test_dict_in_message(clean_stdout):
+def test_dict_in_message(capsys: pytest.CaptureFixture) -> None:
     """Test that dicts in messages are correctly formatted."""
     pp.info({"key": "value", "key2": ["value2", "value3"]})
-    assert clean_stdout() == dedent("""\
+    output = capsys.readouterr().out
+    assert output == dedent("""\
         {
           "key": "value",
           "key2": [
@@ -47,10 +49,11 @@ def test_dict_in_message(clean_stdout):
     """)
 
 
-def test_code_highlighting(clean_stdout):
+def test_code_highlighting(capsys: pytest.CaptureFixture) -> None:
     """Test that code highlighting works."""
     pp.info("there is inline `code` in this message")
-    assert clean_stdout() == "there is inline code in this message\n"
+    output = capsys.readouterr().out
+    assert output == "there is inline code in this message\n"
 
 
 @pytest.mark.parametrize(
@@ -62,13 +65,15 @@ def test_code_highlighting(clean_stdout):
         (True, True),
     ],
 )
-def test_trace_and_debug(clean_stdout, debug, debug_switch, trace_switch):
+def test_trace_and_debug(
+    capsys: pytest.CaptureFixture, debug_switch: bool, trace_switch: bool
+) -> None:
     """Test that trace and debug are correctly defined."""
     pp.configure(debug=debug_switch, trace=trace_switch)
     pp.debug("debug")
     pp.trace("trace")
 
-    output = clean_stdout()
+    output = capsys.readouterr().out
 
     if debug_switch:
         assert "🐛 debug" in output
@@ -81,7 +86,7 @@ def test_trace_and_debug(clean_stdout, debug, debug_switch, trace_switch):
         assert "🔍 trace" not in output
 
 
-def test_custom_styles(clean_stdout):
+def test_custom_styles(capsys: pytest.CaptureFixture) -> None:
     """Test that custom styles are correctly defined."""
     new_style = PrintStyle(name="new_style", prefix=":smile: ", suffix=" :rocket:")
     new_dryrun = PrintStyle(name="dryrun", style="bold green")
@@ -89,30 +94,32 @@ def test_custom_styles(clean_stdout):
     pp.configure(styles=[new_style, new_dryrun])
     pp.new_style("I am new style")
     pp.dryrun("dryrun no longer has an emoji")
-    assert clean_stdout() == "😄 I am new style 🚀\ndryrun no longer has an emoji\n"
+    output = capsys.readouterr().out
+    assert output == "😄 I am new style 🚀\ndryrun no longer has an emoji\n"
 
 
-def test_rule_without_message(clean_stdout):
+def test_rule_without_message(capsys: pytest.CaptureFixture) -> None:
     """Print a horizontal rule without a message."""
     # When: Printing a rule without a message
     pp.rule()
 
     # Then: A horizontal rule is printed
-    assert "──────" in clean_stdout()
+    output = capsys.readouterr().out
+    assert "──────" in output
 
 
-def test_rule_with_message(clean_stdout):
+def test_rule_with_message(capsys: pytest.CaptureFixture) -> None:
     """Print a horizontal rule with a message."""
     # When: Printing a rule with a message
     pp.rule("Test Message")
 
     # Then: A horizontal rule with message is printed
-    output = clean_stdout()
+    output = capsys.readouterr().out
     assert "────── Test Message ──────" in output
     assert "─" in output
 
 
-def test_all_styles_displays_styles(capsys) -> None:
+def test_all_styles_displays_styles(capsys: pytest.CaptureFixture) -> None:
     """Display all available print styles."""
     # Given: A configured pretty print instance
     pp.configure(debug=True, trace=True)
@@ -131,7 +138,7 @@ def test_all_styles_displays_styles(capsys) -> None:
     assert "error" in captured.out
 
 
-def test_all_styles_with_custom_style(capsys) -> None:
+def test_all_styles_with_custom_style(capsys: pytest.CaptureFixture) -> None:
     """Display all styles including custom styles."""
     # Given: A pretty print instance with custom style
 
@@ -147,7 +154,7 @@ def test_all_styles_with_custom_style(capsys) -> None:
     assert ">> The quick brown fox jumps over the lazy dog" in captured.out
 
 
-def test_initialization_happens_once() -> None:
+def test_initialization_happens_once(capsys: pytest.CaptureFixture) -> None:
     """Test that PrettyPrinter follows a singleton pattern."""
     # Given: Initial PrettyPrinter instance with modified settings
     instance1 = PrettyPrinter()
@@ -163,13 +170,15 @@ def test_initialization_happens_once() -> None:
     assert instance1 is instance2
 
 
-def test_console(clean_stdout):
+def test_console(capsys: pytest.CaptureFixture) -> None:
     """Test that console and err_console are correctly defined."""
     console.print("hello world")
-    assert clean_stdout() == "hello world\n"
+    output = capsys.readouterr().out
+    assert output == "hello world\n"
 
 
-def test_err_console(clean_stderr):
+def test_err_console(capsys: pytest.CaptureFixture) -> None:
     """Test that err_console is correctly defined."""
     err_console.print("hello world")
-    assert clean_stderr() == "hello world\n"
+    output = capsys.readouterr().err
+    assert output == "hello world\n"

@@ -5,7 +5,7 @@ import re
 from nclutils import random_string
 
 
-def test_random_string(debug) -> None:
+def test_random_string() -> None:
     """Test random_string()."""
     returned = random_string(10)
 

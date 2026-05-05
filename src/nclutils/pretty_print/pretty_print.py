@@ -12,6 +12,7 @@ from typing import ParamSpec, TypeVar
 from rich.console import Console
 from rich.table import Table
 from rich.text import Text
+from typing_extensions import Self
 
 console = Console()
 err_console = Console(stderr=True)
@@ -114,7 +115,7 @@ class PrettyPrinter:
     _instance = None
     _initialized = False
 
-    def __new__(cls) -> "PrettyPrinter":
+    def __new__(cls) -> Self:
         """Create a new PrettyPrinter instance if it doesn't exist."""
         if cls._instance is None:
             cls._instance = super().__new__(cls)

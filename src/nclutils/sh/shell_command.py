@@ -119,9 +119,9 @@ def run_command(  # noqa: C901, PLR0913
             # Only add these kwargs when NOT in foreground mode
             cmd_kwargs.update(
                 {
-                    "_err": lambda line: _process_output(line, exclude_regex)
-                    if err_to_out
-                    else None,
+                    "_err": lambda line: (
+                        _process_output(line, exclude_regex) if err_to_out else None
+                    ),
                     "_out": lambda line: _process_output(line, exclude_regex),
                     "_ok_code": okay_codes or [0],
                     "_tee": "err",

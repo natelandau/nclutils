@@ -89,7 +89,7 @@ def test_check_python_version_fail() -> None:
 
 
 @freeze_time("2024-03-15 12:34:56.789012")
-def test_new_timestamp_uid_format(debug) -> None:
+def test_new_timestamp_uid_format() -> None:
     """Verify new_timestamp_uid() generates correctly formatted string."""
     # When: Generating a timestamped UID
     uid = new_timestamp_uid()
