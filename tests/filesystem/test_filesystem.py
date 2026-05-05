@@ -5,13 +5,12 @@ from pathlib import Path
 
 import pytest
 
-from nclutils import (
+from nclutils import console, logger
+from nclutils.fs import (
     clean_directory,
-    console,
     directory_tree,
     find_files,
     find_subdirectories,
-    logger,
 )
 
 

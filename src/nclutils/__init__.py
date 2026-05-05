@@ -1,17 +1,11 @@
-"""Modules for script utilities."""
+"""Modules for script utilities.
 
-from .fs import (
-    backup_path,
-    clean_directory,
-    copy_directory,
-    copy_file,
-    directory_tree,
-    find_files,
-    find_subdirectories,
-    find_user_home_dir,
-)
+The top-level package surfaces the high-frequency console output and logging
+helpers. Everything else lives in its submodule (e.g. `nclutils.fs`,
+`nclutils.strings`) and must be imported from there.
+"""
+
 from .logging import logger
-from .network import network_available
 from .pretty_print import (
     THEME,
     Emitter,
@@ -35,92 +29,28 @@ from .pretty_print import (
     trace,
     warning,
 )
-from .questions import choose_multiple_from_list, choose_one_from_list
-from .sh import ShellCommandFailedError, ShellCommandNotFoundError, run_command, which
-from .strings import (
-    camel_case,
-    deburr,
-    int_to_emoji,
-    kebab_case,
-    list_words,
-    pad,
-    pad_end,
-    pad_start,
-    pascal_case,
-    random_string,
-    separator_case,
-    snake_case,
-    split_camel_case,
-    strip_ansi,
-)
-from .text_processing import ensure_lines_in_file, replace_in_file
-from .utils import (
-    check_python_version,
-    format_iso_timestamp,
-    iso_timestamp,
-    new_timestamp_uid,
-    new_uid,
-    unique_id,
-)
 
 __all__ = [
     "THEME",
     "Emitter",
     "Level",
     "LogLevel",
-    "ShellCommandFailedError",
-    "ShellCommandNotFoundError",
     "Theme",
     "Verbosity",
-    "backup_path",
-    "camel_case",
-    "check_python_version",
-    "choose_multiple_from_list",
-    "choose_one_from_list",
-    "clean_directory",
     "configure",
     "console",
-    "copy_directory",
-    "copy_file",
     "critical",
     "debug",
-    "deburr",
-    "directory_tree",
     "dryrun",
-    "ensure_lines_in_file",
     "err_console",
     "error",
-    "find_files",
-    "find_subdirectories",
-    "find_user_home_dir",
-    "format_iso_timestamp",
     "get_default",
     "header",
     "info",
-    "int_to_emoji",
-    "iso_timestamp",
-    "kebab_case",
-    "list_words",
     "logger",
-    "network_available",
-    "new_timestamp_uid",
-    "new_uid",
-    "pad",
-    "pad_end",
-    "pad_start",
-    "pascal_case",
-    "random_string",
-    "replace_in_file",
-    "run_command",
-    "separator_case",
     "set_default",
-    "snake_case",
-    "split_camel_case",
     "step",
-    "strip_ansi",
     "success",
     "trace",
-    "unique_id",
     "warning",
-    "which",
 ]

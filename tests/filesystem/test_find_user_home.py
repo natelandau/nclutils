@@ -5,7 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from nclutils import ShellCommandFailedError, find_user_home_dir
+from nclutils.fs import find_user_home_dir
+from nclutils.sh import ShellCommandFailedError
 
 
 @pytest.fixture
