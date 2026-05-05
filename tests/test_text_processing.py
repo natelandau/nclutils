@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+import pytest
+
 from nclutils import ensure_lines_in_file, logger, replace_in_file
 
 
@@ -17,17 +19,17 @@ Nec dubitamus multa iter quae et nos invenerat. A communi observantia non est re
     return path
 
 
-def test_fail_file_not_found(tmp_path, debug, clean_stderr) -> None:
+def test_fail_file_not_found(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
     """Test replace_in_file."""
     logger.configure(log_level="DEBUG")
     path = tmp_path / "test.txt"
     assert not replace_in_file(path, {"no_match": "no_matches"})
-    output = clean_stderr()
+    output = capsys.readouterr().err
     assert "test.txt does not exist" in output
     assert not path.exists()
 
 
-def test_replace_in_file_no_matches(tmp_path, debug) -> None:
+def test_replace_in_file_no_matches(tmp_path: Path) -> None:
     """Test replace_in_file."""
     path = create_test_file(tmp_path)
 
@@ -36,7 +38,7 @@ def test_replace_in_file_no_matches(tmp_path, debug) -> None:
     assert path.exists()
 
 
-def test_replace_in_file(tmp_path, debug) -> None:
+def test_replace_in_file(tmp_path: Path) -> None:
     """Test replace_in_file."""
     path = create_test_file(tmp_path)
 
@@ -53,7 +55,7 @@ Nec dubitamus multa iter quae et nos invenerat. A communi observantia non est re
     )
 
 
-def test_replace_in_file_regex_no_matches(tmp_path, debug) -> None:
+def test_replace_in_file_regex_no_matches(tmp_path: Path) -> None:
     """Test replace_in_file."""
     path = create_test_file(tmp_path)
 
@@ -62,7 +64,7 @@ def test_replace_in_file_regex_no_matches(tmp_path, debug) -> None:
     assert path.exists()
 
 
-def test_replace_in_file_regex(tmp_path, debug) -> None:
+def test_replace_in_file_regex(tmp_path: Path) -> None:
     """Test replace_in_file."""
     path = create_test_file(tmp_path)
 
@@ -79,7 +81,7 @@ Nec dubitamus multa iter quae et nos invenerat. A communi observantia non est re
     )
 
 
-def test_ensure_lines_in_file(tmp_path, debug) -> None:
+def test_ensure_lines_in_file(tmp_path: Path) -> None:
     """Test ensure_lines_in_file."""
     path = create_test_file(tmp_path)
     path.write_text("some text")
@@ -96,7 +98,7 @@ Gallia est omnis divisa in partes tres, quarum."""
     )
 
 
-def test_ensure_lines_in_file_at_top(tmp_path, debug) -> None:
+def test_ensure_lines_in_file_at_top(tmp_path: Path) -> None:
     """Test ensure_lines_in_file."""
     path = create_test_file(tmp_path)
     path.write_text("some text")
@@ -113,7 +115,7 @@ some text"""
     )
 
 
-def test_ensure_lines_in_file_no_changes(tmp_path, debug) -> None:
+def test_ensure_lines_in_file_no_changes(tmp_path: Path) -> None:
     """Test ensure_lines_in_file."""
     path = create_test_file(tmp_path)
     path.write_text(

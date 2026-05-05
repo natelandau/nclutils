@@ -1,12 +1,14 @@
 """Test the backup function."""
 
+from pathlib import Path
+
 import pytest
 
 from nclutils import backup_path
 
 
 @pytest.fixture
-def backup_test_path(tmp_path):
+def backup_test_path(tmp_path: Path) -> tuple[Path, Path, Path]:
     """Setup and teardown for backup tests.
 
     Returns:
@@ -30,14 +32,16 @@ def backup_test_path(tmp_path):
     return parent_dir, test_file, test_dir
 
 
-def test_backup_path(backup_test_path, clean_stdout):
+def test_backup_path(
+    backup_test_path: tuple[Path, Path, Path], capsys: pytest.CaptureFixture
+) -> None:
     """Verify creating backup files preserves original content."""
     # Given: A test file
     _, test_file, _ = backup_test_path
 
     # When: Creating a backup
     backup = backup_path(test_file, transient=False, with_progress=True)
-    output = clean_stdout()
+    output = capsys.readouterr().out
     assert "Backup test.txt" in output
     assert "100%" in output
 
@@ -47,7 +51,7 @@ def test_backup_path(backup_test_path, clean_stdout):
     assert backup.read_text() == "Hello, world!"
 
 
-def test_backup_multiple_backups(backup_test_path, debug):
+def test_backup_multiple_backups(backup_test_path: tuple[Path, Path, Path]) -> None:
     """Verify backup files increment names when backups already exist."""
     # Given: A test file
     _, test_file, _ = backup_test_path
@@ -70,7 +74,9 @@ def test_backup_multiple_backups(backup_test_path, debug):
     assert backup3.read_text() == "Hello, world!"
 
 
-def test_backup_multiple_backups_same_backup_suffix(backup_test_path, debug):
+def test_backup_multiple_backups_same_backup_suffix(
+    backup_test_path: tuple[Path, Path, Path],
+) -> None:
     """Verify backup files increment names when backups already exist."""
     # Given: A test file
     _, test_file, _ = backup_test_path
@@ -85,7 +91,7 @@ def test_backup_multiple_backups_same_backup_suffix(backup_test_path, debug):
     assert len(list(backup3.parent.glob("*.bak"))) == 1
 
 
-def test_backup_directory(backup_test_path, debug):
+def test_backup_directory(backup_test_path: tuple[Path, Path, Path]) -> None:
     """Verify backing up directories preserves structure and content."""
     # Given: A test directory
     _, _, test_dir = backup_test_path
@@ -103,7 +109,7 @@ def test_backup_directory(backup_test_path, debug):
     assert (backup / "test.txt").read_text() == "Hello, world!"
 
 
-def test_backup_missing_file(tmp_path, debug):
+def test_backup_missing_file(tmp_path: Path) -> None:
     """Verify backup raises error for missing files when configured."""
     # Given: A non-existent file path
     test_file = tmp_path / "test.txt"
@@ -115,7 +121,7 @@ def test_backup_missing_file(tmp_path, debug):
     assert not test_file.exists()
 
 
-def test_backup_missing_file_no_raise(tmp_path, clean_stdout):
+def test_backup_missing_file_no_raise(tmp_path: Path) -> None:
     """Verify backup handles missing files gracefully when configured."""
     # Given: A non-existent file path
     test_file = tmp_path / "test.txt"
