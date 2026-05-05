@@ -15,16 +15,9 @@ warning("API rate limit at 80%")
 ! API rate limit at 80%
 ```
 
-## Why nllog
+## What it owns
 
-If you've written a CLI script in Python, you've probably written this:
-
-```python
-print(f"[OK] {message}")
-print(f"[!] {warning}", file=sys.stderr)
-```
-
-A few iterations in, you've added `--verbose` and `--quiet` flags, swapped brackets for ANSI codes, and finally pulled in Rich. nllog collapses that progression into one import. It owns the verbosity gates, the stdout/stderr split, the markup escaping, and a Rich theme that's already been tuned to look reasonable.
+`pretty_print` handles the four things that grow out of `print()` in any non-trivial CLI script: the verbosity gates (`--verbose` / `--quiet`), the stdout/stderr split, Rich-markup escaping for untrusted input, and a preset theme.
 
 ## Quick start
 
@@ -54,7 +47,7 @@ Pass `markup=True` to opt into Rich markup parsing for `message` and any string 
 
 ```python
 from rich.text import Text
-from nllog import info
+from nclutils import info
 
 info("Found [bold]42[/] matches", markup=True)
 info(Text.from_markup("Found [bold]42[/] matches"))  # Text instances always keep their styling
@@ -75,13 +68,13 @@ Use `markup=True` when _you_ control the string. When the message comes from arb
 | `header`   | stdout | (rule line)              | `quiet` suppresses         |
 | `step`     | stdout | spinner, then `✓` or `✗` | always renders             |
 
-`critical` is severity-only - it does not raise. Use it for "the world is broken" notices that warrant a more emphatic visual than `error`.
+`critical` is severity-only and does not raise. Use it for "the world is broken" notices that warrant a more emphatic visual than `error`.
 
 You can pass Rich renderables in `details` to get syntax-aware output, which is especially useful at `debug` / `trace`:
 
 ```python
 from rich.json import JSON
-from nllog import debug
+from nclutils import debug
 
 debug("got response", details=[response_dict])
 debug("raw payload", details=[JSON(resp.text)])
@@ -90,7 +83,7 @@ debug("raw payload", details=[JSON(resp.text)])
 `header()` draws a `Console.rule()` with an optional centered title to break long output into scannable sections:
 
 ```python
-from nllog import header
+from nclutils import header
 
 header("phase 1: download")
 # ... work ...
@@ -103,7 +96,7 @@ header("phase 2: process")
 
 ```python
 import argparse
-from nllog import configure, Verbosity
+from nclutils import configure, Verbosity
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-v", "--verbose", action="count", default=0)
@@ -121,7 +114,7 @@ The two flags are independent gates:
 - `quiet=True` suppresses `info`, `success`, and `header`. Warnings, errors, dry-run notices, and steps still render.
 - `--verbose --quiet` is a sensible combination: you get debug output without the routine info chatter.
 
-`configure()` is a partial update - fields you don't pass are left alone. Call it as many times as you like:
+`configure()` is a partial update. Fields you don't pass are left alone. Call it as many times as you like:
 
 ```python
 configure(verbosity=Verbosity.DEBUG)
@@ -152,7 +145,7 @@ with step("warming caches", ephemeral=True) as s:
 # success leaves no trace; failure still prints "✗ warming caches"
 ```
 
-> **Warning:** `step()` cannot nest. Rich's `Live` doesn't stack, so nesting silently corrupts the parent's display. nllog raises `RuntimeError` when you try.
+> **Warning:** `step()` cannot nest. Rich's `Live` doesn't stack, so nesting silently corrupts the parent's display. `pretty_print` raises `RuntimeError` when you try.
 
 ## File logging
 
@@ -160,7 +153,7 @@ Pass `logfile=` to write a parallel record of every emission to disk:
 
 ```python
 from pathlib import Path
-from nllog import Emitter, LogLevel
+from nclutils import Emitter, LogLevel
 
 e = Emitter(
     logfile=Path("./run.log"),
@@ -188,14 +181,14 @@ Console rendering and file rendering are independent. The console ignores `logle
 
 ### What gets logged
 
-| nllog emission                | Logged at                         | Notes                                                                         |
+| Emission                      | Logged at                         | Notes                                                                         |
 | ----------------------------- | --------------------------------- | ----------------------------------------------------------------------------- |
 | `info` / `success` / `dryrun` | `INFO` (20)                       | `success`/`dryrun` aren't real severities. `dryrun` keeps `[dry-run]` inline. |
 | `debug`                       | `DEBUG` (10)                      | `[+s.fffs]` elapsed tag inlined into message.                                 |
 | `trace`                       | `TRACE` (5)                       | Custom level registered with stdlib `logging` at import.                      |
 | `warning`                     | `WARNING` (30)                    |                                                                               |
 | `error`                       | `ERROR` (40)                      |                                                                               |
-| `critical`                    | `CRITICAL` (50)                   | Severity-only - does NOT raise.                                               |
+| `critical`                    | `CRITICAL` (50)                   | Severity-only and does not raise.                                             |
 | `step()` lifecycle            | `INFO` start, `INFO`/`ERROR` exit | `ephemeral=True` does not suppress file output.                               |
 | `Step.sub()`                  | `INFO`                            | Indented continuation, written immediately.                                   |
 | `header()`                    | (not logged)                      | Console-only structural sugar.                                                |
@@ -204,7 +197,7 @@ Filtering with `loglevel=LogLevel.WARNING` drops every `info` / `success` / `dry
 
 ### What's not included
 
-nclutils pretty_print's logfile is for sane CLI audit and diagnostic capture. It does not ship rotation, JSON output, syslog, or multi-process safety. If you need those, run nllog on top of your own preconfigured `logging.Logger`, or use external rotation (`logrotate`, `savelog`).
+The logfile is for CLI audit and diagnostic capture. It does not ship rotation, JSON output, syslog, or multi-process safety. If you need those, run `pretty_print` on top of your own preconfigured `logging.Logger`, or use external rotation (`logrotate`, `savelog`).
 
 ## Customizing the theme
 
@@ -237,11 +230,13 @@ configure(theme=Theme(success=Level(detail_style="navy")))
 
 To fully reset, build a fresh emitter: `set_default(Emitter())`.
 
-The horizontal rule (`header`), the connector glyphs under `step()` (`├─`, `└─`), and the `[dry-run]` tag are not customizable.
+### What's not themed
+
+The horizontal rule under `header()`, the connector glyphs beneath `step()` (`├─`, `└─`), and the `[dry-run]` tag are not customizable.
 
 ## Reaching the underlying consoles
 
-When you need to render a Rich object (`Table`, `Syntax`, `Panel`, …) directly to the same stream nclutils.pretty_print's level functions write to, use the `console()` and `err_console()` accessors:
+When you need to render a Rich object (`Table`, `Syntax`, `Panel`, …) on the same stream the level functions write to, use the `console()` and `err_console()` accessors:
 
 ```python
 from rich.table import Table
@@ -280,7 +275,9 @@ e.info("captured")
 assert "captured" in capture.export_text()
 ```
 
-For customizing nclutils.pretty_print's level styles, prefer the `theme=` argument over a custom `Console(theme=...)`. Level styles are resolved inline at print time, so a custom theme dict on a user-supplied `Console` no longer overrides level rendering. The `Console(theme=THEME)` pattern remains valid for capturing the default theme's `header` / `header.rule` / `sub.pipe` styles.
+> **Note:** Use the `theme=` argument to customize level styles, not a custom `Console(theme=...)`. Level styles are resolved inline at print time, so a theme dict on a user-supplied `Console` no longer overrides level rendering.
+>
+> The `Console(theme=THEME)` pattern is still valid when you need to capture the default theme's structural styles (`header`, `header.rule`, `sub.pipe`) on your own console.
 
 To route the module-level functions through a test emitter:
 
@@ -297,18 +294,18 @@ finally:
 
 ## API reference
 
-The full public surface lives in `nclutils.pretty_print`:
+Every name below is re-exported from `nclutils` for convenience and is also available from `nclutils.pretty_print`.
 
-- `info`, `success`, `warning`, `error`, `critical`, `dryrun`, `debug`, `trace`, `header` - output functions.
-- `step(message, *, ephemeral=False)` - spinner context manager.
-- `configure(*, verbosity=None, quiet=None, console=None, err_console=None, theme=None, logfile=None, loglevel=None, logfmt=None)` - partial update of the default emitter.
-- `Emitter` - instantiate directly for isolated configuration.
-- `Theme`, `Level` - per-level style and marker overrides; pass `Theme(success=Level(...))` to `configure()` or `Emitter()`.
-- `Verbosity` - `IntEnum` with `INFO`, `DEBUG`, `TRACE`.
-- `LogLevel` - `IntEnum` aligned with stdlib `logging` (`TRACE=5`, `DEBUG=10`, …, `CRITICAL=50`); used as the `loglevel=` filter cutoff for the logfile.
-- `THEME` - the Rich `Theme` used by default consoles, in case you build your own.
-- `console()`, `err_console()` - return the default emitter's stdout / stderr `Console` for direct Rich rendering. Re-resolves on each call.
-- `get_default()`, `set_default(emitter)` - read or replace the shared default emitter.
+- `info`, `success`, `warning`, `error`, `critical`, `dryrun`, `debug`, `trace`, `header`. Output functions.
+- `step(message, *, ephemeral=False)`. Spinner context manager.
+- `configure(*, verbosity=None, quiet=None, console=None, err_console=None, theme=None, logfile=None, loglevel=None, logfmt=None)`. Partial update of the default emitter.
+- `Emitter`. Instantiate directly for isolated configuration.
+- `Theme`, `Level`. Per-level style and marker overrides. Pass `Theme(success=Level(...))` to `configure()` or `Emitter()`.
+- `Verbosity`. `IntEnum` with `INFO`, `DEBUG`, `TRACE`.
+- `LogLevel`. `IntEnum` aligned with stdlib `logging` (`TRACE=5`, `DEBUG=10`, …, `CRITICAL=50`). Used as the `loglevel=` filter cutoff for the logfile.
+- `THEME`. The Rich `Theme` used by default consoles, in case you build your own.
+- `console()`, `err_console()`. Return the default emitter's stdout / stderr `Console` for direct Rich rendering. Re-resolves on each call.
+- `get_default()`, `set_default(emitter)`. Read or replace the shared default emitter.
 
 ## License
 
