@@ -240,7 +240,7 @@ def test_directory_tree(temp_directory: Path, capsys: pytest.CaptureFixture) -> 
     """Build a rich.tree representation of a directory's contents."""
     # When: Building a directory tree
     result = directory_tree(temp_directory)
-    console.print(result)
+    console().print(result)
     output = capsys.readouterr().out
 
     assert "├── 📂 " in output
