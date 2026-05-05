@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, TypeVar, cast
 
 from loguru import logger as _logger
+from typing_extensions import Self
 
 F = TypeVar("F", bound=Callable[..., Any])
 
@@ -48,7 +49,7 @@ class Logger:
     _instance = None
     _initialized = False
 
-    def __new__(cls) -> "Logger":
+    def __new__(cls) -> Self:
         """Create a new Logger instance if it doesn't exist."""
         if cls._instance is None:
             _logger.remove()
