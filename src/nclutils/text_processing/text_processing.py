@@ -1,9 +1,10 @@
 """Document utilities."""
 
+import logging
 import re
 from pathlib import Path
 
-from nclutils.logging.logging import logger
+logger = logging.getLogger(__name__)
 
 
 def replace_in_file(
@@ -22,23 +23,26 @@ def replace_in_file(
     path = Path(path) if not isinstance(path, Path) else path
 
     try:
-        if not path.exists():
-            logger.error(f"File {path} does not exist")
-            return False
-
         original_content = path.read_text(encoding="utf-8")
-        new_content = original_content
+    except FileNotFoundError:
+        # Use error (not exception): missing file is an expected case; the traceback adds noise.
+        logger.error("File %s does not exist", path)  # noqa: TRY400
+        return False
+    except OSError:
+        logger.exception("Error processing %s", path)
+        return False
 
-        for search_text, replace_text in replacements.items():
-            if use_regex:
-                new_content = re.sub(search_text, replace_text, new_content, flags=re.MULTILINE)
-            else:
-                new_content = new_content.replace(search_text, replace_text)
+    new_content = original_content
+    for search_text, replace_text in replacements.items():
+        if use_regex:
+            new_content = re.sub(search_text, replace_text, new_content, flags=re.MULTILINE)
+        else:
+            new_content = new_content.replace(search_text, replace_text)
 
+    try:
         path.write_text(new_content, encoding="utf-8")
-
-    except Exception as e:  # noqa: BLE001
-        logger.error(f"Error processing {path}: {e}")
+    except OSError:
+        logger.exception("Error processing %s", path)
         return False
 
     return original_content != new_content

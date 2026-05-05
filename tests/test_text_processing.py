@@ -1,10 +1,10 @@
 """Test document utilities."""
 
+import logging
 from pathlib import Path
 
 import pytest
 
-from nclutils import logger
 from nclutils.text_processing import ensure_lines_in_file, replace_in_file
 
 
@@ -20,13 +20,12 @@ Nec dubitamus multa iter quae et nos invenerat. A communi observantia non est re
     return path
 
 
-def test_fail_file_not_found(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
-    """Test replace_in_file."""
-    logger.configure(log_level="DEBUG")
+def test_fail_file_not_found(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    """Verify replace_in_file logs an error and returns False when the file is missing."""
+    caplog.set_level(logging.ERROR, logger="nclutils.text_processing.text_processing")
     path = tmp_path / "test.txt"
     assert not replace_in_file(path, {"no_match": "no_matches"})
-    output = capsys.readouterr().err
-    assert "test.txt does not exist" in output
+    assert "test.txt does not exist" in caplog.text
     assert not path.exists()
 
 

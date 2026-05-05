@@ -1,5 +1,6 @@
 """Filesystem utilities for directory and file operations."""
 
+import logging
 import os
 import platform
 import re
@@ -12,9 +13,10 @@ from rich.progress import Progress, TaskID
 from rich.text import Text
 from rich.tree import Tree
 
-from nclutils.logging import logger
 from nclutils.sh import ShellCommandFailedError, run_command
 from nclutils.utils import check_python_version, new_timestamp_uid
+
+logger = logging.getLogger(__name__)
 
 # how many bytes to read at once?
 # shutil.copy uses 1024 * 1024 if _WINDOWS else 64 * 1024
@@ -105,22 +107,22 @@ def backup_path(
     # Note this isn't perfectly atomic, if another thread does a backup
     # to an identical backup directory but this would be very rare.
     if backup_path.is_symlink():
-        logger.trace(f"unlink {backup_path}")
+        logger.debug("unlink %s", backup_path)
         backup_path.unlink()
     elif backup_path.is_dir():
-        logger.trace(f"rmtree {backup_path}")
+        logger.debug("rmtree %s", backup_path)
         shutil.rmtree(backup_path)
 
     if src.is_dir():
-        logger.debug(f"copytree {src} {backup_path}")
+        logger.debug("copytree %s %s", src, backup_path)
         shutil.copytree(src, backup_path)
     elif with_progress:
         with Progress(transient=transient) as progress_bar:
             copy_task = progress_bar.add_task(f"Backup {src.name}", total=src.stat().st_size)
-            logger.debug(f"copyfile {src} {backup_path}")
+            logger.debug("copyfile %s %s", src, backup_path)
             _do_copy_file(src, backup_path, progress_bar=progress_bar, task=copy_task)
     else:
-        logger.debug(f"copyfile {src} {backup_path}")
+        logger.debug("copyfile %s %s", src, backup_path)
         _do_copy_file(src, backup_path)
 
     return backup_path
@@ -189,16 +191,16 @@ def copy_file(
 
     # Generate unique filename if destination exists and overwrite is disabled
     if dst.exists() and keep_backup:
-        logger.debug(f"backup {dst}")
+        logger.debug("backup %s", dst)
         backup_path(dst, with_progress=with_progress, transient=transient)
 
     dst.parent.mkdir(parents=True, exist_ok=True)
 
     if dst.is_symlink():
-        logger.trace(f"unlink {dst}")
+        logger.debug("unlink %s", dst)
         dst.unlink()
     elif dst.is_dir():
-        logger.trace(f"rmtree {dst}")
+        logger.debug("rmtree %s", dst)
         shutil.rmtree(dst)
 
     # Copy file in chunks with progress bar to handle large files efficiently
@@ -206,10 +208,10 @@ def copy_file(
         with Progress(transient=transient) as progress_bar:
             copy_task = progress_bar.add_task(f"Copy {src.name}", total=src.stat().st_size)
             _do_copy_file(src, dst, progress_bar=progress_bar, task=copy_task)
-            logger.trace(f"copyfile {src} {dst}")
+            logger.debug("copyfile %s %s", src, dst)
     else:
         _do_copy_file(src, dst)
-        logger.trace(f"copyfile {src} {dst}")
+        logger.debug("copyfile %s %s", src, dst)
 
     # Preserve original file permissions
     shutil.copymode(str(src), str(dst))
@@ -271,18 +273,18 @@ def copy_directory(
 
     # Generate unique destination name if it exists and we're not overwriting
     if dst.exists() and keep_backup:
-        logger.debug(f"backup {dst}")
+        logger.debug("backup %s", dst)
         backup_path(dst, with_progress=with_progress, transient=transient)
 
     if dst.is_symlink():
-        logger.trace(f"unlink {dst}")
+        logger.debug("unlink %s", dst)
         dst.unlink()
     elif dst.is_dir():
-        logger.trace(f"rmtree {dst}")
+        logger.debug("rmtree %s", dst)
         shutil.rmtree(dst)
 
     # Walk the source directory tree and copy each file while preserving structure
-    logger.debug(f"walk {src}")
+    logger.debug("walk %s", src)
     for root, _, files in src.walk():
         new_parent = dst if root == src else dst / root.relative_to(src)
         new_parent.mkdir(parents=True, exist_ok=True)

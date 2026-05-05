@@ -6,7 +6,6 @@ from pathlib import Path
 import pytest
 from pytest_mock import MockerFixture
 
-from nclutils import logger
 from nclutils.fs import copy_directory, copy_file
 from nclutils.utils import check_python_version
 
@@ -89,31 +88,24 @@ def test_copy_file_keep_backup(tmp_path: Path) -> None:
             assert file.read_text() == "Old content"
 
 
-def test_copy_file_same_file(
-    tmp_path: Path, capsys: pytest.CaptureFixture, debug: Callable
-) -> None:
+def test_copy_file_same_file(tmp_path: Path, fs_caplog: pytest.LogCaptureFixture) -> None:
     """Verify copy_file handles same file as destination."""
     # Given: Source and destination files with same content
-    logger.configure(log_level="WARNING")
     src = tmp_path / "test.txt"
     dst = tmp_path / "test_copy.txt"
     src.write_text("Hello, world!")
 
     # When: Copying file to itself
-
     copy_file(src, src)
-    output = capsys.readouterr().err.replace(str(tmp_path), "")
-    # debug(output)
 
     # Then: No progress bar was displayed
-    assert "Did not copy" in output.replace("\n", " ").replace("  ", " ")
+    assert "Did not copy" in fs_caplog.text.replace("\n", " ").replace("  ", " ")
     assert not dst.exists()
     assert src.exists()
 
 
-def test_copy_directory(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+def test_copy_directory(tmp_path: Path, fs_caplog: pytest.LogCaptureFixture) -> None:
     """Verify copy_file raises error when copying directory."""
-    logger.configure(log_level="WARNING")
     # Given: Source directory with files
     src = tmp_path / "src"
     dst = tmp_path / "dst"
@@ -125,9 +117,8 @@ def test_copy_directory(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
     with pytest.raises(FileNotFoundError):
         copy_file(src, dst)
 
-    output = capsys.readouterr().err
-
-    assert "is not a file. Did not copy" in output
+    # Then: Warning is logged
+    assert "is not a file. Did not copy" in fs_caplog.text
 
 
 def test_copy_file_with_no_progress(
@@ -173,9 +164,10 @@ def test_copy_directory_basic(tmp_path: Path) -> None:
     assert (dst / "subdir" / "file2.txt").read_text() == "World"
 
 
-def test_copy_directory_same_destination(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+def test_copy_directory_same_destination(
+    tmp_path: Path, fs_caplog: pytest.LogCaptureFixture
+) -> None:
     """Verify copy_directory handles copying to same directory."""
-    logger.configure(log_level="WARNING")
     if not check_python_version(3, 12):
         pytest.skip("Skipping test for Python version < 3.12")
 
@@ -186,17 +178,16 @@ def test_copy_directory_same_destination(tmp_path: Path, capsys: pytest.CaptureF
 
     # When: Copying directory to itself
     result = copy_directory(src, src)
-    output = capsys.readouterr().err
-    # debug(output)
 
     # Then: Warning is shown and original returned
-    assert "same directory" in output
+    assert "same directory" in fs_caplog.text
     assert result == src
 
 
-def test_copy_directory_parent_destination(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+def test_copy_directory_parent_destination(
+    tmp_path: Path, fs_caplog: pytest.LogCaptureFixture
+) -> None:
     """Verify copy_directory prevents copying to parent directory."""
-    logger.configure(log_level="WARNING")
     if not check_python_version(3, 12):
         pytest.skip("Skipping test for Python version < 3.12")
 
@@ -209,17 +200,14 @@ def test_copy_directory_parent_destination(tmp_path: Path, capsys: pytest.Captur
 
     # When: Attempting to copy to parent directory
     result = copy_directory(child, parent)
-    output = capsys.readouterr().err.replace(str(tmp_path), "")
-    # debug(output)
 
     # Then: Warning is shown and original returned
-    assert "have parent/child relationship" in output
+    assert "have parent/child relationship" in fs_caplog.text
     assert result == child
 
 
-def test_copy_directory_dst_in_src(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+def test_copy_directory_dst_in_src(tmp_path: Path, fs_caplog: pytest.LogCaptureFixture) -> None:
     """Verify copy_directory prevents copying when destination is inside source."""
-    logger.configure(log_level="WARNING")
     if not check_python_version(3, 12):
         pytest.skip("Skipping test for Python version < 3.12")
 
@@ -231,16 +219,14 @@ def test_copy_directory_dst_in_src(tmp_path: Path, capsys: pytest.CaptureFixture
 
     # When: Attempting to copy directory into itself
     result = copy_directory(src, dst)
-    output = capsys.readouterr().err.replace(str(tmp_path), "")
 
     # Then: Warning is shown and original directory returned
-    assert "have parent/child relationship" in output
+    assert "have parent/child relationship" in fs_caplog.text
     assert result == src
 
 
-def test_copy_directory_missing_source(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+def test_copy_directory_missing_source(tmp_path: Path, fs_caplog: pytest.LogCaptureFixture) -> None:
     """Verify copy_directory raises error when source directory does not exist."""
-    logger.configure(log_level="WARNING")
     if not check_python_version(3, 12):
         pytest.skip("Skipping test for Python version < 3.12")
 
@@ -252,8 +238,8 @@ def test_copy_directory_missing_source(tmp_path: Path, capsys: pytest.CaptureFix
     with pytest.raises(FileNotFoundError, match="does not exist"):
         copy_directory(src, dst)
 
-    output = capsys.readouterr().err.replace(str(tmp_path), "")
-    assert "does not exist" in output
+    # Then: Error is logged
+    assert "does not exist" in fs_caplog.text
 
 
 def test_copy_directory_with_progress(tmp_path: Path) -> None:
@@ -303,17 +289,11 @@ def test_copy_directory_unique_name(tmp_path: Path) -> None:
             assert (d / "test.txt").read_text() == "old"
 
 
-def test_copy_directory_python_version(
-    mocker: MockerFixture, tmp_path: Path, capsys: pytest.CaptureFixture
-) -> None:
+def test_copy_directory_python_version(mocker: MockerFixture, tmp_path: Path) -> None:
     """Verify copy_directory requires Python 3.12 or higher."""
     # Given: Python version below 3.12
-    logger.configure(log_level="WARNING")
     mocker.patch("nclutils.fs.filesystem.check_python_version", return_value=False)
 
     # When/Then: Copying directory raises version error
     with pytest.raises(ValueError, match=r"requires a minimum of Python version 3\.12"):
         copy_directory("src", "dst")
-
-    output = capsys.readouterr().err
-    assert "requires a minimum of Python version 3.12" in output

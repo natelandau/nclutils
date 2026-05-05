@@ -7,7 +7,6 @@ Collection of convenience functions used in Python packages and scripts. These a
 ## Features
 
 - **Filesystem Utilities**: Common filesystem operations
-- **Logging**: A wrapper around the [Loguru](https://github.com/Delgan/loguru) logger with configurable log levels and custom styles.
 - **Network**: Helper functions for working with network connections.
 - **Pretty Printing**: Rich text formatting for console output with customizable styles
 - **Questions**: Short-cut functions for asking questions and getting user input using the [questionary library](https://github.com/tmbo/questionary).
@@ -28,7 +27,6 @@ nclutils has a few dependencies that are included in the project.
 - [questionary](https://github.com/tmbo/questionary) - For asking questions
 - [rich](https://github.com/Textualize/rich) - For pretty printing
 - [sh](https://github.com/amoffat/sh) - For running shell commands
-- [Loguru](https://github.com/Delgan/loguru) - For logging
 
 ## Installation
 
@@ -42,10 +40,10 @@ pip install nclutils
 
 ## Imports
 
-Pretty-printing helpers and the `logger` are re-exported at the package root for convenience:
+Pretty-printing helpers are re-exported at the package root for convenience:
 
 ```python
-from nclutils import info, success, error, logger
+from nclutils import info, success, error, step
 ```
 
 Everything else lives in its submodule and must be imported from there:
@@ -55,6 +53,18 @@ from nclutils.fs import copy_file, find_files
 from nclutils.sh import run_command, ShellCommandFailedError
 from nclutils.strings import camel_case, deburr
 from nclutils.utils import iso_timestamp, unique_id
+```
+
+### Diagnostic logging
+
+Internal modules (`nclutils.fs`, `nclutils.text_processing`) emit diagnostic messages through the stdlib `logging` module under their own logger names. By default these are silent. To see them, attach a handler in your application:
+
+```python
+import logging
+
+logging.basicConfig(level=logging.WARNING)
+# or, narrower:
+logging.getLogger("nclutils").setLevel(logging.DEBUG)
 ```
 
 ## Included Modules
@@ -113,12 +123,6 @@ Imported from `nclutils.fs`.
 - **`find_user_home_dir(username: str | None = None) -> Path | None`**
 
     Find the home directory for a requested user or the current user if no user is requested. When running under sudo, the home directory for the sudo user is returned.
-
-### Logging
-
-- **`logger`**
-
-    A wrapper around the [Loguru](https://github.com/Delgan/loguru) logger with configurable log levels and custom styles. See the [logging docs](docs/logging.md) for more information.
 
 ### Network
 
