@@ -1,11 +1,12 @@
 # type: ignore
 """Test filesystem utilities."""
 
+import logging
 from pathlib import Path
 
 import pytest
 
-from nclutils import console, logger
+from nclutils import console
 from nclutils.fs import (
     clean_directory,
     directory_tree,
@@ -260,18 +261,16 @@ def test_clean_directory(temp_directory: Path) -> None:
     assert not list(temp_directory.iterdir())
 
 
-def test_clean_directory_not_a_directory(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
-    """Verify that a directory is cleaned up."""
-    logger.configure(log_level="WARNING")
+def test_clean_directory_not_a_directory(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    """Verify clean_directory warns and skips when the target is a file."""
+    caplog.set_level(logging.WARNING, logger="nclutils.fs.filesystem")
     test_file = tmp_path / "test.txt"
     test_file.touch()
 
     # When: Cleaning up a directory
     clean_directory(test_file)
-    output = capsys.readouterr().err
-    # debug(output)
 
     # Then: The directory should be empty
     assert test_file.exists()
     assert test_file.is_file()
-    assert "test.txt is not a directory. Did not clean" in output
+    assert "test.txt is not a directory. Did not clean" in caplog.text
