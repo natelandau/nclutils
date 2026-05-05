@@ -1,87 +1,129 @@
-# Shell Commands
+# Shell commands
 
-A light wrapper built on top of the [sh](https://github.com/amoffat/sh) module.
-
-## Run Command
-
-`run_command(cmd: str, args: list[str] = [], quiet: bool = False, pushd: str | Path | None = None, okay_codes: list[int] | None = None, exclude_regex: str | None = None, sudo: bool = False, fg: bool = False) -> str`
-
-Execute shell commands with proper error handling and output control.
-
-**Arguments:**
-
--   `cmd: str`. The command to execute
--   `args: list[str]`. The command arguments
--   `quiet: bool`. Whether to suppress output to console (default: `False`)
--   `pushd: str | Path`. The directory to change to before running the command (default: `None`)
--   `okay_codes: list[int]`. A list of exit codes that are considered successful (default: `None`)
--   `exclude_regex: str | None`. A regex to exclude lines from the output (default: `None`)
--   `sudo: bool`. Whether to run the command with sudo (default: `False`)
--   `fg: bool`. Whether to run the command in foreground mode. When `True`, the command runs in the foreground and does not capture output. This is useful for commands that require user interaction or produce real-time output. (default: `False`)
+Run external commands with consistent error handling and live output. A small layer over the [sh](https://github.com/amoffat/sh) module. Imported from `nclutils.sh`.
 
 ```python
-from nclutils.sh import run_command
+from nclutils.sh import run_command, which
 
-# Execute a command and print the output to the console
-run_command("ls", ["-la", "/some/path"])
-
-# Run quietly (suppress output to console)
-output = run_command("git", ["status"], quiet=True)
+if which("git"):
+    run_command("git", ["status", "--short"])
 ```
 
-### Changing Directories
+## Running commands
 
-The run_command function can change directories before running a command.
+`run_command(cmd, args, ...)` runs a command, streams its output to the console as it arrives, and returns the full captured output as a string. ANSI color codes are preserved.
 
 ```python
 from nclutils.sh import run_command
 
-# Change to a temporary directory and then run the command
+# Print output to the console as it streams
+run_command("ls", ["-la", "/some/path"])
+
+# Capture quietly and inspect after
+output = run_command("git", ["status", "--short"], quiet=True)
+if output.strip():
+    print("dirty working tree")
+```
+
+### Changing directory
+
+Pass `pushd=` to run the command from a different working directory. Empty string (the default) means "use the current directory."
+
+```python
+from pathlib import Path
+from nclutils.sh import run_command
+
 run_command("pwd", [], pushd=Path("/tmp"))
 ```
 
-### Errors
+If `pushd` points at a directory that doesn't exist, `run_command` raises `ShellCommandFailedError`.
 
-The run_command function raises `ShellCommandFailedError` if the command fails and `ShellCommandNotFoundError` if the command is not found.
+### Allowing non-zero exit codes
 
-`ShellCommandFailedError` has the following attributes:
-
--   `exit_code`: The exit code of the command
--   `stderr`: The stderr output of the command
--   `stdout`: The stdout output of the command
--   `full_cmd`: The full command that was run
--   `err_to_out`: Whether to redirect stderr to stdout for printing command output to the console.
+Some commands use exit codes as data — `grep` returns `1` when there are no matches, `diff` returns `1` for differences. Pass `okay_codes=` to whitelist additional codes.
 
 ```python
-from nclutils.sh import ShellCommandFailedError, ShellCommandNotFoundError, run_command
+from nclutils.sh import run_command
 
-try:
-    run_command("nonexistent", ["arg1"])
-except ShellCommandNotFoundError as e:
-    print(e)
-except ShellCommandFailedError as e:
-    print(e.exit_code)
-    print(e.stderr)
-    print(e.stdout)
-    print(e.full_cmd)
-
-# To mark exit codes as successful, pass a list of integers to the `okay_codes` parameter.
-run_command("ls", ["-l", "/Users"], okay_codes=[0,1])
+# 0 (matched) and 1 (no match) are both fine; only 2+ raise
+run_command("grep", ["pattern", "file.txt"], okay_codes=[0, 1])
 ```
 
-## which
+`okay_codes` defaults to `[0]` when empty.
 
-`which(cmd: str) -> str | None`
+### Filtering output
 
-Check if a command exists in the PATH. Returns the absolute path to the command if found, otherwise None.
+`exclude_regex=` skips lines that match the given regex. Skipped lines are dropped from both the streamed console output and the returned string.
+
+```python
+from nclutils.sh import run_command
+
+run_command("npm", ["install"], exclude_regex=r"^npm warn deprecated")
+```
+
+### Other options
+
+- `quiet=True`. Collect output without printing it to the console.
+- `sudo=True`. Run under `sudo`. Uses `sh.contrib.sudo(k=True)`, which prompts once and caches credentials for the session.
+- `err_to_out=True` (the default). Fold stderr into stdout. Set to `False` to silence stderr entirely from the streamed output.
+- `fg=True`. Run the command in the foreground without capturing output. Use this for interactive commands like `vim` or `less`. The return value is an empty string.
+
+## Errors
+
+Failures from `run_command` come back as one of two exception types.
+
+### `ShellCommandNotFoundError`
+
+The command wasn't found in `PATH`.
+
+```python
+from nclutils.sh import ShellCommandNotFoundError, run_command
+
+try:
+    run_command("not-a-real-command", [])
+except ShellCommandNotFoundError as e:
+    print(e)
+```
+
+### `ShellCommandFailedError`
+
+The command ran but exited with a status not in `okay_codes`. The exception exposes the relevant context as attributes:
+
+| Attribute    | Meaning                                                                |
+| ------------ | ---------------------------------------------------------------------- |
+| `exit_code`  | The exit status returned by the command.                               |
+| `stdout`     | The stdout output captured by `sh`.                                    |
+| `stderr`     | The stderr output captured by `sh`.                                    |
+| `full_cmd`   | The full command string that was executed.                             |
+
+```python
+from nclutils.sh import ShellCommandFailedError, run_command
+
+try:
+    run_command("git", ["push"])
+except ShellCommandFailedError as e:
+    print(f"git push exited {e.exit_code}")
+    print(e.stderr)
+```
+
+The exception is also raised when `pushd=` points at a missing directory; in that case the `e` attributes will be `None`.
+
+## Looking up a command
+
+`which(cmd)` returns the absolute path of an executable in `PATH`, or `None` if the command isn't found. Use it to gate optional features without try/except.
 
 ```python
 from nclutils.sh import which
 
-# Check if a command exists in the PATH
-result = which("ls")
-
-# If the command exists, print the path
-if result:
-    print(result)
+if which("docker"):
+    run_command("docker", ["ps"])
+else:
+    print("docker not installed; skipping container checks")
 ```
+
+## API reference
+
+- `run_command(cmd, args, pushd="", okay_codes=[], exclude_regex=None, *, quiet=False, sudo=False, err_to_out=True, fg=False) -> str`. Run a command and return its captured output.
+- `which(cmd) -> str | None`. Resolve a command name to an absolute path, or `None`.
+- `ShellCommandFailedError`. Raised on non-zero exit. Exposes `exit_code`, `stdout`, `stderr`, `full_cmd`.
+- `ShellCommandNotFoundError`. Raised when the command isn't in `PATH`.

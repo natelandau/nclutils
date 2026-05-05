@@ -1,22 +1,20 @@
-# Scratch folder for temporary files
-scratch/
-tmp/
-dev-config.toml
-.dev/
-.cursor/
-GEMINI.md
-.tmp/
-.github/copilot-instructions.md
-.github/instructions/
-
-# Caches
-*_cache/
+# Python-generated files
 __pycache__/
-.cache/
-
-# macOS
-.DS_Store
-
-# python specific
-.venv/
+*.py[oc]
+build/
 dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+.cache/
+tmp/
+.claude/
+.worktrees/
+_site/
+docs/plans/
+docs/specs/
+docs/superpowers/
+.superpowers/

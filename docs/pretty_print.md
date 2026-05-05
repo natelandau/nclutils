@@ -306,7 +306,3 @@ Every name below is re-exported from `nclutils` for convenience and is also avai
 - `THEME`. The Rich `Theme` used by default consoles, in case you build your own.
 - `console()`, `err_console()`. Return the default emitter's stdout / stderr `Console` for direct Rich rendering. Re-resolves on each call.
 - `get_default()`, `set_default(emitter)`. Read or replace the shared default emitter.
-
-## License
-
-MIT. See [LICENSE](LICENSE).
