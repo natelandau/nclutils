@@ -20,7 +20,7 @@ Execute shell commands with proper error handling and output control.
 -   `fg: bool`. Whether to run the command in foreground mode. When `True`, the command runs in the foreground and does not capture output. This is useful for commands that require user interaction or produce real-time output. (default: `False`)
 
 ```python
-from nclutils import run_command
+from nclutils.sh import run_command
 
 # Execute a command and print the output to the console
 run_command("ls", ["-la", "/some/path"])
@@ -34,7 +34,7 @@ output = run_command("git", ["status"], quiet=True)
 The run_command function can change directories before running a command.
 
 ```python
-from nclutils import run_command
+from nclutils.sh import run_command
 
 # Change to a temporary directory and then run the command
 run_command("pwd", [], pushd=Path("/tmp"))
@@ -53,7 +53,7 @@ The run_command function raises `ShellCommandFailedError` if the command fails a
 -   `err_to_out`: Whether to redirect stderr to stdout for printing command output to the console.
 
 ```python
-from nclutils import ShellCommandFailedError, ShellCommandNotFoundError
+from nclutils.sh import ShellCommandFailedError, ShellCommandNotFoundError, run_command
 
 try:
     run_command("nonexistent", ["arg1"])
@@ -76,7 +76,7 @@ run_command("ls", ["-l", "/Users"], okay_codes=[0,1])
 Check if a command exists in the PATH. Returns the absolute path to the command if found, otherwise None.
 
 ```python
-from nclutils import which
+from nclutils.sh import which
 
 # Check if a command exists in the PATH
 result = which("ls")

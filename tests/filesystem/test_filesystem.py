@@ -5,13 +5,12 @@ from pathlib import Path
 
 import pytest
 
-from nclutils import (
+from nclutils import console, logger
+from nclutils.fs import (
     clean_directory,
-    console,
     directory_tree,
     find_files,
     find_subdirectories,
-    logger,
 )
 
 
@@ -240,7 +239,7 @@ def test_directory_tree(temp_directory: Path, capsys: pytest.CaptureFixture) -> 
     """Build a rich.tree representation of a directory's contents."""
     # When: Building a directory tree
     result = directory_tree(temp_directory)
-    console.print(result)
+    console().print(result)
     output = capsys.readouterr().out
 
     assert "├── 📂 " in output

@@ -4,7 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from nclutils import ensure_lines_in_file, logger, replace_in_file
+from nclutils import logger
+from nclutils.text_processing import ensure_lines_in_file, replace_in_file
 
 
 def create_test_file(parent_dir: Path) -> Path:

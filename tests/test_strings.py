@@ -2,7 +2,7 @@
 
 import re
 
-from nclutils import random_string
+from nclutils.strings import random_string
 
 
 def test_random_string() -> None:

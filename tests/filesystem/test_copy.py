@@ -6,7 +6,9 @@ from pathlib import Path
 import pytest
 from pytest_mock import MockerFixture
 
-from nclutils import check_python_version, copy_directory, copy_file, logger
+from nclutils import logger
+from nclutils.fs import copy_directory, copy_file
+from nclutils.utils import check_python_version
 
 
 def test_copy_file_file_not_found(tmp_path: Path) -> None:

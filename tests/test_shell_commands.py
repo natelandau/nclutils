@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from nclutils import (
+from nclutils.sh import (
     ShellCommandFailedError,
     ShellCommandNotFoundError,
     run_command,

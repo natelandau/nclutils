@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 from freezegun import freeze_time
 
-from nclutils import (
+from nclutils.utils import (
     check_python_version,
     format_iso_timestamp,
     iso_timestamp,

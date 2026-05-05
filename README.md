@@ -40,9 +40,29 @@ uv add nclutils
 pip install nclutils
 ```
 
+## Imports
+
+Pretty-printing helpers and the `logger` are re-exported at the package root for convenience:
+
+```python
+from nclutils import info, success, error, logger
+```
+
+Everything else lives in its submodule and must be imported from there:
+
+```python
+from nclutils.fs import copy_file, find_files
+from nclutils.sh import run_command, ShellCommandFailedError
+from nclutils.strings import camel_case, deburr
+from nclutils.utils import iso_timestamp, unique_id
+```
+
 ## Included Modules
 
 ### Filesystem Utilities
+
+Imported from `nclutils.fs`.
+
 
 - **`backup_path(path: Path, raise_on_missing: bool = False, with_progress: bool = False, transient: bool = True) -> Path | None`**
 
@@ -76,7 +96,7 @@ pip install nclutils
 
     ```python
     from pathlib import Path
-    from nclutils import find_subdirectories
+    from nclutils.fs import find_subdirectories
 
     root_directory = Path(".")
 
@@ -102,33 +122,19 @@ pip install nclutils
 
 ### Network
 
+Imported from `nclutils.network`.
+
 - **`network_available(address: str = "8.8.4.4", port: int = 53, timeout: int = 5) -> bool`**
 
     Check if a network connection is available.
 
 ### Pretty Printing
 
-The pretty printing module provides styled console output with configurable log levels and custom styles. See the [pretty_print docs](docs/pretty_print.md) for more information.
-
-- **`console`**
-
-    A rich console object for styled console output.
-
-- **`err_console`**
-
-    A rich console object for styled console output to stderr.
-
-- **`PrettyPrinter(Class)`**
-
-    Styled console output with configurable levels and custom styles.
-
-- **`print_debug(envar_prefix: str = None, custom: list[dict] = None, packages: list[str] = None, all_packages: bool = False) -> None`**
-
-    Print debug information about the current environment.
+The pretty printing module provides styled console output with configurable levels and custom styles. See the [pretty_print docs](docs/pretty_print.md) for more information.
 
 ### Questions
 
-Convenience functions for working with the [questionary](https://github.com/tmbo/questionary) library.
+Convenience functions for working with the [questionary](https://github.com/tmbo/questionary) library. Imported from `nclutils.questions`.
 
 See the [questions docs](docs/questions.md) for more information.
 
@@ -142,7 +148,7 @@ See the [questions docs](docs/questions.md) for more information.
 
 ### Shell Commands
 
-Convenience functions built on top of the [sh](https://github.com/amoffat/sh) module. See the [shell_commands docs](docs/shell_commands.md) for more information.
+Convenience functions built on top of the [sh](https://github.com/amoffat/sh) module. Imported from `nclutils.sh`. See the [shell_commands docs](docs/shell_commands.md) for more information.
 
 - **`run_command(cmd: str, args: list[str] = [], quiet: bool = False, pushd: str | Path | None = None, okay_codes: list[int] | None = None, exclude_regex: str | None = None, sudo: bool = False, fg: bool = False) -> str`**
 
@@ -153,6 +159,8 @@ Convenience functions built on top of the [sh](https://github.com/amoffat/sh) mo
     Check if a command exists in the PATH. Returns the absolute path to the command if found, otherwise `None`.
 
 ### Strings
+
+Imported from `nclutils.strings`.
 
 - **`camel_case(text: str) -> str`**
 
@@ -175,7 +183,7 @@ Convenience functions built on top of the [sh](https://github.com/amoffat/sh) mo
     Extract words from text by splitting on word boundaries and handling contractions. Optionally use a custom regex pattern for more control over word splitting. Handles apostrophes, underscores, and mixed case text intelligently.
 
     ```python
-    from nclutils import list_words
+    from nclutils.strings import list_words
 
     print(list_words("Jim's horse is fast"))
     # ["Jim's", 'horse', 'is', 'fast']
@@ -225,12 +233,14 @@ Convenience functions built on top of the [sh](https://github.com/amoffat/sh) mo
 
 ### Text Processing
 
+Imported from `nclutils.text_processing`.
+
 - **`replace_in_file(path: str | Path, replacements: dict[str, str], *, use_regex: bool = False) -> bool`**
 
     Replace text in a file with a dictionary of replacements.
 
     ```python
-    from nclutils import replace_in_file
+    from nclutils.text_processing import replace_in_file
 
     replacements = {"old": "new"}
     replace_in_file(path="test.txt", replacements=replacements)
@@ -245,6 +255,8 @@ Convenience functions built on top of the [sh](https://github.com/amoffat/sh) mo
     Ensure lines are in a file. If the lines are not present, they will be added to the file.
 
 ### Utils
+
+Imported from `nclutils.utils`.
 
 - **`check_python_version(major: int, minor: int) -> bool`**
 
@@ -271,7 +283,7 @@ Convenience functions built on top of the [sh](https://github.com/amoffat/sh) mo
     Generate consecutive unique IDs with an optional prefix.
 
     ```python
-    from nclutils import unique_id
+    from nclutils.utils import unique_id
 
     print(unique_id())
     # 1

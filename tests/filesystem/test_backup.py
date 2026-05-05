@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from nclutils import backup_path
+from nclutils.fs import backup_path
 
 
 @pytest.fixture
