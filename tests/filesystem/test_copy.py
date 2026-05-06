@@ -116,8 +116,27 @@ def test_copy_file_source_is_directory(tmp_path: Path, fs_caplog: pytest.LogCapt
     with pytest.raises(IsADirectoryError):
         copy_file(src, dst)
 
-    # Then: An error is logged describing the directory rejection
+    # And: An error is logged describing the directory rejection
     assert "is a directory" in fs_caplog.text
+
+
+def test_copy_file_expands_tilde_in_src(tmp_path: Path, mocker: MockerFixture) -> None:
+    """Verify copy_file expands ~ in src so paths under HOME are usable."""
+    # Given: A source file under a fake HOME and a tilde-prefixed path
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    real_src = fake_home / "note.txt"
+    real_src.write_text("hello")
+    dst = tmp_path / "copy.txt"
+    mocker.patch("pathlib.Path.home", return_value=fake_home)
+    mocker.patch.dict("os.environ", {"HOME": str(fake_home)})
+
+    # When: Copying with ~/note.txt as the source
+    result = copy_file(Path("~/note.txt"), dst)
+
+    # Then: The destination has the source content
+    assert dst.read_text() == "hello"
+    assert result == dst.expanduser().resolve()
 
 
 def test_copy_file_with_no_progress(

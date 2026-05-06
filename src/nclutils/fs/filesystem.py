@@ -165,6 +165,9 @@ def copy_file(
         IsADirectoryError: If the source path is a directory
         OSError: If the source path exists but is not a regular file
     """
+    src = src.expanduser().resolve()
+    dst = dst.expanduser().resolve()
+
     if not src.exists():
         msg = f"source file `{src}` does not exist. Did not copy."
         logger.error(msg)
@@ -179,9 +182,6 @@ def copy_file(
         msg = f"source `{src}` is not a regular file. Did not copy."
         logger.error(msg)
         raise OSError(msg)
-
-    src = src.expanduser().resolve()
-    dst = dst.expanduser().resolve()
 
     # Check if source and destination are the same to avoid unnecessary copy
     if src == dst or (dst.exists() and src.samefile(dst)):
