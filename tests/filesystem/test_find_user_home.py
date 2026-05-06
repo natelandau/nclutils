@@ -1,122 +1,76 @@
 """Tests for the find_user_home_dir function."""
 
 import os
+import sys
 from pathlib import Path
 
 import pytest
 
 from nclutils.fs import find_user_home_dir
-from nclutils.sh import CompletedCommand, ShellCommandFailedError
 
 
-def _make_result(stdout: str) -> CompletedCommand:
-    """Build a minimal CompletedCommand for mocking run_command."""
-    return CompletedCommand(
-        argv=(),
-        returncode=0,
-        stdout=stdout,
-        stderr="",
-        duration=0.0,
-        cwd=None,
-    )
-
-
-@pytest.fixture
-def mock_platform_linux(mocker):
-    """Mock platform.system() to return 'Linux'."""
-    mocker.patch("platform.system", return_value="Linux")
-
-
-@pytest.fixture
-def mock_platform_darwin(mocker):
-    """Mock platform.system() to return 'Darwin'."""
-    mocker.patch("platform.system", return_value="Darwin")
-
-
-def test_find_user_home_dir_no_username(mocker):
-    """Verify finding home directory when no username is provided."""
-    # Given: No SUDO_USER environment variable
+def test_find_user_home_dir_no_username_returns_self_home(mocker) -> None:
+    """Verify find_user_home_dir returns Path.home() when no SUDO_USER is set."""
+    # Given: No SUDO_USER in the environment
     mocker.patch.dict(os.environ, {}, clear=True)
 
-    # When: Finding home directory without username
+    # When: Looking up without a username
     result = find_user_home_dir()
 
-    # Then: Return current user's home directory
+    # Then: Returns the current process's home
     assert result == Path.home()
 
 
-def test_find_user_home_dir_with_sudo_user(mocker):
-    """Verify finding home directory when SUDO_USER is set."""
-    # Given: SUDO_USER environment variable is set and Linux platform
-    mocker.patch.dict(os.environ, {"SUDO_USER": "testuser"})
-    mocker.patch("platform.system", return_value="Linux")
-    mocker.patch(
-        "nclutils.fs.filesystem.run_command",
-        return_value=_make_result("/home/testuser:x:1000:1000::/home/testuser:/bin/bash"),
-    )
+def test_find_user_home_dir_uses_sudo_user(mocker, fake_pwd) -> None:
+    """Verify find_user_home_dir falls back to SUDO_USER when no username is given."""
+    # Given: SUDO_USER points to another user with a known home directory
+    mocker.patch.dict(os.environ, {"SUDO_USER": "alice"}, clear=True)
+    pwd_module = fake_pwd(pw_dir="/home/alice")
 
-    # When: Finding home directory without username
+    # When: Resolving home with no explicit username
     result = find_user_home_dir()
 
-    # Then: Return sudo user's home directory
-    assert result == Path("/home/testuser")
+    # Then: SUDO_USER's home is returned
+    assert result == Path("/home/alice")
+    pwd_module.getpwnam.assert_called_once_with("alice")
 
 
-def test_find_user_home_dir_linux_success(mock_platform_linux, mocker):
-    """Verify finding home directory on Linux with valid username."""
-    # Given: Mock successful command execution
-    mocker.patch(
-        "nclutils.fs.filesystem.run_command",
-        return_value=_make_result("/home/testuser:x:1000:1000::/home/testuser:/bin/bash"),
-    )
+def test_find_user_home_dir_explicit_user(fake_pwd) -> None:
+    """Verify find_user_home_dir resolves an explicitly named user via pwd."""
+    # Given: pwd.getpwnam returns a known home for the requested user
+    pwd_module = fake_pwd(pw_dir="/Users/bob")
 
-    # When: Finding home directory for specific user
-    result = find_user_home_dir("testuser")
+    # When: Resolving home for a specific user
+    result = find_user_home_dir("bob")
 
-    # Then: Return correct home directory path
-    assert result == Path("/home/testuser")
+    # Then: The home from pwd is returned
+    assert result == Path("/Users/bob")
+    pwd_module.getpwnam.assert_called_once_with("bob")
 
 
-def test_find_user_home_dir_linux_failure(mock_platform_linux, mocker):
-    """Verify handling non-existent user on Linux."""
-    # Given: Mock failed command execution
-    mocker.patch(
-        "nclutils.fs.filesystem.run_command",
-        side_effect=ShellCommandFailedError(msg="Command failed"),
-    )
+def test_find_user_home_dir_unknown_user_returns_none(fake_pwd) -> None:
+    """Verify a missing user yields None instead of an unhandled KeyError."""
+    # Given: pwd.getpwnam raises KeyError for the requested user
+    fake_pwd(side_effect=KeyError("ghost"))
 
-    # When: Finding home directory for non-existent user
-    result = find_user_home_dir("nonexistentuser")
+    # When: Looking up a non-existent user
+    result = find_user_home_dir("ghost")
 
-    # Then: Return None for non-existent user
+    # Then: None is returned
     assert result is None
 
 
-def test_find_user_home_dir_darwin_success(mock_platform_darwin, mocker):
-    """Verify finding home directory on macOS with valid username."""
-    # Given: Mock successful command execution
-    mocker.patch(
-        "nclutils.fs.filesystem.run_command",
-        return_value=_make_result("NFSHomeDirectory: /Users/testuser"),
-    )
+def test_find_user_home_dir_pwd_unavailable_returns_none_and_warns(
+    mocker, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Verify the lookup returns None and logs a warning when the pwd module cannot be imported."""
+    # Given: pwd cannot be imported (Windows-like environment)
+    mocker.patch.dict(sys.modules, {"pwd": None})
+    caplog.set_level("WARNING", logger="nclutils.fs.filesystem")
 
-    # When: Finding home directory for specific user
-    result = find_user_home_dir("testuser")
+    # When: Looking up any user
+    result = find_user_home_dir("anyone")
 
-    # Then: Return correct home directory path
-    assert result == Path("/Users/testuser")
-
-
-def test_find_user_home_dir_darwin_failure(mock_platform_darwin, mocker):
-    """Verify handling non-existent user on macOS."""
-    # Given: Mock failed command execution
-    mocker.patch(
-        "nclutils.fs.filesystem.run_command",
-        side_effect=ShellCommandFailedError(msg="Command failed"),
-    )
-
-    # When: Finding home directory for non-existent user
-    result = find_user_home_dir("nonexistentuser")
-
-    # Then: Return None for non-existent user
+    # Then: None is returned and a warning was logged
     assert result is None
+    assert "pwd module" in caplog.text

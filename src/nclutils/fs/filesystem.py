@@ -2,18 +2,17 @@
 
 import logging
 import os
-import platform
 import re
 import shutil
 from pathlib import Path
 
+from rich.console import Console
 from rich.filesize import decimal
 from rich.markup import escape
 from rich.progress import Progress, TaskID
 from rich.text import Text
 from rich.tree import Tree
 
-from nclutils.sh import ShellCommandFailedError, run_command
 from nclutils.utils import check_python_version, new_timestamp_uid
 
 logger = logging.getLogger(__name__)
@@ -27,42 +26,37 @@ IO_BUFFER_SIZE = 4096 * 1024
 def _do_copy_file(
     src: Path, dst: Path, *, progress_bar: Progress | None = None, task: TaskID | None = None
 ) -> None:
-    """Copy file contents in chunks with optional progress tracking.
+    """Copy a file's contents in chunks, preserving permissions, with optional progress tracking.
 
     Args:
-        src (Path): Source file to read from
-        dst (Path): Destination file to write to
-        progress_bar (Progress | None, optional): Progress bar instance for tracking. Defaults to None
-        task (TaskID | None, optional): Task ID for progress updates. Defaults to None
+        src (Path): Source file to read from.
+        dst (Path): Destination file to write to.
+        progress_bar (Progress | None, optional): Progress bar instance for tracking. Defaults to None.
+        task (TaskID | None, optional): Task ID for progress updates. Defaults to None.
 
     Raises:
-        RuntimeError: If the copy operation fails or results in incomplete data
+        RuntimeError: If the destination file size does not match the source after the copy.
     """
     src_size = src.stat().st_size
 
     with src.open("rb") as src_bytes, dst.open("wb") as dst_bytes:
-        total_bytes_copied = 0
+        bytes_copied = 0
         while True:
             buf = src_bytes.read(IO_BUFFER_SIZE)
             if not buf:
                 break
             dst_bytes.write(buf)
-            total_bytes_copied += len(buf)
+            bytes_copied += len(buf)
             if progress_bar is not None and task is not None:
-                progress_bar.update(task, completed=total_bytes_copied)
+                progress_bar.update(task, completed=bytes_copied)
 
-    # Verify the copy was complete by checking file sizes
-    if total_bytes_copied != src_size:
-        msg = f"copy file incomplete: expected {src_size} bytes, copied {total_bytes_copied} bytes"
-        logger.error(msg)
-        raise RuntimeError(msg)
-
-    # Double-check destination file size matches source
     dst_size = dst.stat().st_size
     if dst_size != src_size:
-        msg = f"copy file incomplete: destination file size mismatch: source {src_size} bytes, destination {dst_size} bytes"
+        msg = f"copy incomplete: expected {src_size} bytes, destination has {dst_size} bytes"
         logger.error(msg)
-        raise RuntimeError(msg)
+        raise RuntimeError(msg) from None
+
+    shutil.copymode(src, dst)
 
 
 def backup_path(
@@ -72,60 +66,59 @@ def backup_path(
     raise_on_missing: bool = False,
     with_progress: bool = False,
     transient: bool = True,
+    console: Console | None = None,
 ) -> Path | None:
     """Create a backup copy of a file/directory by appending a suffix to the original name. If no suffix is provided, generate one using a timestamp. Skip if the source path doesn't exist.
 
     Args:
-        src (Path): Path to the file or directory to back up
-        backup_suffix (str, optional): Custom suffix to append to the backup name.
-        raise_on_missing (bool, optional): Whether to raise an error if the source path does not exist. Defaults to False.
-        with_progress (bool, optional): Show a progress bar during copy. Defaults to False
-        transient (bool, optional): Remove the progress bar after completion. Defaults to True
+        src (Path): Path to the file or directory to back up.
+        backup_suffix (str, optional): Custom suffix to append to the backup name. Defaults to a timestamp-based suffix.
+        raise_on_missing (bool, optional): Raise if the source path does not exist. Defaults to False.
+        with_progress (bool, optional): Show a progress bar during file copies. Defaults to False.
+        transient (bool, optional): Remove the progress bar after completion. Defaults to True.
+        console (Console | None, optional): Rich `Console` to render the progress bar through. Defaults to None (Rich's default global console).
 
     Returns:
-        Path | None: Path to the created backup file/directory, or None if source doesn't exist
+        Path | None: Path to the created backup file/directory, or None if the source does not exist and `raise_on_missing` is False.
 
     Raises:
-        FileNotFoundError: If the source path does not exist and raise_on_missing is True
+        FileNotFoundError: If the source path does not exist and `raise_on_missing` is True.
     """
-    if not src.exists() and raise_on_missing:
-        msg = f"skip backup: does not exist `{src}`"
-        logger.error(msg)
-        raise FileNotFoundError(msg)
-
     if not src.exists():
         msg = f"skip backup: does not exist `{src}`"
+        if raise_on_missing:
+            logger.error(msg)
+            raise FileNotFoundError(msg) from None
         logger.warning(msg)
         return None
 
     if not backup_suffix:
         backup_suffix = "." + new_timestamp_uid() + ".bak"
 
-    backup_path = src.with_name(src.name + backup_suffix)
+    target = src.with_name(src.name + backup_suffix)
 
-    # Clear the target of the backup in case it already exists.
-    # Note this isn't perfectly atomic, if another thread does a backup
-    # to an identical backup directory but this would be very rare.
-    if backup_path.is_symlink():
-        logger.debug("unlink %s", backup_path)
-        backup_path.unlink()
-    elif backup_path.is_dir():
-        logger.debug("rmtree %s", backup_path)
-        shutil.rmtree(backup_path)
+    # Clear the target if anything is already there. This isn't atomic across processes,
+    # but the timestamped default suffix makes a real collision very rare.
+    if target.is_symlink() or target.is_file():
+        logger.debug("unlink %s", target)
+        target.unlink()
+    elif target.is_dir():
+        logger.debug("rmtree %s", target)
+        shutil.rmtree(target)
 
     if src.is_dir():
-        logger.debug("copytree %s %s", src, backup_path)
-        shutil.copytree(src, backup_path)
+        logger.debug("copytree %s %s", src, target)
+        shutil.copytree(src, target)
     elif with_progress:
-        with Progress(transient=transient) as progress_bar:
+        with Progress(transient=transient, console=console) as progress_bar:
             copy_task = progress_bar.add_task(f"Backup {src.name}", total=src.stat().st_size)
-            logger.debug("copyfile %s %s", src, backup_path)
-            _do_copy_file(src, backup_path, progress_bar=progress_bar, task=copy_task)
+            logger.debug("copyfile %s %s", src, target)
+            _do_copy_file(src, target, progress_bar=progress_bar, task=copy_task)
     else:
-        logger.debug("copyfile %s %s", src, backup_path)
-        _do_copy_file(src, backup_path)
+        logger.debug("copyfile %s %s", src, target)
+        _do_copy_file(src, target)
 
-    return backup_path
+    return target
 
 
 def clean_directory(directory: Path) -> None:
@@ -140,7 +133,7 @@ def clean_directory(directory: Path) -> None:
         return
 
     for child in directory.iterdir():
-        if child.is_file():
+        if child.is_symlink() or child.is_file():
             child.unlink()
         else:
             shutil.rmtree(child)
@@ -153,46 +146,54 @@ def copy_file(
     with_progress: bool = False,
     transient: bool = True,
     keep_backup: bool = True,
+    console: Console | None = None,
 ) -> Path:
     """Copy a file to a destination with optional progress tracking.
 
     Copy files with granular control over progress display and file conflict handling. Preserve original file permissions while providing visual feedback for long-running operations.
 
     Args:
-        src (Path): Source file to copy
-        dst (Path): Destination path for the copy
-        with_progress (bool, optional): Show a progress bar during copy. Defaults to False
-        transient (bool, optional): Remove the progress bar after completion. Defaults to True
-        keep_backup (bool, optional): Keep a backup of the destination file if it already exists. Defaults to True
+        src (Path): Source file to copy.
+        dst (Path): Destination path for the copy.
+        with_progress (bool, optional): Show a progress bar during copy. Defaults to False.
+        transient (bool, optional): Remove the progress bar after completion. Defaults to True.
+        keep_backup (bool, optional): Keep a backup of the destination file if it already exists. Defaults to True.
+        console (Console | None, optional): Rich `Console` to render the progress bar through. Defaults to None (Rich's default global console).
 
     Returns:
         Path: Path to the destination file after copy completion
 
     Raises:
-        FileNotFoundError: If source file does not exist or is not a regular file
+        FileNotFoundError: If the source path does not exist
+        IsADirectoryError: If the source path is a directory
+        OSError: If the source path exists but is not a regular file
     """
+    src = src.expanduser().resolve()
+    dst = dst.expanduser().resolve()
+
     if not src.exists():
         msg = f"source file `{src}` does not exist. Did not copy."
         logger.error(msg)
-        raise FileNotFoundError(msg)
+        raise FileNotFoundError(msg) from None
+
+    if src.is_dir():
+        msg = f"source `{src}` is a directory, not a file. Did not copy."
+        logger.error(msg)
+        raise IsADirectoryError(msg) from None
 
     if not src.is_file():
-        msg = f"source file `{src}` is not a file. Did not copy."
+        msg = f"source `{src}` is not a regular file. Did not copy."
         logger.error(msg)
-        raise FileNotFoundError(msg)
+        raise OSError(msg) from None
 
-    dst = dst.parent.expanduser().resolve() / dst.name
-
-    # Check if source and destination are the same to avoid unnecessary copy
     if src == dst or (dst.exists() and src.samefile(dst)):
         msg = f"source file `{src}` and destination file `{dst}` are the same file. Did not copy."
         logger.warning(msg)
         return src
 
-    # Generate unique filename if destination exists and overwrite is disabled
     if dst.exists() and keep_backup:
         logger.debug("backup %s", dst)
-        backup_path(dst, with_progress=with_progress, transient=transient)
+        backup_path(dst, with_progress=with_progress, transient=transient, console=console)
 
     dst.parent.mkdir(parents=True, exist_ok=True)
 
@@ -203,18 +204,14 @@ def copy_file(
         logger.debug("rmtree %s", dst)
         shutil.rmtree(dst)
 
-    # Copy file in chunks with progress bar to handle large files efficiently
     if with_progress:
-        with Progress(transient=transient) as progress_bar:
+        with Progress(transient=transient, console=console) as progress_bar:
             copy_task = progress_bar.add_task(f"Copy {src.name}", total=src.stat().st_size)
             _do_copy_file(src, dst, progress_bar=progress_bar, task=copy_task)
             logger.debug("copyfile %s %s", src, dst)
     else:
         _do_copy_file(src, dst)
         logger.debug("copyfile %s %s", src, dst)
-
-    # Preserve original file permissions
-    shutil.copymode(str(src), str(dst))
 
     return dst
 
@@ -226,6 +223,7 @@ def copy_directory(
     with_progress: bool = False,
     transient: bool = True,
     keep_backup: bool = True,
+    console: Console | None = None,
 ) -> Path:
     """Copy a directory and its contents to a new destination path.
 
@@ -237,6 +235,7 @@ def copy_directory(
         with_progress (bool, optional): Show progress bar while copying files. Defaults to False.
         transient (bool, optional): Clear progress bar after completion. Defaults to True.
         keep_backup (bool, optional): Keep a backup of the destination directory if it already exists. Defaults to True.
+        console (Console | None, optional): Rich `Console` to render the progress bar through. Defaults to None (Rich's default global console).
 
     Returns:
         Path: Path to the destination directory
@@ -245,20 +244,18 @@ def copy_directory(
         FileNotFoundError: If source directory does not exist or is not a directory
         ValueError: If Python version is less than 3.12
     """
-    # Verify Python version requirement for Path.walk() method
     if not check_python_version(3, 12):
         msg = "Copy file requires a minimum of Python version 3.12"
         logger.error(msg)
-        raise ValueError(msg)
+        raise ValueError(msg) from None
 
     src = src.expanduser().resolve()
     dst = dst.expanduser().resolve()
 
-    # Validate source directory exists and is actually a directory
     if not src.exists() or not src.is_dir():
         msg = f"source directory `{src}` does not exist or is not a directory. Did not copy."
         logger.error(msg)
-        raise FileNotFoundError(msg)
+        raise FileNotFoundError(msg) from None
 
     # Prevent copying a directory to itself or into itself to avoid infinite recursion
     if src == dst:
@@ -271,10 +268,9 @@ def copy_directory(
         logger.warning(msg)
         return src
 
-    # Generate unique destination name if it exists and we're not overwriting
     if dst.exists() and keep_backup:
         logger.debug("backup %s", dst)
-        backup_path(dst, with_progress=with_progress, transient=transient)
+        backup_path(dst, with_progress=with_progress, transient=transient, console=console)
 
     if dst.is_symlink():
         logger.debug("unlink %s", dst)
@@ -283,19 +279,20 @@ def copy_directory(
         logger.debug("rmtree %s", dst)
         shutil.rmtree(dst)
 
-    # Walk the source directory tree and copy each file while preserving structure
     logger.debug("walk %s", src)
     for root, _, files in src.walk():
-        new_parent = dst if root == src else dst / root.relative_to(src)
+        rel = root.relative_to(src)
+        new_parent = dst / rel
         new_parent.mkdir(parents=True, exist_ok=True)
+        shutil.copystat(root, new_parent)
 
         for file in files:
-            src_file = root / file if root == src else src / root.relative_to(src) / file
             copy_file(
-                src=src_file,
+                src=root / file,
                 dst=new_parent / file,
                 with_progress=with_progress,
                 transient=transient,
+                console=console,
             )
 
     return dst
@@ -363,50 +360,71 @@ def find_subdirectories(
     """Search and filter subdirectories in a directory tree with precise depth control.
 
     Use this function to traverse directory structures when you need fine-grained control over:
-    - How deep to search (depth parameter)
-    - Which directories to include (regex filtering)
-    - Whether to include hidden directories
-    - Whether to return only leaf directories (those without subdirectories)
-
-    This is particularly useful for tasks like:
-    - Finding all project directories in a workspace
-    - Locating leaf directories for processing
-    - Selective directory traversal with pattern matching
+    - How deep to search (depth parameter, must be >= 1)
+    - Which directories to include (regex filtering — the regex is applied with `re.search`, so it matches if the pattern is found *anywhere* in the directory name; anchor with `^` or `$` for whole-name matching)
+    - Whether to skip hidden subdirectories (the user-supplied `directory` itself is never filtered)
+    - Whether to return only leaf directories (those without other matching subdirectories within the depth limit)
 
     Args:
-        directory (Path): Root directory to begin the search
-        depth (int, optional): Maximum directory depth to traverse. Depth of 1 means immediate subdirectories only. Defaults to 1
-        filter_regex (str, optional): Regular expression pattern to filter directory names. Only matching directories are included. Defaults to ""
-        ignore_dotfiles (bool, optional): Skip directories starting with a dot (hidden directories). Defaults to False
-        leaf_dirs_only (bool, optional): Return only directories that have no subdirectories within the specified depth. Defaults to False
+        directory (Path): Root directory to begin the search.
+        depth (int, optional): Maximum directory depth to traverse. Must be >= 1. A depth of 1 means immediate subdirectories only. Defaults to 1.
+        filter_regex (str, optional): Regular expression pattern matched against each directory's name with `re.search`. Empty string matches everything. Defaults to "".
+        ignore_dotfiles (bool, optional): Skip directories whose name starts with a dot, and do not descend into them. Defaults to False.
+        leaf_dirs_only (bool, optional): Return only directories that have no matching descendant within the depth limit. Defaults to False.
 
     Returns:
-        list[Path]: Sorted list of directory paths matching the specified criteria
+        list[Path]: Sorted list of directory paths matching the specified criteria.
+
+    Raises:
+        ValueError: If `depth` is less than 1.
     """
-    # Collect subdirectories for all depths up to the specified depth
-    subdirs = []
-    for current_depth in range(1, depth + 1):
-        pattern = f"{'*/' * current_depth}"
-        current_level = [
-            p
-            for p in directory.glob(pattern)
-            if p.is_dir()
-            and (not ignore_dotfiles or not any(part.startswith(".") for part in p.parts))
-            and (not filter_regex or re.search(filter_regex, p.name))
-        ]
-        subdirs.extend(current_level)
+    if depth < 1:
+        msg = f"depth must be >= 1, got {depth}"
+        raise ValueError(msg) from None
+
+    pattern = re.compile(filter_regex) if filter_regex else None
+
+    matches: list[Path] = []
+    for current_root, dirnames, _ in os.walk(directory):
+        current_path = Path(current_root)
+        try:
+            current_depth = len(current_path.relative_to(directory).parts)
+        except ValueError:  # pragma: no cover — os.walk roots are always under `directory`
+            continue
+
+        # Stop os.walk from descending past the user-requested depth.
+        if current_depth >= depth:
+            dirnames[:] = []
+            continue
+
+        if ignore_dotfiles:
+            # Mutating dirnames in place both filters this level and prevents descent.
+            dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+
+        for dirname in dirnames:
+            if pattern is not None and not pattern.search(dirname):
+                continue
+            matches.append(current_path / dirname)
 
     if leaf_dirs_only:
-        # Keep only directories that don't have subdirectories within our depth limit
-        result = []
-        for p in subdirs:
-            # Check if this directory has any subdirectories in our collection
-            is_parent = any(other != p and str(other).startswith(str(p)) for other in subdirs)
-            if not is_parent:
-                result.append(p)
-        return sorted(result)
+        return _filter_to_leaves(matches)
 
-    return sorted(subdirs)
+    return sorted(matches)
+
+
+def _filter_to_leaves(paths: list[Path]) -> list[Path]:
+    """Return only paths from `paths` that are not ancestors of any other path in `paths`.
+
+    Builds the union of all ancestors in one pass so the filter is O(N * depth)
+    instead of the O(N^2 * depth) cross-product comparison.
+    """
+    ancestors: set[Path] = set()
+    for p in paths:
+        for parent in p.parents:
+            if parent in ancestors:
+                break
+            ancestors.add(parent)
+    return sorted(p for p in paths if p not in ancestors)
 
 
 def find_files(
@@ -418,60 +436,63 @@ def find_files(
 
     Args:
         path (Path): The root directory where the search will be conducted.
-        globs (list[str] | None, optional): A list of glob patterns to match files (e.g., "*.txt", "*.py"). If None, returns all files. Defaults to None.
-        ignore_dotfiles (bool, optional): Whether to ignore files that start with a dot. Defaults to False.
+        globs (list[str] | None, optional): A list of glob patterns to match files (e.g., "*.txt", "*.py"). If None, returns all files in the top level of `path`. Defaults to None.
+        ignore_dotfiles (bool, optional): Skip files whose name starts with a dot, or that are reached through a directory whose name starts with a dot. The user-supplied `path` itself is never filtered. Defaults to False.
 
     Returns:
-        list[Path]: A list of Path objects representing the files that match the glob patterns.
+        list[Path]: A sorted list of unique Path objects matching the requested patterns.
     """
 
     def is_valid_file(p: Path) -> bool:
-        return p.is_file() and (not ignore_dotfiles or not p.name.startswith("."))
+        if not p.is_file():
+            return False
+        if not ignore_dotfiles:
+            return True
+        return not any(part.startswith(".") for part in p.relative_to(path).parts)
 
-    if globs is None:
-        return sorted([p for p in path.glob("*") if is_valid_file(p)])
+    patterns = ["*"] if globs is None else globs
 
-    files: list[Path] = []
-    for g in globs:
-        files.extend(p for p in path.glob(g) if is_valid_file(p))
+    seen: set[Path] = set()
+    results: list[Path] = []
+    for pattern in patterns:
+        for candidate in path.glob(pattern):
+            if candidate in seen or not is_valid_file(candidate):
+                continue
+            seen.add(candidate)
+            results.append(candidate)
 
-    return sorted(files)
+    return sorted(results)
 
 
 def find_user_home_dir(username: str | None = None) -> Path | None:
     """Locate and return the home directory path for a given or current user.
 
-    Search for the home directory using system-specific commands. If no username is provided, check for sudo user first, then fall back to current user's home. For Linux, use getent passwd. For macOS, use dscl to look up NFSHomeDirectory.
+    If no username is provided, fall back to the `SUDO_USER` environment variable so
+    scripts running under sudo resolve the invoking user's home rather than `/root`.
+    On POSIX systems, lookups go through the standard library `pwd` module
+    (`pwd.getpwnam(username).pw_dir`). On platforms without `pwd` (e.g. Windows),
+    return `None` and log a warning.
 
     Args:
-        username (str | None, optional): Username to find home directory for. If None, use sudo user or current user. Defaults to None.
+        username (str | None, optional): Username to find home directory for. If None, use SUDO_USER or the current user. Defaults to None.
 
     Returns:
-        Path | None: Home directory path for the specified or current user, or None if not found
+        Path | None: Home directory path for the specified user, or None if the user is not found or the platform does not provide `pwd`.
     """
     if username is None:
-        if sudo_user := os.getenv("SUDO_USER"):
-            username = sudo_user
-        else:
+        sudo_user = os.getenv("SUDO_USER")
+        if not sudo_user:
             return Path.home()
+        username = sudo_user
 
-    if platform.system() == "Linux":
-        try:
-            return Path(
-                run_command(["getent", "passwd", username]).stdout.strip().split(":")[5].strip()
-            )
-        except ShellCommandFailedError:
-            return None
+    try:
+        import pwd  # noqa: PLC0415
+    except ImportError:
+        logger.warning("pwd module unavailable; cannot resolve home directory for `%s`", username)
+        return None
 
-    if platform.system() == "Darwin":
-        try:
-            return Path(
-                run_command(["dscl", ".", "-read", f"/Users/{username}", "NFSHomeDirectory"])
-                .stdout.strip()
-                .split(":")[1]
-                .strip()
-            )
-        except ShellCommandFailedError:
-            return None
-
-    return None
+    try:
+        return Path(pwd.getpwnam(username).pw_dir)
+    except KeyError:
+        logger.debug("pwd lookup failed for `%s`", username)
+        return None

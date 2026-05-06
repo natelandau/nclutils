@@ -1,10 +1,12 @@
 """Test the copy_file function."""
 
 from collections.abc import Callable
+from io import StringIO
 from pathlib import Path
 
 import pytest
 from pytest_mock import MockerFixture
+from rich.console import Console
 
 from nclutils.fs import copy_directory, copy_file
 from nclutils.utils import check_python_version
@@ -104,21 +106,39 @@ def test_copy_file_same_file(tmp_path: Path, fs_caplog: pytest.LogCaptureFixture
     assert src.exists()
 
 
-def test_copy_directory(tmp_path: Path, fs_caplog: pytest.LogCaptureFixture) -> None:
-    """Verify copy_file raises error when copying directory."""
-    # Given: Source directory with files
+def test_copy_file_source_is_directory(tmp_path: Path, fs_caplog: pytest.LogCaptureFixture) -> None:
+    """Verify copy_file raises IsADirectoryError when the source is a directory."""
+    # Given: A source directory with files
     src = tmp_path / "src"
     dst = tmp_path / "dst"
     src.mkdir()
     (src / "file1.txt").write_text("Hello, world!")
-    (src / "file2.txt").write_text("Hello, world!")
 
-    # When: Attempting to copy directory
-    with pytest.raises(FileNotFoundError):
+    # When/Then: Calling copy_file on a directory raises the correct exception type
+    with pytest.raises(IsADirectoryError):
         copy_file(src, dst)
 
-    # Then: Warning is logged
-    assert "is not a file. Did not copy" in fs_caplog.text
+    # And: An error is logged describing the directory rejection
+    assert "is a directory" in fs_caplog.text
+
+
+def test_copy_file_expands_tilde_in_src(tmp_path: Path, mocker: MockerFixture) -> None:
+    """Verify copy_file expands ~ in src so paths under HOME are usable."""
+    # Given: A source file under a fake HOME and a tilde-prefixed path
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    real_src = fake_home / "note.txt"
+    real_src.write_text("hello")
+    dst = tmp_path / "copy.txt"
+    mocker.patch("pathlib.Path.home", return_value=fake_home)
+    mocker.patch.dict("os.environ", {"HOME": str(fake_home)})
+
+    # When: Copying with ~/note.txt as the source
+    result = copy_file(Path("~/note.txt"), dst)
+
+    # Then: The destination has the source content
+    assert dst.read_text() == "hello"
+    assert result == dst.expanduser().resolve()
 
 
 def test_copy_file_with_no_progress(
@@ -292,8 +312,44 @@ def test_copy_directory_unique_name(tmp_path: Path) -> None:
 def test_copy_directory_python_version(mocker: MockerFixture, tmp_path: Path) -> None:
     """Verify copy_directory requires Python 3.12 or higher."""
     # Given: Python version below 3.12
-    mocker.patch("nclutils.fs.filesystem.check_python_version", return_value=False)
+    mocker.patch("nclutils.fs.filesystem.check_python_version", autospec=True, return_value=False)
 
     # When/Then: Copying directory raises version error
     with pytest.raises(ValueError, match=r"requires a minimum of Python version 3\.12"):
         copy_directory("src", "dst")
+
+
+def test_copy_directory_preserves_directory_mode(tmp_path: Path) -> None:
+    """Verify copy_directory propagates directory permissions from the source tree."""
+    if not check_python_version(3, 12):
+        pytest.skip("Skipping test for Python version < 3.12")
+
+    # Given: A source tree where a subdirectory has a non-default mode
+    src = tmp_path / "src"
+    sub = src / "sub"
+    sub.mkdir(parents=True)
+    (sub / "f.txt").write_text("x")
+    sub.chmod(0o750)
+
+    # When: Copying the directory
+    dst = tmp_path / "dst"
+    copy_directory(src, dst)
+
+    # Then: The mirrored subdirectory carries the same permission bits
+    assert ((dst / "sub").stat().st_mode & 0o777) == 0o750
+
+
+def test_copy_file_uses_provided_console(tmp_path: Path) -> None:
+    """Verify copy_file routes its progress bar through the supplied Rich console."""
+    # Given: A source file and a Console that captures its output
+    src = tmp_path / "test.txt"
+    dst = tmp_path / "test_copy.txt"
+    src.write_text("Hello, world!")
+    buffer = StringIO()
+    console = Console(file=buffer, force_terminal=False, width=80)
+
+    # When: Copying with a non-default console and a non-transient progress bar
+    copy_file(src, dst, with_progress=True, transient=False, console=console)
+
+    # Then: Progress output landed on the supplied console, not stdout
+    assert "Copy test.txt" in buffer.getvalue()

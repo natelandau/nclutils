@@ -14,34 +14,6 @@ from nclutils.fs import (
 )
 
 
-@pytest.fixture
-def temp_directory(tmp_path: Path) -> Path:
-    """Create a nested directory structure for testing.
-
-    Returns:
-        Path: The path to the temporary directory.
-    """
-    # Create directories
-    (tmp_path / "a" / "a1" / "a11").mkdir(parents=True)
-    (tmp_path / "a" / "a2").mkdir(parents=True)
-    (tmp_path / "b" / "b1").mkdir(parents=True)
-    (tmp_path / ".c").mkdir(parents=True)
-
-    # Create a file in each nested directory
-    (tmp_path / "file.txt").touch()
-    (tmp_path / "file.md").touch()
-    (tmp_path / "file2.py").touch()
-    (tmp_path / ".hidden.txt").touch()
-    (tmp_path / "a" / "file.txt").touch()
-    (tmp_path / "a" / "file2.txt").touch()
-    (tmp_path / "a" / "file3.txt").touch()
-    (tmp_path / "a" / "a1" / "a11" / "file.txt").touch()
-    (tmp_path / "b" / "file.txt").touch()
-    (tmp_path / "b" / "b1" / "file4.txt").touch()
-
-    return tmp_path
-
-
 def test_fetch_subdirectories_basic(temp_directory: Path) -> None:
     """Return immediate subdirectories when depth is 1."""
     # When: Fetching immediate subdirectories
@@ -274,3 +246,137 @@ def test_clean_directory_not_a_directory(
     assert test_file.exists()
     assert test_file.is_file()
     assert "test.txt is not a directory. Did not clean" in fs_caplog.text
+
+
+def test_clean_directory_removes_symlink_to_directory(tmp_path: Path) -> None:
+    """Verify clean_directory unlinks directory symlinks instead of recursing into them."""
+    # Given: A directory containing a symlink that points at another directory
+    target = tmp_path / "real_dir"
+    target.mkdir()
+    (target / "keep.txt").write_text("keep me")
+    workdir = tmp_path / "workdir"
+    workdir.mkdir()
+    (workdir / "link").symlink_to(target)
+
+    # When: Cleaning the workdir
+    clean_directory(workdir)
+
+    # Then: Symlink is removed but its target survives untouched
+    assert not (workdir / "link").exists()
+    assert not list(workdir.iterdir())
+    assert (target / "keep.txt").read_text() == "keep me"
+
+
+def test_clean_directory_removes_broken_symlink(tmp_path: Path) -> None:
+    """Verify clean_directory removes dangling symlinks without raising."""
+    # Given: A directory with a broken symlink
+    workdir = tmp_path / "workdir"
+    workdir.mkdir()
+    (workdir / "broken").symlink_to(tmp_path / "missing_target")
+
+    # When: Cleaning the workdir
+    clean_directory(workdir)
+
+    # Then: Broken symlink is gone
+    assert not list(workdir.iterdir())
+
+
+def test_clean_directory_removes_symlink_to_file(tmp_path: Path) -> None:
+    """Verify clean_directory unlinks file symlinks without touching the target."""
+    # Given: A directory containing a symlink that points at a regular file
+    target = tmp_path / "real.txt"
+    target.write_text("content")
+    workdir = tmp_path / "workdir"
+    workdir.mkdir()
+    (workdir / "link").symlink_to(target)
+
+    # When: Cleaning the workdir
+    clean_directory(workdir)
+
+    # Then: Symlink is removed but the target file survives untouched
+    assert not list(workdir.iterdir())
+    assert target.read_text() == "content"
+
+
+def test_find_files_dedupes_overlapping_globs(temp_directory: Path) -> None:
+    """Verify find_files returns each match once when globs overlap."""
+    # Given: Globs that both match the same files
+    globs = ["*.txt", "*"]
+
+    # When: Searching with overlapping globs
+    result = find_files(temp_directory, globs=globs)
+
+    # Then: Each file appears once
+    assert len(result) == len(set(result))
+
+
+def test_find_files_ignore_dotfiles_excludes_hidden_parents(tmp_path: Path) -> None:
+    """Verify ignore_dotfiles also excludes files reached through hidden directories."""
+    # Given: A visible root containing a hidden subdir with files
+    (tmp_path / ".hidden").mkdir()
+    (tmp_path / ".hidden" / "deep.py").write_text("nested")
+    (tmp_path / "visible.py").write_text("top")
+
+    # When: Searching recursively with dotfiles ignored
+    result = find_files(tmp_path, globs=["**/*.py"], ignore_dotfiles=True)
+
+    # Then: Only the file outside the hidden dir is returned
+    assert result == [tmp_path / "visible.py"]
+
+
+def test_find_files_root_dotfile_is_not_filtered(tmp_path: Path) -> None:
+    """Verify a hidden search root is supported when ignore_dotfiles is True."""
+    # Given: A user-supplied hidden root containing a non-hidden file
+    root = tmp_path / ".config"
+    root.mkdir()
+    (root / "settings.toml").write_text("k=v")
+
+    # When: Searching with dotfiles ignored
+    result = find_files(root, ignore_dotfiles=True)
+
+    # Then: The non-hidden file inside the hidden root is returned
+    assert result == [root / "settings.toml"]
+
+
+def test_fetch_subdirectories_invalid_depth_zero() -> None:
+    """Verify depth < 1 raises ValueError."""
+    # Given: A real directory and an invalid depth
+    # When/Then: depth=0 is rejected
+    with pytest.raises(ValueError, match=r"depth must be >= 1"):
+        find_subdirectories(Path(), depth=0)
+
+
+def test_fetch_subdirectories_invalid_depth_negative() -> None:
+    """Verify negative depth raises ValueError."""
+    # Given: An invalid depth value
+    # When/Then: A negative depth is rejected
+    with pytest.raises(ValueError, match=r"depth must be >= 1"):
+        find_subdirectories(Path(), depth=-1)
+
+
+def test_fetch_subdirectories_leaf_dirs_only_with_prefix_siblings(tmp_path: Path) -> None:
+    """Verify leaf detection treats sibling directories with shared name prefixes as independent leaves."""
+    # Given: Two sibling dirs whose names share a string prefix but are not parent/child
+    (tmp_path / "ab").mkdir()
+    (tmp_path / "abc").mkdir()
+
+    # When: Listing leaves
+    result = find_subdirectories(tmp_path, depth=1, leaf_dirs_only=True)
+
+    # Then: Both siblings are leaves
+    assert sorted(result) == sorted([tmp_path / "ab", tmp_path / "abc"])
+
+
+def test_fetch_subdirectories_root_dotfile_is_supported(tmp_path: Path) -> None:
+    """Verify ignore_dotfiles treats the search root as ordinary even when its own name starts with a dot."""
+    # Given: A hidden root with non-hidden children
+    root = tmp_path / ".config"
+    root.mkdir()
+    (root / "kit").mkdir()
+    (root / "tools").mkdir()
+
+    # When: Searching the hidden root with dotfiles ignored
+    result = find_subdirectories(root, depth=1, ignore_dotfiles=True)
+
+    # Then: Non-hidden children are returned
+    assert sorted(result) == sorted([root / "kit", root / "tools"])
