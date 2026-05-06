@@ -55,7 +55,7 @@ def _do_copy_file(
     if dst_size != src_size:
         msg = f"copy incomplete: expected {src_size} bytes, destination has {dst_size} bytes"
         logger.error(msg)
-        raise RuntimeError(msg)
+        raise RuntimeError(msg) from None
 
     shutil.copymode(src, dst)
 
@@ -87,7 +87,7 @@ def backup_path(
         msg = f"skip backup: does not exist `{src}`"
         if raise_on_missing:
             logger.error(msg)
-            raise FileNotFoundError(msg)
+            raise FileNotFoundError(msg) from None
         logger.warning(msg)
         return None
 
@@ -171,17 +171,17 @@ def copy_file(
     if not src.exists():
         msg = f"source file `{src}` does not exist. Did not copy."
         logger.error(msg)
-        raise FileNotFoundError(msg)
+        raise FileNotFoundError(msg) from None
 
     if src.is_dir():
         msg = f"source `{src}` is a directory, not a file. Did not copy."
         logger.error(msg)
-        raise IsADirectoryError(msg)
+        raise IsADirectoryError(msg) from None
 
     if not src.is_file():
         msg = f"source `{src}` is not a regular file. Did not copy."
         logger.error(msg)
-        raise OSError(msg)
+        raise OSError(msg) from None
 
     # Check if source and destination are the same to avoid unnecessary copy
     if src == dst or (dst.exists() and src.samefile(dst)):
@@ -246,7 +246,7 @@ def copy_directory(
     if not check_python_version(3, 12):
         msg = "Copy file requires a minimum of Python version 3.12"
         logger.error(msg)
-        raise ValueError(msg)
+        raise ValueError(msg) from None
 
     src = src.expanduser().resolve()
     dst = dst.expanduser().resolve()
@@ -255,7 +255,7 @@ def copy_directory(
     if not src.exists() or not src.is_dir():
         msg = f"source directory `{src}` does not exist or is not a directory. Did not copy."
         logger.error(msg)
-        raise FileNotFoundError(msg)
+        raise FileNotFoundError(msg) from None
 
     # Prevent copying a directory to itself or into itself to avoid infinite recursion
     if src == dst:
@@ -381,7 +381,7 @@ def find_subdirectories(
     """
     if depth < 1:
         msg = f"depth must be >= 1, got {depth}"
-        raise ValueError(msg)
+        raise ValueError(msg) from None
 
     pattern = re.compile(filter_regex) if filter_regex else None
 
