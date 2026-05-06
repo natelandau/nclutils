@@ -3,7 +3,6 @@
 import os
 import sys
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
@@ -22,48 +21,37 @@ def test_find_user_home_dir_no_username_returns_self_home(mocker) -> None:
     assert result == Path.home()
 
 
-def test_find_user_home_dir_uses_sudo_user(mocker) -> None:
+def test_find_user_home_dir_uses_sudo_user(mocker, fake_pwd) -> None:
     """Verify find_user_home_dir falls back to SUDO_USER when no username is given."""
     # Given: SUDO_USER points to another user with a known home directory
     mocker.patch.dict(os.environ, {"SUDO_USER": "alice"}, clear=True)
-    fake_pwd = SimpleNamespace(
-        getpwnam=mocker.MagicMock(
-            return_value=SimpleNamespace(pw_dir="/home/alice"),
-        )
-    )
-    mocker.patch.dict(sys.modules, {"pwd": fake_pwd})
+    pwd_module = fake_pwd(pw_dir="/home/alice")
 
     # When: Resolving home with no explicit username
     result = find_user_home_dir()
 
     # Then: SUDO_USER's home is returned
     assert result == Path("/home/alice")
-    fake_pwd.getpwnam.assert_called_once_with("alice")
+    pwd_module.getpwnam.assert_called_once_with("alice")
 
 
-def test_find_user_home_dir_explicit_user(mocker) -> None:
+def test_find_user_home_dir_explicit_user(fake_pwd) -> None:
     """Verify find_user_home_dir resolves an explicitly named user via pwd."""
     # Given: pwd.getpwnam returns a known home for the requested user
-    fake_pwd = SimpleNamespace(
-        getpwnam=mocker.MagicMock(
-            return_value=SimpleNamespace(pw_dir="/Users/bob"),
-        )
-    )
-    mocker.patch.dict(sys.modules, {"pwd": fake_pwd})
+    pwd_module = fake_pwd(pw_dir="/Users/bob")
 
     # When: Resolving home for a specific user
     result = find_user_home_dir("bob")
 
     # Then: The home from pwd is returned
     assert result == Path("/Users/bob")
-    fake_pwd.getpwnam.assert_called_once_with("bob")
+    pwd_module.getpwnam.assert_called_once_with("bob")
 
 
-def test_find_user_home_dir_unknown_user_returns_none(mocker) -> None:
+def test_find_user_home_dir_unknown_user_returns_none(fake_pwd) -> None:
     """Verify a missing user yields None instead of an unhandled KeyError."""
     # Given: pwd.getpwnam raises KeyError for the requested user
-    fake_pwd = SimpleNamespace(getpwnam=mocker.MagicMock(side_effect=KeyError("ghost")))
-    mocker.patch.dict(sys.modules, {"pwd": fake_pwd})
+    fake_pwd(side_effect=KeyError("ghost"))
 
     # When: Looking up a non-existent user
     result = find_user_home_dir("ghost")

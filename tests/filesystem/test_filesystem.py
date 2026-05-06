@@ -14,34 +14,6 @@ from nclutils.fs import (
 )
 
 
-@pytest.fixture
-def temp_directory(tmp_path: Path) -> Path:
-    """Create a nested directory structure for testing.
-
-    Returns:
-        Path: The path to the temporary directory.
-    """
-    # Create directories
-    (tmp_path / "a" / "a1" / "a11").mkdir(parents=True)
-    (tmp_path / "a" / "a2").mkdir(parents=True)
-    (tmp_path / "b" / "b1").mkdir(parents=True)
-    (tmp_path / ".c").mkdir(parents=True)
-
-    # Create a file in each nested directory
-    (tmp_path / "file.txt").touch()
-    (tmp_path / "file.md").touch()
-    (tmp_path / "file2.py").touch()
-    (tmp_path / ".hidden.txt").touch()
-    (tmp_path / "a" / "file.txt").touch()
-    (tmp_path / "a" / "file2.txt").touch()
-    (tmp_path / "a" / "file3.txt").touch()
-    (tmp_path / "a" / "a1" / "a11" / "file.txt").touch()
-    (tmp_path / "b" / "file.txt").touch()
-    (tmp_path / "b" / "b1" / "file4.txt").touch()
-
-    return tmp_path
-
-
 def test_fetch_subdirectories_basic(temp_directory: Path) -> None:
     """Return immediate subdirectories when depth is 1."""
     # When: Fetching immediate subdirectories

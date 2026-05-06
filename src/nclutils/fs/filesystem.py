@@ -186,13 +186,11 @@ def copy_file(
         logger.error(msg)
         raise OSError(msg) from None
 
-    # Check if source and destination are the same to avoid unnecessary copy
     if src == dst or (dst.exists() and src.samefile(dst)):
         msg = f"source file `{src}` and destination file `{dst}` are the same file. Did not copy."
         logger.warning(msg)
         return src
 
-    # Generate unique filename if destination exists and overwrite is disabled
     if dst.exists() and keep_backup:
         logger.debug("backup %s", dst)
         backup_path(dst, with_progress=with_progress, transient=transient, console=console)
@@ -206,7 +204,6 @@ def copy_file(
         logger.debug("rmtree %s", dst)
         shutil.rmtree(dst)
 
-    # Copy file in chunks with progress bar to handle large files efficiently
     if with_progress:
         with Progress(transient=transient, console=console) as progress_bar:
             copy_task = progress_bar.add_task(f"Copy {src.name}", total=src.stat().st_size)
@@ -247,7 +244,6 @@ def copy_directory(
         FileNotFoundError: If source directory does not exist or is not a directory
         ValueError: If Python version is less than 3.12
     """
-    # Verify Python version requirement for Path.walk() method
     if not check_python_version(3, 12):
         msg = "Copy file requires a minimum of Python version 3.12"
         logger.error(msg)
@@ -256,7 +252,6 @@ def copy_directory(
     src = src.expanduser().resolve()
     dst = dst.expanduser().resolve()
 
-    # Validate source directory exists and is actually a directory
     if not src.exists() or not src.is_dir():
         msg = f"source directory `{src}` does not exist or is not a directory. Did not copy."
         logger.error(msg)
@@ -273,7 +268,6 @@ def copy_directory(
         logger.warning(msg)
         return src
 
-    # Generate unique destination name if it exists and we're not overwriting
     if dst.exists() and keep_backup:
         logger.debug("backup %s", dst)
         backup_path(dst, with_progress=with_progress, transient=transient, console=console)
@@ -285,7 +279,6 @@ def copy_directory(
         logger.debug("rmtree %s", dst)
         shutil.rmtree(dst)
 
-    # Walk the source directory tree and copy each file while preserving structure and modes.
     logger.debug("walk %s", src)
     for root, _, files in src.walk():
         rel = root.relative_to(src)
@@ -414,10 +407,24 @@ def find_subdirectories(
             matches.append(current_path / dirname)
 
     if leaf_dirs_only:
-        leaves = [p for p in matches if not any(p in other.parents for other in matches)]
-        return sorted(leaves)
+        return _filter_to_leaves(matches)
 
     return sorted(matches)
+
+
+def _filter_to_leaves(paths: list[Path]) -> list[Path]:
+    """Return only paths from `paths` that are not ancestors of any other path in `paths`.
+
+    Builds the union of all ancestors in one pass so the filter is O(N * depth)
+    instead of the O(N^2 * depth) cross-product comparison.
+    """
+    ancestors: set[Path] = set()
+    for p in paths:
+        for parent in p.parents:
+            if parent in ancestors:
+                break
+            ancestors.add(parent)
+    return sorted(p for p in paths if p not in ancestors)
 
 
 def find_files(
