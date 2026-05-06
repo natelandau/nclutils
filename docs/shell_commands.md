@@ -49,6 +49,8 @@ result = run_command(["rsync", "-av", "src/", "dst/"], stream=True)
 print(f"finished in {result.duration:.1f}s")
 ```
 
+> **Note:** stdout and stderr are drained by separate threads, so within each stream lines stay in order, but the relative interleaving between stdout and stderr is not deterministic. If you need true chronological interleaving, run the command via `sh -c "... 2>&1"` and inspect `result.stdout`.
+
 ## Options
 
 ### `cwd=` — working directory
@@ -257,7 +259,7 @@ The previous `nclutils.sh` module was a thin wrapper around the third-party `sh`
 | `pushd=Path("/tmp")`                                          | `cwd=Path("/tmp")`                                            |
 | `quiet=True` (captured silently)                              | Default behavior — `stream=False` is the default             |
 | `quiet=False` (streamed to console)                           | `stream=True`                                                 |
-| `err_to_out=True`                                             | Removed — `result.stderr` is always available separately      |
+| `err_to_out=True`                                             | **Default behavior change.** The old default `err_to_out=True` folded stderr into the returned string. The new return value gives you `result.stdout` and `result.stderr` separately. If you previously did `output = run_command("foo", ["--bar"])` and your code expected stderr to be in `output`, switch to `result.stdout + result.stderr` after the call (or invoke `sh -c "foo --bar 2>&1"` if you need true interleaving). |
 | `fg=True` (interactive, no capture)                           | `run_interactive([...])`                                      |
 | `e.exit_code`, `e.stdout`, `e.stderr`, `e.full_cmd`           | `e.result.returncode`, `e.result.stdout`, `e.result.stderr`   |
 
