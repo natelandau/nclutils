@@ -146,8 +146,50 @@ class _Copier:
         return dst
 
     def copy_directory(self, src: Path, dst: Path, *, keep_backup: bool = True) -> Path:
-        """Stub. Filled in by Tasks 5 and 6."""
-        raise NotImplementedError
+        """Copy a directory tree to a new destination using this Copier's shared configuration.
+
+        Validates Python 3.12+, src exists and is a directory, src and dst are not
+        the same and not in a parent/child relationship. If dst exists and
+        keep_backup is True, snapshots dst via self.backup() first.
+        """
+        if not check_python_version(3, 12):
+            msg = "Copy file requires a minimum of Python version 3.12"
+            logger.error(msg)
+            raise ValueError(msg) from None
+
+        src = src.expanduser().resolve()
+        dst = dst.expanduser().resolve()
+
+        if not src.exists() or not src.is_dir():
+            msg = f"source directory `{src}` does not exist or is not a directory. Did not copy."
+            logger.error(msg)
+            raise FileNotFoundError(msg) from None
+
+        # Prevent copying a directory to itself or into itself to avoid infinite recursion
+        if src == dst:
+            msg = f"source directory `{src}` and destination directory `{dst}` are the same directory. Did not copy."
+            logger.warning(msg)
+            return src
+
+        if src in dst.parents or dst in src.parents:
+            msg = f"source directory `{src}` and destination directory `{dst}` have parent/child relationship. Did not copy."
+            logger.warning(msg)
+            return src
+
+        if dst.exists() and keep_backup:
+            logger.debug("backup %s", dst)
+            self.backup(dst)
+
+        if dst.is_symlink():
+            logger.debug("unlink %s", dst)
+            dst.unlink()
+        elif dst.is_dir():
+            logger.debug("rmtree %s", dst)
+            shutil.rmtree(dst)
+
+        logger.debug("walk %s", src)
+        self._copy_tree_no_progress(src, dst)
+        return dst
 
     def _copy_tree_no_progress(self, src: Path, dst: Path) -> None:
         """Copy a directory tree from src to dst using chunked file I/O.
@@ -310,75 +352,26 @@ def copy_directory(
 ) -> Path:
     """Copy a directory and its contents to a new destination path.
 
-    Recursively copy all files and subdirectories from the source directory to the destination, preserving the directory structure. Display an optional progress bar for each file being copied.
+    Recursively copy all files and subdirectories from the source directory to the destination, preserving the directory structure. Display an optional progress bar for the copy.
 
     Args:
-        src (Path): Source directory to copy from
-        dst (Path): Destination directory to copy to
+        src (Path): Source directory to copy from.
+        dst (Path): Destination directory to copy to.
         with_progress (bool, optional): Show progress bar while copying files. Defaults to False.
         transient (bool, optional): Clear progress bar after completion. Defaults to True.
         keep_backup (bool, optional): Keep a backup of the destination directory if it already exists. Defaults to True.
-        console (Console | None, optional): Rich `Console` to render the progress bar through. Defaults to None (Rich's default global console).
+        console (Console | None, optional): Rich `Console` to render the progress bar through. Defaults to None.
 
     Returns:
-        Path: Path to the destination directory
+        Path: Path to the destination directory.
 
     Raises:
-        FileNotFoundError: If source directory does not exist or is not a directory
-        ValueError: If Python version is less than 3.12
+        FileNotFoundError: If source directory does not exist or is not a directory.
+        ValueError: If Python version is less than 3.12.
     """
-    if not check_python_version(3, 12):
-        msg = "Copy file requires a minimum of Python version 3.12"
-        logger.error(msg)
-        raise ValueError(msg) from None
-
-    src = src.expanduser().resolve()
-    dst = dst.expanduser().resolve()
-
-    if not src.exists() or not src.is_dir():
-        msg = f"source directory `{src}` does not exist or is not a directory. Did not copy."
-        logger.error(msg)
-        raise FileNotFoundError(msg) from None
-
-    # Prevent copying a directory to itself or into itself to avoid infinite recursion
-    if src == dst:
-        msg = f"source directory `{src}` and destination directory `{dst}` are the same directory. Did not copy."
-        logger.warning(msg)
-        return src
-
-    if src in dst.parents or dst in src.parents:
-        msg = f"source directory `{src}` and destination directory `{dst}` have parent/child relationship. Did not copy."
-        logger.warning(msg)
-        return src
-
-    if dst.exists() and keep_backup:
-        logger.debug("backup %s", dst)
-        backup_path(dst, with_progress=with_progress, transient=transient, console=console)
-
-    if dst.is_symlink():
-        logger.debug("unlink %s", dst)
-        dst.unlink()
-    elif dst.is_dir():
-        logger.debug("rmtree %s", dst)
-        shutil.rmtree(dst)
-
-    logger.debug("walk %s", src)
-    for root, _, files in src.walk():
-        rel = root.relative_to(src)
-        new_parent = dst / rel
-        new_parent.mkdir(parents=True, exist_ok=True)
-        shutil.copystat(root, new_parent)
-
-        for file in files:
-            copy_file(
-                src=root / file,
-                dst=new_parent / file,
-                with_progress=with_progress,
-                transient=transient,
-                console=console,
-            )
-
-    return dst
+    return _Copier(
+        with_progress=with_progress, transient=transient, console=console
+    ).copy_directory(src, dst, keep_backup=keep_backup)
 
 
 def directory_tree(directory: Path, *, show_hidden: bool = False) -> Tree:
