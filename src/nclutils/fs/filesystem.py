@@ -140,7 +140,7 @@ def clean_directory(directory: Path) -> None:
         return
 
     for child in directory.iterdir():
-        if child.is_file():
+        if child.is_symlink() or child.is_file():
             child.unlink()
         else:
             shutil.rmtree(child)

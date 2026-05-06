@@ -274,3 +274,36 @@ def test_clean_directory_not_a_directory(
     assert test_file.exists()
     assert test_file.is_file()
     assert "test.txt is not a directory. Did not clean" in fs_caplog.text
+
+
+def test_clean_directory_removes_symlink_to_directory(tmp_path: Path) -> None:
+    """Verify clean_directory unlinks directory symlinks instead of recursing into them."""
+    # Given: A directory containing a symlink that points at another directory
+    target = tmp_path / "real_dir"
+    target.mkdir()
+    (target / "keep.txt").write_text("keep me")
+    workdir = tmp_path / "workdir"
+    workdir.mkdir()
+    (workdir / "link").symlink_to(target, target_is_directory=True)
+
+    # When: Cleaning the workdir
+    clean_directory(workdir)
+
+    # Then: Symlink is removed but its target survives untouched
+    assert not (workdir / "link").exists()
+    assert not list(workdir.iterdir())
+    assert (target / "keep.txt").read_text() == "keep me"
+
+
+def test_clean_directory_removes_broken_symlink(tmp_path: Path) -> None:
+    """Verify clean_directory removes dangling symlinks without raising."""
+    # Given: A directory with a broken symlink
+    workdir = tmp_path / "workdir"
+    workdir.mkdir()
+    (workdir / "broken").symlink_to(tmp_path / "missing_target")
+
+    # When: Cleaning the workdir
+    clean_directory(workdir)
+
+    # Then: Broken symlink is gone
+    assert not list(workdir.iterdir())
