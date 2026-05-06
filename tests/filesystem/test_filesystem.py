@@ -324,3 +324,43 @@ def test_clean_directory_removes_symlink_to_file(tmp_path: Path) -> None:
     # Then: Symlink is removed but the target file survives untouched
     assert not list(workdir.iterdir())
     assert target.read_text() == "content"
+
+
+def test_find_files_dedupes_overlapping_globs(temp_directory: Path) -> None:
+    """Verify find_files returns each match once when globs overlap."""
+    # Given: Globs that both match the same files
+    globs = ["*.txt", "*"]
+
+    # When: Searching with overlapping globs
+    result = find_files(temp_directory, globs=globs)
+
+    # Then: Each file appears once
+    assert len(result) == len(set(result))
+
+
+def test_find_files_ignore_dotfiles_excludes_hidden_parents(tmp_path: Path) -> None:
+    """Verify ignore_dotfiles also excludes files reached through hidden directories."""
+    # Given: A visible root containing a hidden subdir with files
+    (tmp_path / ".hidden").mkdir()
+    (tmp_path / ".hidden" / "deep.py").write_text("nested")
+    (tmp_path / "visible.py").write_text("top")
+
+    # When: Searching recursively with dotfiles ignored
+    result = find_files(tmp_path, globs=["**/*.py"], ignore_dotfiles=True)
+
+    # Then: Only the file outside the hidden dir is returned
+    assert result == [tmp_path / "visible.py"]
+
+
+def test_find_files_root_dotfile_is_not_filtered(tmp_path: Path) -> None:
+    """Verify a hidden search root is supported when ignore_dotfiles is True."""
+    # Given: A user-supplied hidden root containing a non-hidden file
+    root = tmp_path / ".config"
+    root.mkdir()
+    (root / "settings.toml").write_text("k=v")
+
+    # When: Searching with dotfiles ignored
+    result = find_files(root, ignore_dotfiles=True)
+
+    # Then: The non-hidden file inside the hidden root is returned
+    assert result == [root / "settings.toml"]

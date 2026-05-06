@@ -418,24 +418,36 @@ def find_files(
 
     Args:
         path (Path): The root directory where the search will be conducted.
-        globs (list[str] | None, optional): A list of glob patterns to match files (e.g., "*.txt", "*.py"). If None, returns all files. Defaults to None.
-        ignore_dotfiles (bool, optional): Whether to ignore files that start with a dot. Defaults to False.
+        globs (list[str] | None, optional): A list of glob patterns to match files (e.g., "*.txt", "*.py"). If None, returns all files in the top level of `path`. Defaults to None.
+        ignore_dotfiles (bool, optional): Skip files whose name starts with a dot, or that are reached through a directory whose name starts with a dot. The user-supplied `path` itself is never filtered. Defaults to False.
 
     Returns:
-        list[Path]: A list of Path objects representing the files that match the glob patterns.
+        list[Path]: A sorted list of unique Path objects matching the requested patterns.
     """
 
     def is_valid_file(p: Path) -> bool:
-        return p.is_file() and (not ignore_dotfiles or not p.name.startswith("."))
+        if not p.is_file():
+            return False
+        if not ignore_dotfiles:
+            return True
+        try:
+            rel_parts = p.relative_to(path).parts
+        except ValueError:
+            rel_parts = (p.name,)
+        return not any(part.startswith(".") for part in rel_parts)
 
-    if globs is None:
-        return sorted([p for p in path.glob("*") if is_valid_file(p)])
+    patterns = ["*"] if globs is None else globs
 
-    files: list[Path] = []
-    for g in globs:
-        files.extend(p for p in path.glob(g) if is_valid_file(p))
+    seen: set[Path] = set()
+    results: list[Path] = []
+    for pattern in patterns:
+        for candidate in path.glob(pattern):
+            if candidate in seen or not is_valid_file(candidate):
+                continue
+            seen.add(candidate)
+            results.append(candidate)
 
-    return sorted(files)
+    return sorted(results)
 
 
 def find_user_home_dir(username: str | None = None) -> Path | None:
