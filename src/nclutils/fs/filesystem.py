@@ -280,16 +280,17 @@ def copy_directory(
         logger.debug("rmtree %s", dst)
         shutil.rmtree(dst)
 
-    # Walk the source directory tree and copy each file while preserving structure
+    # Walk the source directory tree and copy each file while preserving structure and modes.
     logger.debug("walk %s", src)
     for root, _, files in src.walk():
-        new_parent = dst if root == src else dst / root.relative_to(src)
+        rel = root.relative_to(src)
+        new_parent = dst / rel
         new_parent.mkdir(parents=True, exist_ok=True)
+        shutil.copystat(root, new_parent)
 
         for file in files:
-            src_file = root / file if root == src else src / root.relative_to(src) / file
             copy_file(
-                src=src_file,
+                src=root / file,
                 dst=new_parent / file,
                 with_progress=with_progress,
                 transient=transient,

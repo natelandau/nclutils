@@ -315,3 +315,23 @@ def test_copy_directory_python_version(mocker: MockerFixture, tmp_path: Path) ->
     # When/Then: Copying directory raises version error
     with pytest.raises(ValueError, match=r"requires a minimum of Python version 3\.12"):
         copy_directory("src", "dst")
+
+
+def test_copy_directory_preserves_directory_mode(tmp_path: Path) -> None:
+    """Verify copy_directory propagates directory permissions from the source tree."""
+    if not check_python_version(3, 12):
+        pytest.skip("Skipping test for Python version < 3.12")
+
+    # Given: A source tree where a subdirectory has a non-default mode
+    src = tmp_path / "src"
+    sub = src / "sub"
+    sub.mkdir(parents=True)
+    (sub / "f.txt").write_text("x")
+    sub.chmod(0o750)
+
+    # When: Copying the directory
+    dst = tmp_path / "dst"
+    copy_directory(src, dst)
+
+    # Then: The mirrored subdirectory carries the same permission bits
+    assert ((dst / "sub").stat().st_mode & 0o777) == 0o750
