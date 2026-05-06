@@ -1,4 +1,4 @@
-[![PyPI version](https://badge.fury.io/py/nclutils.svg)](https://badge.fury.io/py/nclutils) ![PyPI - Python Version](https://img.shields.io/pypi/pyversions/nclutils) [![Tests](https://github.com/natelandau/nclutils/actions/workflows/test.yml/badge.svg)](https://github.com/natelandau/nclutils/actions/workflows/test.yml) [![codecov](https://codecov.io/gh/natelandau/nclutils/graph/badge.svg?token=Nl1V9jnI60)](https://codecov.io/gh/natelandau/nclutils)
+[![PyPI version](https://badge.fury.io/py/nclutils.svg)](https://badge.fury.io/py/nclutils) ![PyPI - Python Version](https://img.shields.io/pypi/pyversions/nclutils) [![Tests](https://github.com/natelandau/nclutils/actions/workflows/automated-tests.yml/badge.svg)](https://github.com/natelandau/nclutils/actions/workflows/automated-tests.yml) [![codecov](https://codecov.io/gh/natelandau/nclutils/graph/badge.svg?token=Nl1V9jnI60)](https://codecov.io/gh/natelandau/nclutils)
 
 # nclutils
 
@@ -72,16 +72,16 @@ from nclutils.pp import info, success
 
 The larger modules have their own documentation pages. Smaller modules are listed inline below. Function signatures live with the source; consult docstrings (`help(func)` or your editor's hover) for authoritative argument details.
 
-| Module                    | Summary                                                  | Docs                                  |
-| ------------------------- | -------------------------------------------------------- | ------------------------------------- |
-| `nclutils.fs`             | Copy, back up, search, and visualize the filesystem.     | [docs/fs.md](docs/fs.md)              |
-| `nclutils.network`        | Lightweight network reachability check.                  | _(inline below)_                      |
-| `nclutils.pp`             | Rich-based console output, verbosity gates, file logger. | [docs/pp.md](docs/pp.md)              |
-| `nclutils.questions`      | Single- and multi-select prompts via `questionary`.      | [docs/questions.md](docs/questions.md) |
-| `nclutils.sh`             | Run commands via subprocess; returns `CompletedCommand`, raises typed errors (`ShellCommandError` hierarchy). Includes `run_command`, `run_interactive`, `which`. | [docs/shell_commands.md](docs/shell_commands.md) |
-| `nclutils.strings`        | Case conversions, padding, tokenizing, normalization.    | [docs/strings.md](docs/strings.md)    |
-| `nclutils.text_processing` | In-place file edits.                                    | _(inline below)_                      |
-| `nclutils.utils`          | Timestamps, unique IDs, Python version check.            | [docs/utils.md](docs/utils.md)        |
+| Module                     | Summary                                                                                                                                                           | Docs                                             |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `nclutils.fs`              | Copy, back up, search, and visualize the filesystem.                                                                                                              | [docs/fs.md](docs/fs.md)                         |
+| `nclutils.network`         | Lightweight network reachability check.                                                                                                                           | _(inline below)_                                 |
+| `nclutils.pp`              | Rich-based console output, verbosity gates, file logger.                                                                                                          | [docs/pp.md](docs/pp.md)                         |
+| `nclutils.questions`       | Single- and multi-select prompts via `questionary`.                                                                                                               | [docs/questions.md](docs/questions.md)           |
+| `nclutils.sh`              | Run commands via subprocess; returns `CompletedCommand`, raises typed errors (`ShellCommandError` hierarchy). Includes `run_command`, `run_interactive`, `which`. | [docs/shell_commands.md](docs/shell_commands.md) |
+| `nclutils.strings`         | Case conversions, padding, tokenizing, normalization.                                                                                                             | [docs/strings.md](docs/strings.md)               |
+| `nclutils.text_processing` | In-place file edits.                                                                                                                                              | _(inline below)_                                 |
+| `nclutils.utils`           | Timestamps, unique IDs, Python version check.                                                                                                                     | [docs/utils.md](docs/utils.md)                   |
 
 ### `nclutils.network`
 

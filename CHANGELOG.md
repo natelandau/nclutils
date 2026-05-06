@@ -1,3 +1,9 @@
+## v3.0.1 (2026-05-06)
+
+### Fix
+
+- **build**: update commitizen config
+
 ## v3.0.0 (2026-05-06)
 
 ### BREAKING CHANGE
