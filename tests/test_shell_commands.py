@@ -216,7 +216,7 @@ def test_run_command_with_pushd_nonexistent_dir(capsys: pytest.CaptureFixture) -
     cmd = "pwd"
 
     # When/Then: Running command with invalid pushd raises error
-    with pytest.raises(ShellCommandFailedError, match=r"Directory.*does not exist"):
+    with pytest.raises(ShellCommandFailedError, match=r"Cannot enter directory"):
         run_command(cmd, [], pushd=nonexistent_dir)
 
     captured = capsys.readouterr()
@@ -287,37 +287,33 @@ def test_run_command_fg_passes_fg_kwarg_to_sh(mocker: MockerFixture) -> None:
     assert "_tee" not in call_kwargs
 
 
-def test_run_command_with_sudo_enters_sudo_context(mocker: MockerFixture) -> None:
-    """Verify sudo=True wraps execution in sh.contrib.sudo(_with=True)."""
-    # Given: sh.contrib is replaced with a MagicMock (sh.contrib.sudo is a property
-    # so it cannot be patched directly); sh.Command is stubbed so no real process runs
+@pytest.fixture
+def stub_sh(mocker: MockerFixture):
+    """Stub sh.contrib (a property — can't patch sh.contrib.sudo directly) and sh.Command."""
     fake_contrib = mocker.MagicMock()
     mocker.patch("nclutils.sh.shell_command.sh.contrib", new=fake_contrib)
     mocker.patch("nclutils.sh.shell_command.sh.Command")
+    return fake_contrib
 
+
+def test_run_command_with_sudo_enters_sudo_context(stub_sh) -> None:
+    """Verify sudo=True wraps execution in sh.contrib.sudo(_with=True)."""
     # When: Running with sudo=True
     run_command("echo", ["hello"], sudo=True, quiet=True)
 
-    # Then: sudo was invoked with _with=True (and notably WITHOUT k=True, which
-    # would invalidate cached credentials before each call) and was entered
-    fake_contrib.sudo.assert_called_once_with(_with=True)
-    fake_contrib.sudo.return_value.__enter__.assert_called_once()
+    # Then: sudo was invoked with _with=True and entered as a context manager.
+    # The absence of k=True is enforced by assert_called_once_with's exact-match.
+    stub_sh.sudo.assert_called_once_with(_with=True)
+    stub_sh.sudo.return_value.__enter__.assert_called_once()
 
 
-def test_run_command_without_sudo_does_not_enter_sudo_context(
-    mocker: MockerFixture,
-) -> None:
+def test_run_command_without_sudo_does_not_enter_sudo_context(stub_sh) -> None:
     """Verify sudo=False leaves sh.contrib.sudo untouched."""
-    # Given: sh.contrib is replaced with a MagicMock and sh.Command is stubbed
-    fake_contrib = mocker.MagicMock()
-    mocker.patch("nclutils.sh.shell_command.sh.contrib", new=fake_contrib)
-    mocker.patch("nclutils.sh.shell_command.sh.Command")
-
     # When: Running without sudo
     run_command("echo", ["hello"], quiet=True)
 
     # Then: sudo was never invoked
-    fake_contrib.sudo.assert_not_called()
+    stub_sh.sudo.assert_not_called()
 
 
 def test_run_command_err_to_out_false_drops_successful_stderr(

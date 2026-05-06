@@ -2,14 +2,7 @@
 
 
 def _decode(output: bytes | str | None) -> str | None:
-    """Decode subprocess output bytes to a stripped string.
-
-    Args:
-        output: Raw output from a subprocess (bytes), an already-decoded string, or None.
-
-    Returns:
-        str | None: The decoded and stripped output, or None if the input was None.
-    """
+    """Decode subprocess output (bytes/str/None) to a stripped string or None."""
     if output is None:
         return None
     if isinstance(output, bytes):
@@ -27,8 +20,7 @@ class ShellCommandFailedError(Exception):
         self.exit_code: int | None = getattr(e, "exit_code", None)
         self.stderr: str | None = _decode(getattr(e, "stderr", None))
         self.stdout: str | None = _decode(getattr(e, "stdout", None))
-        full_cmd = getattr(e, "full_cmd", None)
-        self.full_cmd: str | None = str(full_cmd).strip() if full_cmd is not None else None
+        self.full_cmd: str | None = _decode(getattr(e, "full_cmd", None))
 
         parts = [msg or "Shell command failed."]
         if e is not None:

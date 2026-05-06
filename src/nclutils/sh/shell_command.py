@@ -81,9 +81,9 @@ def run_command(  # noqa: C901, PLR0913
     def _on_line(line: str) -> None:
         if exclude_pattern is not None and exclude_pattern.search(line):
             return
-        output_lines.append(str(line))
+        output_lines.append(line)
         if not quiet:
-            console.print(Text.from_ansi(str(line)))
+            console.print(Text.from_ansi(line))
 
     def _execute() -> str:
         ok_code = list(okay_codes) or [0]
@@ -97,6 +97,9 @@ def run_command(  # noqa: C901, PLR0913
         try:
             command = sh.Command(cmd)
             if sudo:
+                # Do NOT pass `k=True` — that would invalidate cached sudo credentials
+                # before each invocation, forcing a password prompt every call and
+                # hanging in non-interactive contexts (CI, daemons).
                 with sh.contrib.sudo(_with=True):
                     command(*args, **cmd_kwargs)
             else:
@@ -116,9 +119,10 @@ def run_command(  # noqa: C901, PLR0913
             with sh.pushd(pushd):
                 return _execute()
         except OSError as e:
-            # chdir-time failures (missing dir, not-a-directory, permission) — surface
+            # Surface chdir-time failures (missing dir, not-a-directory, permission)
             # as ShellCommandFailedError so callers don't get raw OSError.
-            msg = f"Directory {pushd} does not exist"
+            detail = e.strerror or str(e)
+            msg = f"Cannot enter directory {pushd}: {detail}"
             raise ShellCommandFailedError(msg, e=e) from e
 
     return _execute()
