@@ -112,27 +112,24 @@ def test_backup_directory(backup_test_path: tuple[Path, Path, Path]) -> None:
 
 
 def test_backup_missing_file(tmp_path: Path) -> None:
-    """Verify backup raises error for missing files when configured."""
-    # Given: A non-existent file path
+    """Verify backup_path raises FileNotFoundError under strict=True when src is missing."""
+    # Given: A path that does not exist
     test_file = tmp_path / "test.txt"
 
-    # When/Then: Backup attempt raises error
+    # When/Then: strict=True surfaces the missing source
     with pytest.raises(FileNotFoundError):
-        backup_path(test_file, raise_on_missing=True)
-
-    assert not test_file.exists()
+        backup_path(test_file, strict=True)
 
 
 def test_backup_missing_file_no_raise(tmp_path: Path) -> None:
-    """Verify backup handles missing files gracefully when configured."""
-    # Given: A non-existent file path
+    """Verify backup_path returns None when src is missing and strict is False."""
+    # Given: A path that does not exist
     test_file = tmp_path / "test.txt"
 
-    # When: Creating backup with raise_on_missing=False
-    output = backup_path(test_file, raise_on_missing=False)
+    # When: Creating backup without strict
+    output = backup_path(test_file, strict=False)
 
-    # Then: No backup created
-    assert not test_file.exists()
+    # Then: Output is None
     assert output is None
 
 

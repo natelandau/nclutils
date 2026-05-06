@@ -119,6 +119,9 @@ class _Copier:
             msg = (
                 f"source file `{src}` and destination file `{dst}` are the same file. Did not copy."
             )
+            if self.strict:
+                logger.error(msg)
+                raise shutil.SameFileError(msg) from None
             logger.warning(msg)
             return src
 
@@ -146,7 +149,7 @@ class _Copier:
 
         return dst
 
-    def copy_directory(self, src: Path, dst: Path, *, keep_backup: bool = True) -> Path:
+    def copy_directory(self, src: Path, dst: Path, *, keep_backup: bool = True) -> Path:  # noqa: C901
         """Copy a directory tree to a new destination using this Copier's shared configuration.
 
         Validates Python 3.12+, src exists and is a directory, src and dst are not
@@ -169,11 +172,17 @@ class _Copier:
         # Prevent copying a directory to itself or into itself to avoid infinite recursion
         if src == dst:
             msg = f"source directory `{src}` and destination directory `{dst}` are the same directory. Did not copy."
+            if self.strict:
+                logger.error(msg)
+                raise shutil.SameFileError(msg) from None
             logger.warning(msg)
             return src
 
         if src in dst.parents or dst in src.parents:
             msg = f"source directory `{src}` and destination directory `{dst}` have parent/child relationship. Did not copy."
+            if self.strict:
+                logger.error(msg)
+                raise ValueError(msg) from None
             logger.warning(msg)
             return src
 
@@ -245,17 +254,15 @@ class _Copier:
                     _do_copy_file(src_file, new_parent / name, progress_bar=progress, task=inner)
                     progress.update(outer, advance=size)
 
-    def backup(
-        self, src: Path, backup_suffix: str = "", *, raise_on_missing: bool = False
-    ) -> Path | None:
+    def backup(self, src: Path, backup_suffix: str = "") -> Path | None:
         """Create a backup copy of `src` by appending `backup_suffix` to its name.
 
         If `backup_suffix` is empty, generates a timestamped suffix. Skips silently when
-        `src` does not exist (or raises `FileNotFoundError` if `raise_on_missing`).
+        `src` does not exist (or raises `FileNotFoundError` if `self.strict` is True).
         """
         if not src.exists():
             msg = f"skip backup: does not exist `{src}`"
-            if raise_on_missing:
+            if self.strict:
                 logger.error(msg)
                 raise FileNotFoundError(msg) from None
             logger.warning(msg)
@@ -301,40 +308,53 @@ def backup_path(
     src: Path,
     backup_suffix: str = "",
     *,
-    raise_on_missing: bool = False,
     with_progress: bool = False,
     transient: bool = True,
     console: Console | None = None,
+    strict: bool = False,
 ) -> Path | None:
-    """Create a backup copy of a file/directory by appending a suffix to the original name. If no suffix is provided, generate one using a timestamp. Skip if the source path doesn't exist.
+    """Create a backup copy of a file/directory by appending a suffix to the original name.
+
+    If no suffix is provided, generate one using a timestamp. By default, returns
+    None when the source path does not exist; pass `strict=True` to raise
+    `FileNotFoundError` instead.
 
     Args:
         src (Path): Path to the file or directory to back up.
         backup_suffix (str, optional): Custom suffix to append to the backup name. Defaults to a timestamp-based suffix.
-        raise_on_missing (bool, optional): Raise if the source path does not exist. Defaults to False.
         with_progress (bool, optional): Show a progress bar during file copies. Defaults to False.
         transient (bool, optional): Remove the progress bar after completion. Defaults to True.
-        console (Console | None, optional): Rich `Console` to render the progress bar through. Defaults to None (Rich's default global console).
+        console (Console | None, optional): Rich `Console` to render the progress bar through. Defaults to None.
+        strict (bool, optional): Raise on silent failure modes (missing source). Defaults to False.
 
     Returns:
-        Path | None: Path to the created backup file/directory, or None if the source does not exist and `raise_on_missing` is False.
+        Path | None: Path to the created backup file/directory, or None if the source does not exist and `strict` is False.
 
     Raises:
-        FileNotFoundError: If the source path does not exist and `raise_on_missing` is True.
+        FileNotFoundError: If the source path does not exist and `strict` is True.
     """
-    return _Copier(with_progress=with_progress, transient=transient, console=console).backup(
-        src, backup_suffix, raise_on_missing=raise_on_missing
-    )
+    return _Copier(
+        with_progress=with_progress, transient=transient, console=console, strict=strict
+    ).backup(src, backup_suffix)
 
 
-def clean_directory(directory: Path) -> None:
-    """Recursively cleans up the contents of a directory, deleting all files and subdirectories without deleting the directory itself.
+def clean_directory(directory: Path, *, strict: bool = False) -> None:
+    """Recursively clean up the contents of a directory.
+
+    Delete all files and subdirectories without deleting the directory itself.
 
     Args:
         directory (Path): The directory to clean up.
+        strict (bool, optional): Raise NotADirectoryError if `directory` is not an existing directory. Defaults to False.
+
+    Raises:
+        NotADirectoryError: If `directory` is not an existing directory and `strict` is True.
     """
     if not directory.is_dir():
         msg = f"{directory} is not a directory. Did not clean up."
+        if strict:
+            logger.error(msg)
+            raise NotADirectoryError(msg) from None
         logger.warning(msg)
         return
 
@@ -345,7 +365,7 @@ def clean_directory(directory: Path) -> None:
             shutil.rmtree(child)
 
 
-def copy_file(
+def copy_file(  # noqa: PLR0913
     src: Path,
     dst: Path,
     *,
@@ -353,6 +373,7 @@ def copy_file(
     transient: bool = True,
     keep_backup: bool = True,
     console: Console | None = None,
+    strict: bool = False,
 ) -> Path:
     """Copy a file to a destination with optional progress tracking.
 
@@ -364,22 +385,24 @@ def copy_file(
         with_progress (bool, optional): Show a progress bar during copy. Defaults to False.
         transient (bool, optional): Remove the progress bar after completion. Defaults to True.
         keep_backup (bool, optional): Keep a backup of the destination file if it already exists. Defaults to True.
-        console (Console | None, optional): Rich `Console` to render the progress bar through. Defaults to None (Rich's default global console).
+        console (Console | None, optional): Rich `Console` to render the progress bar through. Defaults to None.
+        strict (bool, optional): Raise on silent failure modes (src equals dst). Defaults to False.
 
     Returns:
-        Path: Path to the destination file after copy completion
+        Path: Path to the destination file after copy completion.
 
     Raises:
-        FileNotFoundError: If the source path does not exist
-        IsADirectoryError: If the source path is a directory
-        OSError: If the source path exists but is not a regular file
+        FileNotFoundError: If the source path does not exist.
+        IsADirectoryError: If the source path is a directory.
+        OSError: If the source path exists but is not a regular file.
+        shutil.SameFileError: If src and dst resolve to the same file and `strict` is True.
     """
-    return _Copier(with_progress=with_progress, transient=transient, console=console).copy_file(
-        src, dst, keep_backup=keep_backup
-    )
+    return _Copier(
+        with_progress=with_progress, transient=transient, console=console, strict=strict
+    ).copy_file(src, dst, keep_backup=keep_backup)
 
 
-def copy_directory(
+def copy_directory(  # noqa: PLR0913
     src: Path,
     dst: Path,
     *,
@@ -387,6 +410,7 @@ def copy_directory(
     transient: bool = True,
     keep_backup: bool = True,
     console: Console | None = None,
+    strict: bool = False,
 ) -> Path:
     """Copy a directory and its contents to a new destination path.
 
@@ -399,16 +423,18 @@ def copy_directory(
         transient (bool, optional): Clear progress bar after completion. Defaults to True.
         keep_backup (bool, optional): Keep a backup of the destination directory if it already exists. Defaults to True.
         console (Console | None, optional): Rich `Console` to render the progress bar through. Defaults to None.
+        strict (bool, optional): Raise on silent failure modes (src equals dst, or src/dst nested). Defaults to False.
 
     Returns:
         Path: Path to the destination directory.
 
     Raises:
         FileNotFoundError: If source directory does not exist or is not a directory.
-        ValueError: If Python version is less than 3.12.
+        ValueError: If Python version is less than 3.12, or if src/dst have a parent/child relationship and `strict` is True.
+        shutil.SameFileError: If src and dst are the same directory and `strict` is True.
     """
     return _Copier(
-        with_progress=with_progress, transient=transient, console=console
+        with_progress=with_progress, transient=transient, console=console, strict=strict
     ).copy_directory(src, dst, keep_backup=keep_backup)
 
 
@@ -578,20 +604,26 @@ def find_files(
     return sorted(results)
 
 
-def find_user_home_dir(username: str | None = None) -> Path | None:
+def find_user_home_dir(username: str | None = None, *, strict: bool = False) -> Path | None:
     """Locate and return the home directory path for a given or current user.
 
     If no username is provided, fall back to the `SUDO_USER` environment variable so
     scripts running under sudo resolve the invoking user's home rather than `/root`.
     On POSIX systems, lookups go through the standard library `pwd` module
     (`pwd.getpwnam(username).pw_dir`). On platforms without `pwd` (e.g. Windows),
-    return `None` and log a warning.
+    return `None` and log a warning. The `pwd` unavailability path always returns None
+    regardless of `strict`, since it represents a platform capability rather than a
+    runtime error.
 
     Args:
         username (str | None, optional): Username to find home directory for. If None, use SUDO_USER or the current user. Defaults to None.
+        strict (bool, optional): Raise KeyError on unknown user. Defaults to False.
 
     Returns:
-        Path | None: Home directory path for the specified user, or None if the user is not found or the platform does not provide `pwd`.
+        Path | None: Home directory path for the specified user, or None if the user is not found, or the platform does not provide `pwd`, or both.
+
+    Raises:
+        KeyError: If `username` is not a known user and `strict` is True.
     """
     if username is None:
         sudo_user = os.getenv("SUDO_USER")
@@ -608,5 +640,9 @@ def find_user_home_dir(username: str | None = None) -> Path | None:
     try:
         return Path(pwd.getpwnam(username).pw_dir)
     except KeyError:
-        logger.debug("pwd lookup failed for `%s`", username)
+        msg = f"pwd lookup failed for `{username}`"
+        if strict:
+            logger.error(msg)  # noqa: TRY400
+            raise
+        logger.debug(msg)
         return None

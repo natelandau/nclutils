@@ -248,6 +248,17 @@ def test_clean_directory_not_a_directory(
     assert "test.txt is not a directory. Did not clean" in fs_caplog.text
 
 
+def test_clean_directory_not_a_directory_strict_raises(tmp_path: Path) -> None:
+    """Verify clean_directory raises NotADirectoryError when strict=True and target is not a directory."""
+    # Given: A path that is a file, not a directory
+    f = tmp_path / "not_a_dir.txt"
+    f.write_text("hi")
+
+    # When/Then: strict=True turns the silent log into NotADirectoryError
+    with pytest.raises(NotADirectoryError):
+        clean_directory(f, strict=True)
+
+
 def test_clean_directory_removes_symlink_to_directory(tmp_path: Path) -> None:
     """Verify clean_directory unlinks directory symlinks instead of recursing into them."""
     # Given: A directory containing a symlink that points at another directory

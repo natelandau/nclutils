@@ -74,3 +74,28 @@ def test_find_user_home_dir_pwd_unavailable_returns_none_and_warns(
     # Then: None is returned and a warning was logged
     assert result is None
     assert "pwd module" in caplog.text
+
+
+def test_find_user_home_dir_unknown_user_strict_raises(fake_pwd) -> None:
+    """Verify find_user_home_dir raises KeyError when strict=True and user is unknown."""
+    # Given: pwd.getpwnam raises KeyError for the requested user
+    fake_pwd(side_effect=KeyError("ghost"))
+
+    # When/Then: strict=True turns the silent return into KeyError
+    with pytest.raises(KeyError):
+        find_user_home_dir("ghost", strict=True)
+
+
+def test_find_user_home_dir_pwd_unavailable_returns_none_even_under_strict(
+    mocker, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Verify find_user_home_dir keeps returning None for missing pwd module even under strict."""
+    # Given: pwd cannot be imported
+    mocker.patch.dict(sys.modules, {"pwd": None})
+    caplog.set_level("WARNING", logger="nclutils.fs.filesystem")
+
+    # When: Looking up under strict=True
+    result = find_user_home_dir("anyone", strict=True)
+
+    # Then: Still None (platform capability, not a strict-mode violation)
+    assert result is None
