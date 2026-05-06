@@ -1,10 +1,12 @@
 """Test the copy_file function."""
 
 from collections.abc import Callable
+from io import StringIO
 from pathlib import Path
 
 import pytest
 from pytest_mock import MockerFixture
+from rich.console import Console
 
 from nclutils.fs import copy_directory, copy_file
 from nclutils.utils import check_python_version
@@ -340,10 +342,6 @@ def test_copy_directory_preserves_directory_mode(tmp_path: Path) -> None:
 def test_copy_file_uses_provided_console(tmp_path: Path) -> None:
     """Verify copy_file routes its progress bar through the supplied Rich console."""
     # Given: A source file and a Console that captures its output
-    from io import StringIO
-
-    from rich.console import Console
-
     src = tmp_path / "test.txt"
     dst = tmp_path / "test_copy.txt"
     src.write_text("Hello, world!")
