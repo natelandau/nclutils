@@ -16,6 +16,7 @@ from nclutils.sh import (
     ShellCommandFailedError,
     ShellCommandNotFoundError,
     ShellCommandTimeoutError,
+    run_command,
     which,
 )
 from nclutils.sh._streaming import pump_pipe
@@ -271,3 +272,150 @@ class TestStreamingPump:
 
         # Then: the trailing line is included as-is
         assert buffer == ["a\n", "no-newline-end"]
+
+
+class TestRunCommandCapture:
+    """Tests for run_command without stream=True (capture only)."""
+
+    def test_returns_completed_command_on_success(self) -> None:
+        """Verify run_command returns a CompletedCommand with stdout, returncode, and argv."""
+        # Given/When: a successful echo
+        result = run_command(["echo", "hello"])
+
+        # Then: a CompletedCommand with hello on stdout and exit 0
+        assert isinstance(result, CompletedCommand)
+        assert result.returncode == 0
+        assert result.argv == ("echo", "hello")
+        assert "hello" in result.stdout
+        assert result.stderr == ""
+        assert result.duration >= 0
+        assert result.ok is True
+
+    def test_check_true_raises_failed_on_nonzero(self) -> None:
+        """Verify check=True raises ShellCommandFailedError carrying the result."""
+        # Given/When: a command that exits 1
+        # Then: ShellCommandFailedError is raised and exposes the result
+        with pytest.raises(ShellCommandFailedError) as exc:
+            run_command(["false"])
+        assert exc.value.result is not None
+        assert exc.value.result.returncode == 1
+        assert exc.value.result.argv == ("false",)
+
+    def test_check_false_returns_nonzero_result(self) -> None:
+        """Verify check=False suppresses raising and returns the failed result."""
+        # Given/When: a failing command with check=False
+        result = run_command(["false"], check=False)
+
+        # Then: result is returned, returncode is non-zero
+        assert result.returncode != 0
+        assert result.ok is False
+
+    def test_okay_codes_treats_listed_codes_as_success(self) -> None:
+        """Verify a returncode in okay_codes does not raise."""
+        # Given/When: false (rc=1) with 0 and 1 both okay
+        result = run_command(["false"], okay_codes=(0, 1))
+
+        # Then: returns normally
+        assert result.returncode == 1
+
+    def test_command_not_found_raises(self) -> None:
+        """Verify a missing executable raises ShellCommandNotFoundError."""
+        # Given/When/Then: a non-existent binary raises NotFound
+        with pytest.raises(ShellCommandNotFoundError):
+            run_command(["definitely-not-a-real-binary-xyz-12345"])
+
+    def test_cwd_changes_directory(self, tmp_path: Path) -> None:
+        """Verify cwd= runs the command from the given directory."""
+        # Given: a subdir containing one file
+        (tmp_path / "marker.txt").write_text("hi")
+
+        # When: running ls under cwd=tmp_path
+        result = run_command(["ls"], cwd=tmp_path)
+
+        # Then: marker.txt appears in stdout
+        assert "marker.txt" in result.stdout
+        assert result.cwd == tmp_path.resolve()
+
+    def test_cwd_unreachable_raises_failed(self) -> None:
+        """Verify a missing cwd raises ShellCommandFailedError with result=None."""
+        # Given/When/Then: a non-existent dir raises Failed with no result
+        with pytest.raises(ShellCommandFailedError) as exc:
+            run_command(["echo", "hi"], cwd="/no/such/dir/xyz")
+        assert exc.value.result is None
+        assert "/no/such/dir/xyz" in str(exc.value)
+
+    def test_env_replaces_environment(self) -> None:
+        """Verify env= replaces (does not extend) the child environment."""
+        # Given/When: a fully replaced env containing only FOO=bar
+        result = run_command(
+            ["sh", "-c", "echo $FOO"],
+            env={"FOO": "bar", "PATH": "/usr/bin:/bin"},
+        )
+
+        # Then: FOO is bar
+        assert result.stdout.strip() == "bar"
+
+    def test_input_str_is_written_to_stdin(self) -> None:
+        """Verify input= writes a string to the child's stdin and is read back via cat."""
+        # Given/When: cat reads stdin
+        result = run_command(["cat"], input="ping pong")
+
+        # Then: the same text comes back on stdout
+        assert result.stdout == "ping pong"
+
+    def test_input_bytes_is_passed_through(self) -> None:
+        """Verify input= accepts bytes and forwards them verbatim."""
+        # Given/When: bytes input
+        result = run_command(["cat"], input=b"raw bytes\n")
+
+        # Then: stdout matches the bytes decoded as utf-8
+        assert result.stdout == "raw bytes\n"
+
+    def test_timeout_raises_timeout_error_with_partial_result(self) -> None:
+        """Verify timeout= terminates the child and raises ShellCommandTimeoutError."""
+        # Given/When/Then: a long sleep with a 0.2s timeout
+        with pytest.raises(ShellCommandTimeoutError) as exc:
+            run_command(["sleep", "5"], timeout=0.2)
+        assert exc.value.timeout == 0.2
+        assert exc.value.result.argv == ("sleep", "5")
+
+    def test_sudo_prepends_sudo(self, mocker) -> None:
+        """Verify sudo=True prepends 'sudo' to argv before invocation."""
+        # Given: a Popen mock that records argv
+        from nclutils.sh import shell_command as sc  # noqa: PLC0415
+
+        recorded: dict = {}
+
+        class FakeProc:
+            def __init__(self, argv: list[str], **kwargs: object) -> None:
+                recorded["argv"] = argv
+                self.stdout = mocker.MagicMock()
+                self.stdout.readline.side_effect = [b""]
+                self.stderr = mocker.MagicMock()
+                self.stderr.readline.side_effect = [b""]
+                self.stdin = None
+                self.returncode = 0
+
+            def wait(self, timeout: float | None = None) -> int:
+                return 0
+
+            def kill(self) -> None:
+                pass
+
+        mocker.patch.object(sc.subprocess, "Popen", autospec=True, side_effect=FakeProc)
+
+        # When: running with sudo=True
+        run_command(["whoami"], sudo=True)
+
+        # Then: argv was prefixed
+        assert recorded["argv"][:2] == ["sudo", "whoami"]
+
+    def test_quiet_by_default_does_not_print(self, capsys: pytest.CaptureFixture) -> None:
+        """Verify the default (stream=False) writes nothing to sys.stdout/sys.stderr."""
+        # Given/When: a successful echo with default stream=False
+        run_command(["echo", "hello"])
+
+        # Then: nothing leaked to capsys
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert captured.err == ""
