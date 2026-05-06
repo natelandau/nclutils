@@ -157,14 +157,15 @@ class _Copier:
         keep_backup is True, snapshots dst via self.backup() first.
         """
         if not check_python_version(3, 12):
-            msg = "Copy file requires a minimum of Python version 3.12"
+            msg = "Copy directory requires a minimum of Python version 3.12"
             logger.error(msg)
             raise ValueError(msg) from None
 
         src = src.expanduser().resolve()
         dst = dst.expanduser().resolve()
 
-        if not src.exists() or not src.is_dir():
+        # Path.is_dir() returns False for missing paths, so it covers the existence check too.
+        if not src.is_dir():
             msg = f"source directory `{src}` does not exist or is not a directory. Did not copy."
             logger.error(msg)
             raise FileNotFoundError(msg) from None
@@ -238,7 +239,7 @@ class _Copier:
 
         with Progress(transient=self.transient, console=self.console) as progress:
             outer = progress.add_task(f"{label} {src.name}", total=total_bytes or None)
-            inner = progress.add_task("", total=1, visible=False)
+            inner = progress.add_task("", total=None, visible=False)
 
             for current_root, _, files in src.walk(follow_symlinks=True):
                 rel = current_root.relative_to(src)

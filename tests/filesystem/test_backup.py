@@ -5,6 +5,7 @@ import stat
 from pathlib import Path
 
 import pytest
+from pytest_mock import MockerFixture
 
 from nclutils.fs import backup_path
 
@@ -259,7 +260,7 @@ def test_backup_directory_follows_symlink_to_directory(tmp_path: Path) -> None:
     assert (backed_up / "deep.txt").read_text() == "deep content"
 
 
-def test_backup_directory_raises_on_old_python(tmp_path: Path, mocker) -> None:
+def test_backup_directory_raises_on_old_python(tmp_path: Path, mocker: MockerFixture) -> None:
     """Verify backup_path raises ValueError when called on a directory under Python < 3.12."""
     # Given: A directory and a mocked check_python_version returning False
     src = tmp_path / "src"
