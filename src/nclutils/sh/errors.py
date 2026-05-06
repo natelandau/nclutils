@@ -75,14 +75,14 @@ class ShellCommandFailedError(ShellCommandError):
         if msg is not None:
             super().__init__(msg)
             return
+        if result is None:
+            super().__init__("Shell command failed (no result captured)")
+            return
 
-        # Build a message from the result.
-        argv_str = " ".join(result.argv) if result is not None else "<unknown>"
-        rc = result.returncode if result is not None else "<unknown>"
-        parts = [f"Shell command failed: {argv_str} (exit code {rc})"]
-        if result is not None and result.stderr:
+        parts = [f"Shell command failed: {' '.join(result.argv)} (exit code {result.returncode})"]
+        if result.stderr:
             parts.append(f"Stderr: {result.stderr.rstrip()}")
-        if result is not None and result.stdout:
+        if result.stdout:
             parts.append(f"Stdout: {result.stdout.rstrip()}")
         super().__init__("\n".join(parts))
 

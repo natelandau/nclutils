@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import io
-import os
 import re
 from dataclasses import FrozenInstanceError
 from pathlib import Path
@@ -172,10 +171,7 @@ class TestStreamingPump:
     def test_lines_appended_to_buffer(self) -> None:
         """Verify pump_pipe decodes each line and appends it to the buffer."""
         # Given: a pipe with two lines
-        read_fd, write_fd = os.pipe()
-        os.write(write_fd, b"hello\nworld\n")
-        os.close(write_fd)
-        reader = os.fdopen(read_fd, "rb")
+        reader = io.BytesIO(b"hello\nworld\n")
         buffer: list[str] = []
 
         # When: pumping with no sink and no exclusion
@@ -188,10 +184,7 @@ class TestStreamingPump:
     def test_excluded_lines_are_dropped(self) -> None:
         """Verify lines matching exclude_pattern are omitted from buffer and sink."""
         # Given: a pipe with a kept line and a dropped line
-        read_fd, write_fd = os.pipe()
-        os.write(write_fd, b"keep me\ndrop me\n")
-        os.close(write_fd)
-        reader = os.fdopen(read_fd, "rb")
+        reader = io.BytesIO(b"keep me\ndrop me\n")
         pattern = re.compile(r"drop")
         buffer: list[str] = []
 
@@ -204,10 +197,7 @@ class TestStreamingPump:
     def test_sink_receives_lines(self) -> None:
         """Verify pump_pipe writes each non-excluded line to the sink."""
         # Given: a pipe with two lines and an in-memory sink
-        read_fd, write_fd = os.pipe()
-        os.write(write_fd, b"alpha\nbeta\n")
-        os.close(write_fd)
-        reader = os.fdopen(read_fd, "rb")
+        reader = io.BytesIO(b"alpha\nbeta\n")
         sink = io.StringIO()
         buffer: list[str] = []
 
@@ -220,9 +210,7 @@ class TestStreamingPump:
     def test_pipe_closed_on_completion(self) -> None:
         """Verify pump_pipe closes the pipe after draining it."""
         # Given: an empty pipe
-        read_fd, write_fd = os.pipe()
-        os.close(write_fd)
-        reader = os.fdopen(read_fd, "rb")
+        reader = io.BytesIO()
 
         # When: pumping an empty pipe
         pump_pipe(pipe=reader, buffer=[], sink=None, exclude_pattern=None)
@@ -233,10 +221,7 @@ class TestStreamingPump:
     def test_appends_to_existing_buffer(self) -> None:
         """Verify pump_pipe appends to an existing buffer rather than replacing it."""
         # Given: a pipe with one new line and a buffer with a pre-existing entry
-        read_fd, write_fd = os.pipe()
-        os.write(write_fd, b"new\n")
-        os.close(write_fd)
-        reader = os.fdopen(read_fd, "rb")
+        reader = io.BytesIO(b"new\n")
         buffer: list[str] = ["pre-existing\n"]
 
         # When: pumping
@@ -248,10 +233,7 @@ class TestStreamingPump:
     def test_invalid_utf8_raises_and_closes_pipe(self) -> None:
         """Verify pump_pipe surfaces UnicodeDecodeError and still closes the pipe."""
         # Given: a pipe with invalid utf-8 bytes
-        read_fd, write_fd = os.pipe()
-        os.write(write_fd, b"\xff\xfe invalid\n")
-        os.close(write_fd)
-        reader = os.fdopen(read_fd, "rb")
+        reader = io.BytesIO(b"\xff\xfe invalid\n")
 
         # When/Then: pumping raises UnicodeDecodeError and the pipe is closed afterward
         with pytest.raises(UnicodeDecodeError):
@@ -261,10 +243,7 @@ class TestStreamingPump:
     def test_pump_pipe_partial_final_line_without_newline(self) -> None:
         """Verify pump_pipe captures a final line that lacks a trailing newline."""
         # Given: a pipe whose final line has no newline
-        read_fd, write_fd = os.pipe()
-        os.write(write_fd, b"a\nno-newline-end")
-        os.close(write_fd)
-        reader = os.fdopen(read_fd, "rb")
+        reader = io.BytesIO(b"a\nno-newline-end")
         buffer: list[str] = []
 
         # When: pumping
@@ -373,10 +352,10 @@ class TestRunCommandCapture:
 
     def test_timeout_raises_timeout_error_with_partial_result(self) -> None:
         """Verify timeout= terminates the child and raises ShellCommandTimeoutError."""
-        # Given/When/Then: a long sleep with a 0.2s timeout
+        # Given/When/Then: a long sleep with a 0.05s timeout
         with pytest.raises(ShellCommandTimeoutError) as exc:
-            run_command(["sleep", "5"], timeout=0.2)
-        assert exc.value.timeout == 0.2
+            run_command(["sleep", "5"], timeout=0.05)
+        assert exc.value.timeout == 0.05
         assert exc.value.result.argv == ("sleep", "5")
 
     def test_sudo_prepends_sudo(self, mocker) -> None:
@@ -422,9 +401,9 @@ class TestRunCommandCapture:
 
     def test_invalid_utf8_in_child_output_raises(self) -> None:
         """Verify non-utf8 child output surfaces UnicodeDecodeError to the caller."""
-        # Given/When/Then: a printf that emits invalid utf-8 bytes
+        # Given/When/Then: a python child that emits invalid utf-8 bytes
         with pytest.raises(UnicodeDecodeError):
-            run_command(["printf", r"\xff\xfe"])
+            run_command(["python3", "-c", r"import sys; sys.stdout.buffer.write(b'\xff\xfe')"])
 
     def test_concurrent_stdout_and_stderr_both_captured(self) -> None:
         """Verify both stdout and stderr are captured when child writes to both."""

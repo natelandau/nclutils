@@ -144,39 +144,41 @@ def run_command(  # noqa: C901, PLR0912, PLR0913, PLR0915
     sout_sink = sys.stdout if stream else None
     serr_sink = sys.stderr if stream else None
 
-    # proc.stdout and proc.stderr are always set when PIPE is passed to Popen
-    if proc.stdout is None or proc.stderr is None:  # pragma: no cover
+    # proc.stdout and proc.stderr are always set when PIPE is passed to Popen.
+    # Capture into locals so mypy can narrow them inside the drain closures.
+    out_pipe = proc.stdout
+    err_pipe = proc.stderr
+    if out_pipe is None or err_pipe is None:  # pragma: no cover
         _msg = "Popen did not open stdout/stderr pipes as expected"
         raise RuntimeError(_msg)
 
-    pump_errors: dict[str, BaseException | None] = {"out": None, "err": None}
+    out_exc: list[BaseException | None] = [None]
+    err_exc: list[BaseException | None] = [None]
 
-    def _run_pump(slot: str, **kwargs: object) -> None:
+    def _drain_stdout() -> None:
         try:
-            pump_pipe(**kwargs)  # type: ignore[arg-type]
+            pump_pipe(
+                pipe=out_pipe,
+                buffer=stdout_lines,
+                sink=sout_sink,
+                exclude_pattern=exclude_pattern,
+            )
         except BaseException as e:  # noqa: BLE001 -- capture and re-raise from caller
-            pump_errors[slot] = e
+            out_exc[0] = e
 
-    t_out = threading.Thread(
-        target=_run_pump,
-        kwargs={
-            "slot": "out",
-            "pipe": proc.stdout,
-            "buffer": stdout_lines,
-            "sink": sout_sink,
-            "exclude_pattern": exclude_pattern,
-        },
-    )
-    t_err = threading.Thread(
-        target=_run_pump,
-        kwargs={
-            "slot": "err",
-            "pipe": proc.stderr,
-            "buffer": stderr_lines,
-            "sink": serr_sink,
-            "exclude_pattern": exclude_pattern,
-        },
-    )
+    def _drain_stderr() -> None:
+        try:
+            pump_pipe(
+                pipe=err_pipe,
+                buffer=stderr_lines,
+                sink=serr_sink,
+                exclude_pattern=exclude_pattern,
+            )
+        except BaseException as e:  # noqa: BLE001 -- capture and re-raise from caller
+            err_exc[0] = e
+
+    t_out = threading.Thread(target=_drain_stdout)
+    t_err = threading.Thread(target=_drain_stderr)
     t_out.start()
     t_err.start()
 
@@ -193,9 +195,10 @@ def run_command(  # noqa: C901, PLR0912, PLR0913, PLR0915
 
     # Surface any pump-thread exception (e.g., UnicodeDecodeError) before evaluating
     # the timeout/check branches so a decode error isn't masked by a normal exit.
-    for err in (pump_errors["out"], pump_errors["err"]):
-        if err is not None:
-            raise err
+    if out_exc[0] is not None:
+        raise out_exc[0]
+    if err_exc[0] is not None:
+        raise err_exc[0]
 
     duration = time.monotonic() - started
     result = CompletedCommand(
