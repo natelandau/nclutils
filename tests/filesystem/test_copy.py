@@ -353,3 +353,54 @@ def test_copy_file_uses_provided_console(tmp_path: Path) -> None:
 
     # Then: Progress output landed on the supplied console, not stdout
     assert "Copy test.txt" in buffer.getvalue()
+
+
+@pytest.mark.skipif(not check_python_version(3, 12), reason="Requires Python 3.12+")
+def test_copy_directory_unified_progress_no_backup(tmp_path: Path) -> None:
+    """Verify copy_directory shows a single Copy phase when dst does not exist."""
+    # Given: A source directory with a couple of files, no pre-existing dst
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "a.txt").write_text("hello")
+    (src / "b.txt").write_text("world")
+    dst = tmp_path / "dst"
+
+    buf = StringIO()
+    console = Console(file=buf, force_terminal=True, width=120)
+
+    # When: Copying with progress and a non-transient bar
+    copy_directory(src, dst, with_progress=True, transient=False, console=console)
+
+    output = buf.getvalue()
+
+    # Then: One Copy phase header appears, no Backup phase header
+    assert "Copy src" in output
+    assert "Backup" not in output
+    # And: 100% completion is shown
+    assert "100%" in output
+
+
+@pytest.mark.skipif(not check_python_version(3, 12), reason="Requires Python 3.12+")
+def test_copy_directory_unified_progress_with_backup(tmp_path: Path) -> None:
+    """Verify copy_directory shows Backup then Copy when dst exists."""
+    # Given: An existing dst directory and a fresh src
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "new.txt").write_text("new content")
+
+    dst = tmp_path / "dst"
+    dst.mkdir()
+    (dst / "old.txt").write_text("old content")
+
+    buf = StringIO()
+    console = Console(file=buf, force_terminal=True, width=120)
+
+    # When: Copying with progress, backup enabled, non-transient
+    copy_directory(src, dst, with_progress=True, transient=False, keep_backup=True, console=console)
+
+    output = buf.getvalue()
+
+    # Then: Both Backup and Copy phase headers appear, in order
+    assert "Backup dst" in output
+    assert "Copy src" in output
+    assert output.index("Backup dst") < output.index("Copy src")

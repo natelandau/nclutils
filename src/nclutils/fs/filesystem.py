@@ -188,7 +188,10 @@ class _Copier:
             shutil.rmtree(dst)
 
         logger.debug("walk %s", src)
-        self._copy_tree_no_progress(src, dst)
+        if self.with_progress:
+            self._copy_tree_with_progress(src, dst, label="Copy")
+        else:
+            self._copy_tree_no_progress(src, dst)
         return dst
 
     def _copy_tree_no_progress(self, src: Path, dst: Path) -> None:
@@ -209,6 +212,35 @@ class _Copier:
             shutil.copystat(current_root, new_parent)
             for name in files:
                 _do_copy_file(current_root / name, new_parent / name)
+
+    def _copy_tree_with_progress(self, src: Path, dst: Path, label: str) -> None:
+        """Copy a directory tree with a unified Progress bar.
+
+        Pre-walks `src` once to compute total bytes, then drives a single
+        `Progress` containing one outer total-bytes task and one recycled
+        per-file subtask. `label` is used as the description prefix
+        (e.g. "Copy" or "Backup"). Mirrors `_copy_tree_no_progress`'s
+        semantics: follows symlinks, preserves directory mode/timestamps via
+        `shutil.copystat`, preserves file mode via `shutil.copymode`, and
+        intentionally does not preserve file mtime (the write bumps it).
+        """
+        total_bytes, _ = _sum_bytes(src)
+
+        with Progress(transient=self.transient, console=self.console) as progress:
+            outer = progress.add_task(f"{label} {src.name}", total=total_bytes)
+            inner = progress.add_task("", total=1, visible=False)
+
+            for current_root, _, files in src.walk(follow_symlinks=True):
+                rel = current_root.relative_to(src)
+                new_parent = dst / rel
+                new_parent.mkdir(parents=True, exist_ok=True)
+                shutil.copystat(current_root, new_parent)
+                for name in files:
+                    src_file = current_root / name
+                    size = src_file.stat().st_size
+                    progress.reset(inner, description=f"  └ {rel / name}", total=size, visible=True)
+                    _do_copy_file(src_file, new_parent / name, progress_bar=progress, task=inner)
+                    progress.update(outer, advance=size)
 
     def backup(
         self, src: Path, backup_suffix: str = "", *, raise_on_missing: bool = False
@@ -246,7 +278,10 @@ class _Copier:
                 logger.error(msg)
                 raise ValueError(msg) from None
             logger.debug("copy_tree %s %s", src, target)
-            self._copy_tree_no_progress(src, target)
+            if self.with_progress:
+                self._copy_tree_with_progress(src, target, label="Backup")
+            else:
+                self._copy_tree_no_progress(src, target)
         elif self.with_progress:
             with Progress(transient=self.transient, console=self.console) as progress_bar:
                 copy_task = progress_bar.add_task(f"Backup {src.name}", total=src.stat().st_size)
