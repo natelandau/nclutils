@@ -101,13 +101,15 @@ class _Copier:
     def _copy_tree_no_progress(self, src: Path, dst: Path) -> None:
         """Copy a directory tree from src to dst using chunked file I/O.
 
-        Mirrors `shutil.copytree(src, dst)` (no kwargs) semantics: follows
-        symlinks, preserves dir + file mode, creates empty subdirs, propagates
-        errors. Used when no progress bar is wanted.
+        Approximates `shutil.copytree(src, dst)` (no kwargs) semantics: follows
+        symlinks (including to directories), preserves directory mode and
+        timestamps via `shutil.copystat`, preserves file mode via
+        `shutil.copymode`, creates empty subdirs, propagates errors. File
+        timestamps (atime, mtime) are intentionally not preserved because the
+        write itself bumps mtime; this matches the existing `copy_directory`
+        behavior.
         """
-        dst.mkdir(parents=True, exist_ok=True)
-        shutil.copystat(src, dst)
-        for current_root, _, files in src.walk():
+        for current_root, _, files in src.walk(follow_symlinks=True):
             rel = current_root.relative_to(src)
             new_parent = dst / rel
             new_parent.mkdir(parents=True, exist_ok=True)
@@ -146,6 +148,10 @@ class _Copier:
             shutil.rmtree(target)
 
         if src.is_dir():
+            if not check_python_version(3, 12):
+                msg = "Backup of a directory requires a minimum of Python version 3.12"
+                logger.error(msg)
+                raise ValueError(msg) from None
             logger.debug("copy_tree %s %s", src, target)
             self._copy_tree_no_progress(src, target)
         elif self.with_progress:

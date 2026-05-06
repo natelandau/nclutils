@@ -239,6 +239,45 @@ def test_backup_directory_follows_symlink_to_file(tmp_path: Path) -> None:
     assert (target / "link.txt").read_text() == "content"
 
 
+def test_backup_directory_follows_symlink_to_directory(tmp_path: Path) -> None:
+    """Verify directory backup descends into symlinks pointing to directories."""
+    # Given: A directory with a symlink to another directory containing a file
+    real_dir = tmp_path / "real_dir"
+    real_dir.mkdir()
+    (real_dir / "deep.txt").write_text("deep content")
+
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "link_to_dir").symlink_to(real_dir)
+
+    # When: Backing up
+    target = backup_path(src, backup_suffix=".bak")
+
+    # Then: The link is materialized as a real directory containing the symlink target's contents
+    assert target is not None
+    backed_up = target / "link_to_dir"
+    assert backed_up.exists()
+    assert backed_up.is_dir()
+    assert not backed_up.is_symlink()
+    assert (backed_up / "deep.txt").read_text() == "deep content"
+
+
+def test_backup_directory_raises_on_old_python(tmp_path: Path, mocker) -> None:
+    """Verify backup_path raises ValueError when called on a directory under Python < 3.12."""
+    # Given: A directory and a mocked check_python_version returning False
+    src = tmp_path / "src"
+    src.mkdir()
+    mocker.patch(
+        "nclutils.fs.filesystem.check_python_version",
+        autospec=True,
+        return_value=False,
+    )
+
+    # When/Then: Backing up a directory raises ValueError
+    with pytest.raises(ValueError, match=r"Python version 3\.12"):
+        backup_path(src, backup_suffix=".bak")
+
+
 def test_backup_directory_matches_shutil_copytree_output(tmp_path: Path) -> None:
     """Verify the chunked walk produces a tree functionally identical to shutil.copytree."""
     # Given: A non-trivial directory tree
