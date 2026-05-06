@@ -4,6 +4,7 @@ import logging
 import os
 import re
 import shutil
+from dataclasses import dataclass
 from pathlib import Path
 
 from rich.console import Console
@@ -57,6 +58,48 @@ def _do_copy_file(
         raise RuntimeError(msg) from None
 
     shutil.copymode(src, dst)
+
+
+def _sum_bytes(root: Path) -> tuple[int, int]:
+    """Return (total_bytes, file_count) for every file under root.
+
+    Used by `_Copier` to drive a determinate progress bar when `with_progress=True`.
+    The extra `os.stat` per file is the cost of an accurate ETA and percentage; callers
+    that pass `with_progress=False` never trigger this walk.
+    """
+    total = 0
+    count = 0
+    for current_root, _, files in root.walk():
+        for name in files:
+            total += (current_root / name).stat().st_size
+            count += 1
+    return total, count
+
+
+@dataclass(frozen=True, kw_only=True)
+class _Copier:
+    """Internal helper holding shared copy/backup configuration.
+
+    Public functions (`copy_file`, `copy_directory`, `backup_path`) build a one-shot
+    instance and delegate. Not exported.
+    """
+
+    with_progress: bool = False
+    transient: bool = True
+    console: Console | None = None
+    strict: bool = False
+
+    def copy_file(self, src: Path, dst: Path, *, keep_backup: bool = True) -> Path:
+        """Stub. Filled in by Task 4."""
+        raise NotImplementedError
+
+    def copy_directory(self, src: Path, dst: Path, *, keep_backup: bool = True) -> Path:
+        """Stub. Filled in by Tasks 5 and 6."""
+        raise NotImplementedError
+
+    def backup(self, src: Path, suffix: str = "") -> Path | None:
+        """Stub. Filled in by Tasks 2 and 3."""
+        raise NotImplementedError
 
 
 def backup_path(
