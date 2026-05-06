@@ -6,6 +6,7 @@ import re
 import shutil
 from pathlib import Path
 
+from rich.console import Console
 from rich.filesize import decimal
 from rich.markup import escape
 from rich.progress import Progress, TaskID
@@ -65,6 +66,7 @@ def backup_path(
     raise_on_missing: bool = False,
     with_progress: bool = False,
     transient: bool = True,
+    console: Console | None = None,
 ) -> Path | None:
     """Create a backup copy of a file/directory by appending a suffix to the original name. If no suffix is provided, generate one using a timestamp. Skip if the source path doesn't exist.
 
@@ -74,6 +76,7 @@ def backup_path(
         raise_on_missing (bool, optional): Raise if the source path does not exist. Defaults to False.
         with_progress (bool, optional): Show a progress bar during file copies. Defaults to False.
         transient (bool, optional): Remove the progress bar after completion. Defaults to True.
+        console (Console | None, optional): Rich `Console` to render the progress bar through. Defaults to None (Rich's default global console).
 
     Returns:
         Path | None: Path to the created backup file/directory, or None if the source does not exist and `raise_on_missing` is False.
@@ -107,7 +110,7 @@ def backup_path(
         logger.debug("copytree %s %s", src, target)
         shutil.copytree(src, target)
     elif with_progress:
-        with Progress(transient=transient) as progress_bar:
+        with Progress(transient=transient, console=console) as progress_bar:
             copy_task = progress_bar.add_task(f"Backup {src.name}", total=src.stat().st_size)
             logger.debug("copyfile %s %s", src, target)
             _do_copy_file(src, target, progress_bar=progress_bar, task=copy_task)
@@ -143,6 +146,7 @@ def copy_file(
     with_progress: bool = False,
     transient: bool = True,
     keep_backup: bool = True,
+    console: Console | None = None,
 ) -> Path:
     """Copy a file to a destination with optional progress tracking.
 
@@ -154,6 +158,7 @@ def copy_file(
         with_progress (bool, optional): Show a progress bar during copy. Defaults to False
         transient (bool, optional): Remove the progress bar after completion. Defaults to True
         keep_backup (bool, optional): Keep a backup of the destination file if it already exists. Defaults to True
+        console (Console | None, optional): Rich `Console` to render the progress bar through. Defaults to None (Rich's default global console).
 
     Returns:
         Path: Path to the destination file after copy completion
@@ -190,7 +195,7 @@ def copy_file(
     # Generate unique filename if destination exists and overwrite is disabled
     if dst.exists() and keep_backup:
         logger.debug("backup %s", dst)
-        backup_path(dst, with_progress=with_progress, transient=transient)
+        backup_path(dst, with_progress=with_progress, transient=transient, console=console)
 
     dst.parent.mkdir(parents=True, exist_ok=True)
 
@@ -203,7 +208,7 @@ def copy_file(
 
     # Copy file in chunks with progress bar to handle large files efficiently
     if with_progress:
-        with Progress(transient=transient) as progress_bar:
+        with Progress(transient=transient, console=console) as progress_bar:
             copy_task = progress_bar.add_task(f"Copy {src.name}", total=src.stat().st_size)
             _do_copy_file(src, dst, progress_bar=progress_bar, task=copy_task)
             logger.debug("copyfile %s %s", src, dst)
@@ -221,6 +226,7 @@ def copy_directory(
     with_progress: bool = False,
     transient: bool = True,
     keep_backup: bool = True,
+    console: Console | None = None,
 ) -> Path:
     """Copy a directory and its contents to a new destination path.
 
@@ -232,6 +238,7 @@ def copy_directory(
         with_progress (bool, optional): Show progress bar while copying files. Defaults to False.
         transient (bool, optional): Clear progress bar after completion. Defaults to True.
         keep_backup (bool, optional): Keep a backup of the destination directory if it already exists. Defaults to True.
+        console (Console | None, optional): Rich `Console` to render the progress bar through. Defaults to None (Rich's default global console).
 
     Returns:
         Path: Path to the destination directory
@@ -269,7 +276,7 @@ def copy_directory(
     # Generate unique destination name if it exists and we're not overwriting
     if dst.exists() and keep_backup:
         logger.debug("backup %s", dst)
-        backup_path(dst, with_progress=with_progress, transient=transient)
+        backup_path(dst, with_progress=with_progress, transient=transient, console=console)
 
     if dst.is_symlink():
         logger.debug("unlink %s", dst)
@@ -292,6 +299,7 @@ def copy_directory(
                 dst=new_parent / file,
                 with_progress=with_progress,
                 transient=transient,
+                console=console,
             )
 
     return dst

@@ -335,3 +335,23 @@ def test_copy_directory_preserves_directory_mode(tmp_path: Path) -> None:
 
     # Then: The mirrored subdirectory carries the same permission bits
     assert ((dst / "sub").stat().st_mode & 0o777) == 0o750
+
+
+def test_copy_file_uses_provided_console(tmp_path: Path) -> None:
+    """Verify copy_file routes its progress bar through the supplied Rich console."""
+    # Given: A source file and a Console that captures its output
+    from io import StringIO
+
+    from rich.console import Console
+
+    src = tmp_path / "test.txt"
+    dst = tmp_path / "test_copy.txt"
+    src.write_text("Hello, world!")
+    buffer = StringIO()
+    console = Console(file=buffer, force_terminal=False, width=80)
+
+    # When: Copying with a non-default console and a non-transient progress bar
+    copy_file(src, dst, with_progress=True, transient=False, console=console)
+
+    # Then: Progress output landed on the supplied console, not stdout
+    assert "Copy test.txt" in buffer.getvalue()
