@@ -5,12 +5,11 @@ from pathlib import Path
 from typing import Any
 
 import sh
-from rich.console import Console
 from rich.text import Text
 
-from .errors import ShellCommandFailedError, ShellCommandNotFoundError
+from nclutils.pretty_print import console as get_console
 
-console = Console()
+from .errors import ShellCommandFailedError, ShellCommandNotFoundError
 
 
 def which(cmd: str) -> str | None:
@@ -73,55 +72,27 @@ def run_command(  # noqa: C901, PLR0913
         ShellCommandFailedError: When the command exits with a non-zero status code
     """
     output_lines: list[str] = []
+    # Compile once instead of per-line — significant for high-volume output.
+    exclude_pattern = re.compile(exclude_regex) if exclude_regex else None
+    # Resolve the shared pretty_print console once per call so set_default()
+    # swaps in the host application still take effect between invocations.
+    console = get_console()
 
-    def _process_output(line: str, exclude_regex: str | None = None) -> None:
-        """Process a single line of command output.
-
-        Collect output lines for final return value and optionally display to console. Preserve ANSI color codes and formatting when displaying output.
-
-        Args:
-            line (str): A single line of output from the command execution
-            exclude_regex (str | None): Regex to exclude lines from the output. Defaults to None.
-        """
-        if exclude_regex and re.search(exclude_regex, line):
+    def _on_line(line: str) -> None:
+        if exclude_pattern is not None and exclude_pattern.search(line):
             return
-
         output_lines.append(str(line))
         if not quiet:
             console.print(Text.from_ansi(str(line)))
 
-    def _execute_command(*, sudo: bool = False) -> str:
-        """Execute the shell command and process its output.
-
-        Create and run the shell command with the configured arguments. Handle command execution errors by raising appropriate exceptions.
-
-        Args:
-            sudo (bool): Whether to run the command with sudo. Defaults to False.
-
-        Returns:
-            str: The complete command output as a string
-
-        Raises:
-            ShellCommandNotFoundError: When the command is not found in PATH
-            ShellCommandFailedError: When the command exits with a non-zero status code
-        """
-        # Build kwargs conditionally
-        cmd_kwargs: dict[str, Any] = {}
-
+    def _execute() -> str:
         ok_code = list(okay_codes) or [0]
         if fg:
-            cmd_kwargs.update({"_fg": True, "_ok_code": ok_code})
+            cmd_kwargs: dict[str, Any] = {"_fg": True, "_ok_code": ok_code}
         else:
-            # Only add these kwargs when NOT in foreground mode
-            cmd_kwargs.update(
-                {
-                    "_out": lambda line: _process_output(line, exclude_regex),
-                    "_ok_code": ok_code,
-                    "_tee": "err",
-                }
-            )
+            cmd_kwargs = {"_out": _on_line, "_ok_code": ok_code, "_tee": "err"}
             if err_to_out:
-                cmd_kwargs["_err"] = lambda line: _process_output(line, exclude_regex)
+                cmd_kwargs["_err"] = _on_line
 
         try:
             command = sh.Command(cmd)
@@ -130,7 +101,6 @@ def run_command(  # noqa: C901, PLR0913
                     command(*args, **cmd_kwargs)
             else:
                 command(*args, **cmd_kwargs)
-
             return "".join(output_lines)
         except sh.CommandNotFound as e:
             raise ShellCommandNotFoundError(e=e) from e
@@ -144,11 +114,11 @@ def run_command(  # noqa: C901, PLR0913
 
         try:
             with sh.pushd(pushd):
-                return _execute_command(sudo=sudo)
+                return _execute()
         except OSError as e:
             # chdir-time failures (missing dir, not-a-directory, permission) — surface
             # as ShellCommandFailedError so callers don't get raw OSError.
             msg = f"Directory {pushd} does not exist"
             raise ShellCommandFailedError(msg, e=e) from e
 
-    return _execute_command(sudo=sudo)
+    return _execute()
