@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import io
+import os
+import re
 from dataclasses import FrozenInstanceError
 from pathlib import Path
 
@@ -15,6 +18,7 @@ from nclutils.sh import (
     ShellCommandTimeoutError,
     which,
 )
+from nclutils.sh._streaming import pump_pipe
 
 
 class TestCompletedCommand:
@@ -159,3 +163,96 @@ class TestWhich:
 
         # Then: None
         assert result is None
+
+
+class TestStreamingPump:
+    """Tests for pump_pipe."""
+
+    def test_lines_appended_to_buffer(self) -> None:
+        """Verify pump_pipe decodes each line and appends it to the buffer."""
+        # Given: a pipe with two lines
+        read_fd, write_fd = os.pipe()
+        os.write(write_fd, b"hello\nworld\n")
+        os.close(write_fd)
+        reader = os.fdopen(read_fd, "rb")
+        buffer: list[str] = []
+
+        # When: pumping with no sink and no exclusion
+        pump_pipe(pipe=reader, buffer=buffer, sink=None, exclude_pattern=None)
+
+        # Then: both lines are in the buffer and the pipe is closed
+        assert buffer == ["hello\n", "world\n"]
+        assert reader.closed
+
+    def test_excluded_lines_are_dropped(self) -> None:
+        """Verify lines matching exclude_pattern are omitted from buffer and sink."""
+        # Given: a pipe with a kept line and a dropped line
+        read_fd, write_fd = os.pipe()
+        os.write(write_fd, b"keep me\ndrop me\n")
+        os.close(write_fd)
+        reader = os.fdopen(read_fd, "rb")
+        pattern = re.compile(r"drop")
+        buffer: list[str] = []
+
+        # When: pumping with an exclusion pattern
+        pump_pipe(pipe=reader, buffer=buffer, sink=None, exclude_pattern=pattern)
+
+        # Then: only the kept line survives
+        assert buffer == ["keep me\n"]
+
+    def test_sink_receives_lines(self) -> None:
+        """Verify pump_pipe writes each non-excluded line to the sink."""
+        # Given: a pipe with two lines and an in-memory sink
+        read_fd, write_fd = os.pipe()
+        os.write(write_fd, b"alpha\nbeta\n")
+        os.close(write_fd)
+        reader = os.fdopen(read_fd, "rb")
+        sink = io.StringIO()
+        buffer: list[str] = []
+
+        # When: pumping with a sink
+        pump_pipe(pipe=reader, buffer=buffer, sink=sink, exclude_pattern=None)
+
+        # Then: the sink contains both lines
+        assert sink.getvalue() == "alpha\nbeta\n"
+
+    def test_pipe_closed_on_completion(self) -> None:
+        """Verify pump_pipe closes the pipe after draining it."""
+        # Given: an empty pipe
+        read_fd, write_fd = os.pipe()
+        os.close(write_fd)
+        reader = os.fdopen(read_fd, "rb")
+
+        # When: pumping an empty pipe
+        pump_pipe(pipe=reader, buffer=[], sink=None, exclude_pattern=None)
+
+        # Then: the pipe is closed
+        assert reader.closed
+
+    def test_appends_to_existing_buffer(self) -> None:
+        """Verify pump_pipe appends to an existing buffer rather than replacing it."""
+        # Given: a pipe with one new line and a buffer with a pre-existing entry
+        read_fd, write_fd = os.pipe()
+        os.write(write_fd, b"new\n")
+        os.close(write_fd)
+        reader = os.fdopen(read_fd, "rb")
+        buffer: list[str] = ["pre-existing\n"]
+
+        # When: pumping
+        pump_pipe(pipe=reader, buffer=buffer, sink=None, exclude_pattern=None)
+
+        # Then: the new line is appended after the pre-existing one
+        assert buffer == ["pre-existing\n", "new\n"]
+
+    def test_invalid_utf8_raises_and_closes_pipe(self) -> None:
+        """Verify pump_pipe surfaces UnicodeDecodeError and still closes the pipe."""
+        # Given: a pipe with invalid utf-8 bytes
+        read_fd, write_fd = os.pipe()
+        os.write(write_fd, b"\xff\xfe invalid\n")
+        os.close(write_fd)
+        reader = os.fdopen(read_fd, "rb")
+
+        # When/Then: pumping raises UnicodeDecodeError and the pipe is closed afterward
+        with pytest.raises(UnicodeDecodeError):
+            pump_pipe(pipe=reader, buffer=[], sink=None, exclude_pattern=None)
+        assert reader.closed
