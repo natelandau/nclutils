@@ -141,7 +141,7 @@
             "PLR6301",
             "S101",
             "SLF001",  # Access a private attribute
-        ], "duties.py" = ["ANN001", "FBT001", "FBT002"], "src/nclutils/pretty_print/emitter.py" = [
+        ], "duties.py" = ["ANN001", "FBT001", "FBT002"], "src/nclutils/pp/emitter.py" = [
             "ANN401", # Dynamically typed expressions (typing.Any) are disallowed in `**kwargs`
         ] }
         select = ["ALL"]

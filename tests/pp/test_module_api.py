@@ -1,4 +1,4 @@
-"""Tests for nclutils.pretty_print's module-level API surface.
+"""Tests for nclutils.pp's module-level API surface.
 
 Covers the module-level wrapper functions (`info`, `success`, `step`, etc.),
 default-emitter management (`get_default` / `set_default`), and package-level
@@ -12,8 +12,8 @@ from typing import TYPE_CHECKING
 import pytest
 from rich.console import Console
 
-from nclutils.pretty_print import Emitter, Level, Theme, Verbosity, get_default, set_default
-from nclutils.pretty_print import emitter as emitter_module
+from nclutils.pp import Emitter, Level, Theme, Verbosity, get_default, set_default
+from nclutils.pp import emitter as emitter_module
 
 if TYPE_CHECKING:
     from .conftest import RecordingEmitterFactory
@@ -106,7 +106,7 @@ class TestModuleWrapperPerCallOverrides:
     def test_module_info_accepts_style_kwarg_without_collision(
         self, isolated_default: None, make_recording_emitter: RecordingEmitterFactory
     ) -> None:
-        """Verify nclutils.pretty_print.info(message, style=...) works through the module-level wrapper."""
+        """Verify nclutils.pp.info(message, style=...) works through the module-level wrapper."""
         # Given a default emitter wired to a recording stdout
         e, out, _ = make_recording_emitter()
         set_default(e)

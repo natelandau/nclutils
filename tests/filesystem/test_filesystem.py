@@ -5,13 +5,13 @@ from pathlib import Path
 
 import pytest
 
-from nclutils import console
 from nclutils.fs import (
     clean_directory,
     directory_tree,
     find_files,
     find_subdirectories,
 )
+from nclutils.pp import console
 
 
 def test_fetch_subdirectories_basic(temp_directory: Path) -> None:

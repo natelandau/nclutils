@@ -1,4 +1,4 @@
-"""nclutils.pretty_print is a tool for console output and logging."""
+"""nclutils.pp is a tool for console output and logging."""
 
 from .constants import LogLevel, Verbosity
 from .emitter import (

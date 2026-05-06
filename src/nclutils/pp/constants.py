@@ -1,4 +1,4 @@
-"""Constants for the nclutils.pretty_print package."""
+"""Constants for the nclutils.pp package."""
 
 from enum import IntEnum
 
@@ -16,10 +16,10 @@ class LogLevel(IntEnum):
 
     Use as the `loglevel=` kwarg on `Emitter` / `configure()` to set the
     minimum severity that gets written to the configured logfile. The
-    numerics match stdlib `logging` (`DEBUG=10`, `INFO=20`, …) so nclutils.pretty_print's
+    numerics match stdlib `logging` (`DEBUG=10`, `INFO=20`, …) so nclutils.pp's
     file substrate composes cleanly with stdlib tooling. `TRACE=5` is
-    nclutils.pretty_print-specific and is registered with `logging.addLevelName` at
-    import time of `nclutils.pretty_print._logsink`.
+    nclutils.pp-specific and is registered with `logging.addLevelName` at
+    import time of `nclutils.pp._logsink`.
     """
 
     TRACE = 5

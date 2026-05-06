@@ -1,54 +1,10 @@
 """Modules for script utilities.
 
-The top-level package surfaces the high-frequency console output helpers.
-Everything else lives in its submodule (e.g. `nclutils.fs`,
-`nclutils.strings`) and must be imported from there.
+Each public module lives in its own submodule and must be imported from
+there (e.g. `from nclutils import pp`, `from nclutils.fs import copy_file`,
+`from nclutils.strings import random_string`).
 """
 
-from .pretty_print import (
-    THEME,
-    Emitter,
-    Level,
-    LogLevel,
-    Theme,
-    Verbosity,
-    configure,
-    console,
-    critical,
-    debug,
-    dryrun,
-    err_console,
-    error,
-    get_default,
-    header,
-    info,
-    set_default,
-    step,
-    success,
-    trace,
-    warning,
-)
+from . import pp
 
-__all__ = [
-    "THEME",
-    "Emitter",
-    "Level",
-    "LogLevel",
-    "Theme",
-    "Verbosity",
-    "configure",
-    "console",
-    "critical",
-    "debug",
-    "dryrun",
-    "err_console",
-    "error",
-    "get_default",
-    "header",
-    "info",
-    "set_default",
-    "step",
-    "success",
-    "trace",
-    "warning",
-]
+__all__ = ["pp"]

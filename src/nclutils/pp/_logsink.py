@@ -1,7 +1,7 @@
-"""Private file-logging substrate for nclutils.pretty_print.
+"""Private file-logging substrate for nclutils.pp.
 
 Each `Emitter` constructs one `_LogSink`. The sink owns a stdlib
-`logging.Logger` (named `nclutils.pretty_print._{id(emitter)}`, with `propagate=False`)
+`logging.Logger` (named `nclutils.pp._{id(emitter)}`, with `propagate=False`)
 plus a single `FileHandler` opened lazily on first emit. Console
 rendering and file rendering are independent - the file ignores
 `quiet`/`verbosity`, the console ignores `loglevel`.
@@ -223,7 +223,7 @@ class _LogSink:
         if self._logfile is None:  # pragma: no cover
             msg = "_ensure_logger called with no logfile; this is a bug"
             raise RuntimeError(msg)
-        name = f"nclutils.pretty_print._{id(self)}"
+        name = f"nclutils.pp._{id(self)}"
         logger = logging.getLogger(name)
         # Close and remove any stale handlers from a prior instance that shared
         # this logger name via id() reuse - avoids ResourceWarning on GC.
