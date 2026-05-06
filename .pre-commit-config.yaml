@@ -1,11 +1,11 @@
 ---
 # https://pre-commit.com
-default_install_hook_types: [commit-msg, pre-commit]
-default_stages: [pre-commit, manual]
+default_install_hook_types: [ commit-msg, pre-commit, pre-push ]
+default_stages: [ pre-commit, manual ]
 fail_fast: true
 repos:
   - repo: "https://github.com/commitizen-tools/commitizen"
-    rev: v4.15.0
+    rev: v4.15.1
     hooks:
       - id: commitizen
       - id: commitizen-branch
@@ -49,13 +49,13 @@ repos:
       - id: fix-byte-order-marker
       - id: mixed-line-ending
       - id: trailing-whitespace
-        types: [python]
-        args: [--markdown-linebreak-ext=md]
+        types: [ python ]
+        args: [ --markdown-linebreak-ext=md ]
       - id: end-of-file-fixer
-        types: [python]
+        types: [ python ]
 
   - repo: "https://github.com/gitleaks/gitleaks"
-    rev: v8.30.0
+    rev: v8.30.1
     hooks:
       - id: gitleaks
 
@@ -64,21 +64,21 @@ repos:
     hooks:
       - id: ruff-check
         exclude: tests/
-        args: [--no-fix]
+        args: [ --no-fix ]
       - id: ruff-format
-        args: [--check]
+        args: [ --check ]
 
   - repo: "https://github.com/adhtruong/mirrors-typos"
     rev: v1.46.0
     hooks:
       - id: typos
-        stages: [commit-msg, pre-commit]
+        stages: [ commit-msg, pre-commit ]
 
   - repo: "https://github.com/crate-ci/committed"
     rev: v1.1.11
     hooks:
       - id: committed
-        stages: [commit-msg]
+        stages: [ commit-msg ]
 
   - repo: local
     hooks:
@@ -86,14 +86,15 @@ repos:
         name: shellcheck
         entry: shellcheck --check-sourced --severity=warning
         language: system
-        types: [shell]
+        types: [ shell ]
 
       - id: mypy
         name: mypy
-        entry: mypy --config-file pyproject.toml
+        entry: uv run mypy --config-file pyproject.toml src/
         exclude: "tests/|duties.py"
+        pass_filenames: false
         language: system
-        types: [python]
+        types: [ python ]
 
       - id: pytest
         name: pytest
