@@ -65,11 +65,12 @@ def _sum_bytes(root: Path) -> tuple[int, int]:
 
     Used by `_Copier` to drive a determinate progress bar when `with_progress=True`.
     The extra `os.stat` per file is the cost of an accurate ETA and percentage; callers
-    that pass `with_progress=False` never trigger this walk.
+    that pass `with_progress=False` never trigger this walk. Symlinked directories are
+    followed so the count matches `_copy_tree_with_progress`'s walk.
     """
     total = 0
     count = 0
-    for current_root, _, files in os.walk(root):
+    for current_root, _, files in os.walk(root, followlinks=True):
         base = Path(current_root)
         for name in files:
             total += (base / name).stat().st_size
@@ -227,7 +228,7 @@ class _Copier:
         total_bytes, _ = _sum_bytes(src)
 
         with Progress(transient=self.transient, console=self.console) as progress:
-            outer = progress.add_task(f"{label} {src.name}", total=total_bytes)
+            outer = progress.add_task(f"{label} {src.name}", total=total_bytes or None)
             inner = progress.add_task("", total=1, visible=False)
 
             for current_root, _, files in src.walk(follow_symlinks=True):
@@ -238,7 +239,9 @@ class _Copier:
                 for name in files:
                     src_file = current_root / name
                     size = src_file.stat().st_size
-                    progress.reset(inner, description=f"  └ {rel / name}", total=size, visible=True)
+                    progress.reset(
+                        inner, description=f"  └ {rel / name}", total=size or None, visible=True
+                    )
                     _do_copy_file(src_file, new_parent / name, progress_bar=progress, task=inner)
                     progress.update(outer, advance=size)
 

@@ -404,3 +404,32 @@ def test_copy_directory_unified_progress_with_backup(tmp_path: Path) -> None:
     assert "Backup dst" in output
     assert "Copy src" in output
     assert output.index("Backup dst") < output.index("Copy src")
+
+
+@pytest.mark.skipif(not check_python_version(3, 12), reason="Requires Python 3.12+")
+def test_copy_directory_progress_with_symlinked_subdir(tmp_path: Path) -> None:
+    """Verify unified progress reaches 100% for trees containing a symlinked directory."""
+    # Given: A tree with a symlink pointing to a directory containing a file
+    real = tmp_path / "real_dir"
+    real.mkdir()
+    (real / "deep.txt").write_text("deep content")
+
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "regular.txt").write_text("regular content")
+    (src / "link_to_dir").symlink_to(real)
+
+    dst = tmp_path / "dst"
+
+    buf = StringIO()
+    console = Console(file=buf, force_terminal=True, width=120)
+
+    # When: Copying with progress
+    copy_directory(src, dst, with_progress=True, transient=False, console=console)
+
+    output = buf.getvalue()
+
+    # Then: 100% is shown (would be missed if _sum_bytes didn't follow symlinks)
+    assert "100%" in output
+    # And: The symlink target's content was copied
+    assert (dst / "link_to_dir" / "deep.txt").read_text() == "deep content"
