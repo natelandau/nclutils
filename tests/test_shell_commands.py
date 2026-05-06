@@ -13,6 +13,7 @@ from nclutils.sh import (
     ShellCommandFailedError,
     ShellCommandNotFoundError,
     ShellCommandTimeoutError,
+    which,
 )
 
 
@@ -134,3 +135,27 @@ class TestErrorHierarchy:
 
         # Then: the executable name is in the message
         assert "not-a-real-command" in str(err)
+
+
+class TestWhich:
+    """Tests for which()."""
+
+    def test_returns_path_for_known_binary(self) -> None:
+        """Verify which() returns an absolute Path for a binary that exists."""
+        # Given: a binary that's reliably on PATH everywhere
+        # When: looking up sh
+        result = which("sh")
+
+        # Then: an absolute Path is returned
+        assert result is not None
+        assert isinstance(result, Path)
+        assert result.is_absolute()
+
+    def test_returns_none_for_unknown_binary(self) -> None:
+        """Verify which() returns None when the binary isn't on PATH."""
+        # Given: a name that won't exist on any system
+        # When: looking it up
+        result = which("definitely-not-a-real-binary-xyz-12345")
+
+        # Then: None
+        assert result is None

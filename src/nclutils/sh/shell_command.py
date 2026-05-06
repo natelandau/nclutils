@@ -1,6 +1,7 @@
 """Run and work with shell commands."""
 
 import re
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -21,29 +22,20 @@ def _decode_sh(value: bytes | str | None) -> str:
     return str(value)
 
 
-def which(cmd: str) -> str | None:
-    """Find the absolute path of a command in the system PATH.
+def which(cmd: str) -> Path | None:
+    """Return the absolute Path to ``cmd`` on PATH, or None if it is missing.
 
-    Search through the system PATH environment variable to locate the executable file for the given command name. Use this function to verify command availability before execution or to find the full path to a command.
+    Use this to gate optional features without raising. Wraps
+    :func:`shutil.which`; returns the same answer the shell would pick.
 
     Args:
-        cmd (str): The command name to search for in PATH
+        cmd: The executable name to look up.
 
     Returns:
-        str | None: The absolute path to the command if found, None if the command doesn't exist
-
+        The resolved absolute Path, or None if ``cmd`` is not on PATH.
     """
-    try:
-        result = sh.which(cmd)
-    except (sh.CommandNotFound, sh.ErrorReturnCode):
-        # `sh.which` shells out to /usr/bin/which, which exits 1 when the command is
-        # missing. CommandNotFound covers the case where /usr/bin/which itself is gone.
-        return None
-
-    if result is None:
-        return None
-
-    return str(result).strip()
+    found = shutil.which(cmd)
+    return Path(found) if found is not None else None
 
 
 def run_command(  # noqa: C901, PLR0913
