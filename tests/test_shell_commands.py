@@ -444,3 +444,58 @@ class TestRunCommandCapture:
 
             # Then: both produce the same resolved cwd
             assert result.cwd == tmp_path.resolve()
+
+
+class TestRunCommandStreaming:
+    """Tests for stream=True and exclude_regex."""
+
+    def test_stream_true_writes_stdout_live(self, capsys: pytest.CaptureFixture) -> None:
+        """Verify stream=True tees stdout to sys.stdout while still capturing it."""
+        # Given/When: a streamed echo
+        result = run_command(["echo", "streamed"], stream=True)
+        captured = capsys.readouterr()
+
+        # Then: live output and captured output both contain the line
+        assert "streamed" in captured.out
+        assert "streamed" in result.stdout
+
+    def test_stream_true_writes_stderr_live(self, capsys: pytest.CaptureFixture) -> None:
+        """Verify stream=True tees stderr to sys.stderr."""
+        # Given/When: a command that writes to stderr
+        result = run_command(["sh", "-c", "echo errline 1>&2"], stream=True)
+        captured = capsys.readouterr()
+
+        # Then: live stderr saw the line, captured stderr too
+        assert "errline" in captured.err
+        assert "errline" in result.stderr
+
+    def test_exclude_regex_drops_from_capture_and_stream(
+        self, capsys: pytest.CaptureFixture
+    ) -> None:
+        """Verify exclude_regex removes matching lines from both stream and capture."""
+        # Given/When: noisy output with a regex matching the noise
+        result = run_command(
+            ["sh", "-c", "echo keep; echo drop me; echo also keep"],
+            stream=True,
+            exclude_regex=r"^drop",
+        )
+        captured = capsys.readouterr()
+
+        # Then: noise gone from both
+        assert "drop me" not in captured.out
+        assert "drop me" not in result.stdout
+        assert "keep" in result.stdout
+        assert "also keep" in result.stdout
+
+    def test_exclude_regex_applies_when_stream_false(self) -> None:
+        """Verify exclude_regex still filters captured output when stream=False."""
+        # Given/When: filter without streaming
+        result = run_command(
+            ["sh", "-c", "echo a; echo b; echo c"],
+            exclude_regex=r"^b$",
+        )
+
+        # Then: b is gone from capture
+        assert "a\n" in result.stdout
+        assert "b" not in result.stdout
+        assert "c\n" in result.stdout
