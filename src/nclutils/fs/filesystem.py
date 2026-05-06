@@ -4,6 +4,7 @@ import logging
 import os
 import re
 import shutil
+from dataclasses import dataclass
 from pathlib import Path
 
 from rich.console import Console
@@ -59,76 +60,303 @@ def _do_copy_file(
     shutil.copymode(src, dst)
 
 
+def _sum_bytes(root: Path) -> tuple[int, int]:
+    """Return (total_bytes, file_count) for every file under root.
+
+    Used by `_Copier` to drive a determinate progress bar when `with_progress=True`.
+    The extra `os.stat` per file is the cost of an accurate ETA and percentage; callers
+    that pass `with_progress=False` never trigger this walk. Symlinked directories are
+    followed so the count matches `_copy_tree_with_progress`'s walk.
+    """
+    total = 0
+    count = 0
+    for current_root, _, files in os.walk(root, followlinks=True):
+        base = Path(current_root)
+        for name in files:
+            total += (base / name).stat().st_size
+            count += 1
+    return total, count
+
+
+@dataclass(frozen=True, kw_only=True)
+class _Copier:
+    """Internal helper holding shared copy/backup configuration.
+
+    Public functions (`copy_file`, `copy_directory`, `backup_path`) build a one-shot
+    instance and delegate. Not exported.
+    """
+
+    with_progress: bool = False
+    transient: bool = True
+    console: Console | None = None
+    strict: bool = False
+
+    def copy_file(self, src: Path, dst: Path, *, keep_backup: bool = True) -> Path:
+        """Copy a file to a destination using this Copier's shared configuration.
+
+        Validates that src is a regular existing file. If dst exists and keep_backup
+        is True, snapshots dst via self.backup() before overwriting.
+        """
+        src = src.expanduser().resolve()
+        dst = dst.expanduser().resolve()
+
+        if not src.exists():
+            msg = f"source file `{src}` does not exist. Did not copy."
+            logger.error(msg)
+            raise FileNotFoundError(msg) from None
+
+        if src.is_dir():
+            msg = f"source `{src}` is a directory, not a file. Did not copy."
+            logger.error(msg)
+            raise IsADirectoryError(msg) from None
+
+        if not src.is_file():
+            msg = f"source `{src}` is not a regular file. Did not copy."
+            logger.error(msg)
+            raise OSError(msg) from None
+
+        if src == dst or (dst.exists() and src.samefile(dst)):
+            msg = (
+                f"source file `{src}` and destination file `{dst}` are the same file. Did not copy."
+            )
+            if self.strict:
+                logger.error(msg)
+                raise shutil.SameFileError(msg) from None
+            logger.warning(msg)
+            return src
+
+        if dst.exists() and keep_backup:
+            logger.debug("backup %s", dst)
+            self.backup(dst)
+
+        dst.parent.mkdir(parents=True, exist_ok=True)
+
+        if dst.is_symlink():
+            logger.debug("unlink %s", dst)
+            dst.unlink()
+        elif dst.is_dir():
+            logger.debug("rmtree %s", dst)
+            shutil.rmtree(dst)
+
+        self._copy_single_file(src, dst, label="Copy")
+
+        return dst
+
+    def copy_directory(self, src: Path, dst: Path, *, keep_backup: bool = True) -> Path:  # noqa: C901
+        """Copy a directory tree to a new destination using this Copier's shared configuration.
+
+        Validates Python 3.12+, src exists and is a directory, src and dst are not
+        the same and not in a parent/child relationship. If dst exists and
+        keep_backup is True, snapshots dst via self.backup() first.
+        """
+        if not check_python_version(3, 12):
+            msg = "Copy directory requires a minimum of Python version 3.12"
+            logger.error(msg)
+            raise ValueError(msg) from None
+
+        src = src.expanduser().resolve()
+        dst = dst.expanduser().resolve()
+
+        # Path.is_dir() returns False for missing paths, so it covers the existence check too.
+        if not src.is_dir():
+            msg = f"source directory `{src}` does not exist or is not a directory. Did not copy."
+            logger.error(msg)
+            raise FileNotFoundError(msg) from None
+
+        # Prevent copying a directory to itself or into itself to avoid infinite recursion
+        if src == dst:
+            msg = f"source directory `{src}` and destination directory `{dst}` are the same directory. Did not copy."
+            if self.strict:
+                logger.error(msg)
+                raise shutil.SameFileError(msg) from None
+            logger.warning(msg)
+            return src
+
+        if src in dst.parents or dst in src.parents:
+            msg = f"source directory `{src}` and destination directory `{dst}` have parent/child relationship. Did not copy."
+            if self.strict:
+                logger.error(msg)
+                raise ValueError(msg) from None
+            logger.warning(msg)
+            return src
+
+        if dst.exists() and keep_backup:
+            logger.debug("backup %s", dst)
+            self.backup(dst)
+
+        if dst.is_symlink():
+            logger.debug("unlink %s", dst)
+            dst.unlink()
+        elif dst.is_dir():
+            logger.debug("rmtree %s", dst)
+            shutil.rmtree(dst)
+
+        logger.debug("walk %s", src)
+        if self.with_progress:
+            self._copy_tree_with_progress(src, dst, label="Copy")
+        else:
+            self._copy_tree_no_progress(src, dst)
+        return dst
+
+    def _copy_tree_no_progress(self, src: Path, dst: Path) -> None:
+        """Copy a directory tree from src to dst using chunked file I/O.
+
+        Approximates `shutil.copytree(src, dst)` (no kwargs) semantics: follows
+        symlinks (including to directories), preserves directory mode and
+        timestamps via `shutil.copystat`, preserves file mode via
+        `shutil.copymode`, creates empty subdirs, propagates errors. File
+        timestamps (atime, mtime) are intentionally not preserved because the
+        write itself bumps mtime; this matches the existing `copy_directory`
+        behavior.
+        """
+        for current_root, _, files in src.walk(follow_symlinks=True):
+            rel = current_root.relative_to(src)
+            new_parent = dst / rel
+            new_parent.mkdir(parents=True, exist_ok=True)
+            shutil.copystat(current_root, new_parent)
+            for name in files:
+                _do_copy_file(current_root / name, new_parent / name)
+
+    def _copy_tree_with_progress(self, src: Path, dst: Path, label: str) -> None:
+        """Copy a directory tree with a unified Progress bar.
+
+        Pre-walks `src` once to compute total bytes, then drives a single
+        `Progress` containing one outer total-bytes task and one recycled
+        per-file subtask. `label` is used as the description prefix
+        (e.g. "Copy" or "Backup"). Mirrors `_copy_tree_no_progress`'s
+        semantics: follows symlinks, preserves directory mode/timestamps via
+        `shutil.copystat`, preserves file mode via `shutil.copymode`, and
+        intentionally does not preserve file mtime (the write bumps it).
+        """
+        total_bytes, _ = _sum_bytes(src)
+
+        with Progress(transient=self.transient, console=self.console) as progress:
+            outer = progress.add_task(f"{label} {src.name}", total=total_bytes or None)
+            inner = progress.add_task("", total=None, visible=False)
+
+            for current_root, _, files in src.walk(follow_symlinks=True):
+                rel = current_root.relative_to(src)
+                new_parent = dst / rel
+                new_parent.mkdir(parents=True, exist_ok=True)
+                shutil.copystat(current_root, new_parent)
+                for name in files:
+                    src_file = current_root / name
+                    size = src_file.stat().st_size
+                    progress.reset(
+                        inner, description=f"  └ {rel / name}", total=size or None, visible=True
+                    )
+                    _do_copy_file(src_file, new_parent / name, progress_bar=progress, task=inner)
+                    progress.update(outer, advance=size)
+
+    def _copy_single_file(self, src: Path, dst: Path, label: str) -> None:
+        """Copy a single file with optional Progress, using this Copier's config.
+
+        Shared by `copy_file` and `backup`'s file branch so both call sites
+        agree on Progress setup, label format, and debug logging.
+        """
+        if self.with_progress:
+            with Progress(transient=self.transient, console=self.console) as progress_bar:
+                copy_task = progress_bar.add_task(f"{label} {src.name}", total=src.stat().st_size)
+                _do_copy_file(src, dst, progress_bar=progress_bar, task=copy_task)
+        else:
+            _do_copy_file(src, dst)
+        logger.debug("copyfile %s %s", src, dst)
+
+    def backup(self, src: Path, backup_suffix: str = "") -> Path | None:
+        """Create a backup copy of `src` by appending `backup_suffix` to its name.
+
+        If `backup_suffix` is empty, generates a timestamped suffix. Skips silently when
+        `src` does not exist (or raises `FileNotFoundError` if `self.strict` is True).
+        """
+        if not src.exists():
+            msg = f"skip backup: does not exist `{src}`"
+            if self.strict:
+                logger.error(msg)
+                raise FileNotFoundError(msg) from None
+            logger.warning(msg)
+            return None
+
+        if not backup_suffix:
+            backup_suffix = "." + new_timestamp_uid() + ".bak"
+
+        target = src.with_name(src.name + backup_suffix)
+
+        # Clear the target if anything is already there. This isn't atomic across processes,
+        # but the timestamped default suffix makes a real collision very rare.
+        if target.is_symlink() or target.is_file():
+            logger.debug("unlink %s", target)
+            target.unlink()
+        elif target.is_dir():
+            logger.debug("rmtree %s", target)
+            shutil.rmtree(target)
+
+        if src.is_dir():
+            if not check_python_version(3, 12):
+                msg = "Backup of a directory requires a minimum of Python version 3.12"
+                logger.error(msg)
+                raise ValueError(msg) from None
+            logger.debug("copy_tree %s %s", src, target)
+            if self.with_progress:
+                self._copy_tree_with_progress(src, target, label="Backup")
+            else:
+                self._copy_tree_no_progress(src, target)
+        else:
+            self._copy_single_file(src, target, label="Backup")
+
+        return target
+
+
 def backup_path(
     src: Path,
     backup_suffix: str = "",
     *,
-    raise_on_missing: bool = False,
     with_progress: bool = False,
     transient: bool = True,
     console: Console | None = None,
+    strict: bool = False,
 ) -> Path | None:
-    """Create a backup copy of a file/directory by appending a suffix to the original name. If no suffix is provided, generate one using a timestamp. Skip if the source path doesn't exist.
+    """Create a backup copy of a file/directory by appending a suffix to the original name.
+
+    If no suffix is provided, generate one using a timestamp. By default, returns
+    None when the source path does not exist; pass `strict=True` to raise
+    `FileNotFoundError` instead.
 
     Args:
         src (Path): Path to the file or directory to back up.
         backup_suffix (str, optional): Custom suffix to append to the backup name. Defaults to a timestamp-based suffix.
-        raise_on_missing (bool, optional): Raise if the source path does not exist. Defaults to False.
         with_progress (bool, optional): Show a progress bar during file copies. Defaults to False.
         transient (bool, optional): Remove the progress bar after completion. Defaults to True.
-        console (Console | None, optional): Rich `Console` to render the progress bar through. Defaults to None (Rich's default global console).
+        console (Console | None, optional): Rich `Console` to render the progress bar through. Defaults to None.
+        strict (bool, optional): Raise on silent failure modes (missing source). Defaults to False.
 
     Returns:
-        Path | None: Path to the created backup file/directory, or None if the source does not exist and `raise_on_missing` is False.
+        Path | None: Path to the created backup file/directory, or None if the source does not exist and `strict` is False.
 
     Raises:
-        FileNotFoundError: If the source path does not exist and `raise_on_missing` is True.
+        FileNotFoundError: If the source path does not exist and `strict` is True.
     """
-    if not src.exists():
-        msg = f"skip backup: does not exist `{src}`"
-        if raise_on_missing:
-            logger.error(msg)
-            raise FileNotFoundError(msg) from None
-        logger.warning(msg)
-        return None
-
-    if not backup_suffix:
-        backup_suffix = "." + new_timestamp_uid() + ".bak"
-
-    target = src.with_name(src.name + backup_suffix)
-
-    # Clear the target if anything is already there. This isn't atomic across processes,
-    # but the timestamped default suffix makes a real collision very rare.
-    if target.is_symlink() or target.is_file():
-        logger.debug("unlink %s", target)
-        target.unlink()
-    elif target.is_dir():
-        logger.debug("rmtree %s", target)
-        shutil.rmtree(target)
-
-    if src.is_dir():
-        logger.debug("copytree %s %s", src, target)
-        shutil.copytree(src, target)
-    elif with_progress:
-        with Progress(transient=transient, console=console) as progress_bar:
-            copy_task = progress_bar.add_task(f"Backup {src.name}", total=src.stat().st_size)
-            logger.debug("copyfile %s %s", src, target)
-            _do_copy_file(src, target, progress_bar=progress_bar, task=copy_task)
-    else:
-        logger.debug("copyfile %s %s", src, target)
-        _do_copy_file(src, target)
-
-    return target
+    return _Copier(
+        with_progress=with_progress, transient=transient, console=console, strict=strict
+    ).backup(src, backup_suffix)
 
 
-def clean_directory(directory: Path) -> None:
-    """Recursively cleans up the contents of a directory, deleting all files and subdirectories without deleting the directory itself.
+def clean_directory(directory: Path, *, strict: bool = False) -> None:
+    """Recursively clean up the contents of a directory.
+
+    Delete all files and subdirectories without deleting the directory itself.
 
     Args:
         directory (Path): The directory to clean up.
+        strict (bool, optional): Raise NotADirectoryError if `directory` is not an existing directory. Defaults to False.
+
+    Raises:
+        NotADirectoryError: If `directory` is not an existing directory and `strict` is True.
     """
     if not directory.is_dir():
         msg = f"{directory} is not a directory. Did not clean up."
+        if strict:
+            logger.error(msg)
+            raise NotADirectoryError(msg) from None
         logger.warning(msg)
         return
 
@@ -139,7 +367,7 @@ def clean_directory(directory: Path) -> None:
             shutil.rmtree(child)
 
 
-def copy_file(
+def copy_file(  # noqa: PLR0913
     src: Path,
     dst: Path,
     *,
@@ -147,6 +375,7 @@ def copy_file(
     transient: bool = True,
     keep_backup: bool = True,
     console: Console | None = None,
+    strict: bool = False,
 ) -> Path:
     """Copy a file to a destination with optional progress tracking.
 
@@ -158,65 +387,24 @@ def copy_file(
         with_progress (bool, optional): Show a progress bar during copy. Defaults to False.
         transient (bool, optional): Remove the progress bar after completion. Defaults to True.
         keep_backup (bool, optional): Keep a backup of the destination file if it already exists. Defaults to True.
-        console (Console | None, optional): Rich `Console` to render the progress bar through. Defaults to None (Rich's default global console).
+        console (Console | None, optional): Rich `Console` to render the progress bar through. Defaults to None.
+        strict (bool, optional): Raise on silent failure modes (src equals dst). Defaults to False.
 
     Returns:
-        Path: Path to the destination file after copy completion
+        Path: Path to the destination file after copy completion.
 
     Raises:
-        FileNotFoundError: If the source path does not exist
-        IsADirectoryError: If the source path is a directory
-        OSError: If the source path exists but is not a regular file
+        FileNotFoundError: If the source path does not exist.
+        IsADirectoryError: If the source path is a directory.
+        OSError: If the source path exists but is not a regular file.
+        shutil.SameFileError: If src and dst resolve to the same file and `strict` is True.
     """
-    src = src.expanduser().resolve()
-    dst = dst.expanduser().resolve()
-
-    if not src.exists():
-        msg = f"source file `{src}` does not exist. Did not copy."
-        logger.error(msg)
-        raise FileNotFoundError(msg) from None
-
-    if src.is_dir():
-        msg = f"source `{src}` is a directory, not a file. Did not copy."
-        logger.error(msg)
-        raise IsADirectoryError(msg) from None
-
-    if not src.is_file():
-        msg = f"source `{src}` is not a regular file. Did not copy."
-        logger.error(msg)
-        raise OSError(msg) from None
-
-    if src == dst or (dst.exists() and src.samefile(dst)):
-        msg = f"source file `{src}` and destination file `{dst}` are the same file. Did not copy."
-        logger.warning(msg)
-        return src
-
-    if dst.exists() and keep_backup:
-        logger.debug("backup %s", dst)
-        backup_path(dst, with_progress=with_progress, transient=transient, console=console)
-
-    dst.parent.mkdir(parents=True, exist_ok=True)
-
-    if dst.is_symlink():
-        logger.debug("unlink %s", dst)
-        dst.unlink()
-    elif dst.is_dir():
-        logger.debug("rmtree %s", dst)
-        shutil.rmtree(dst)
-
-    if with_progress:
-        with Progress(transient=transient, console=console) as progress_bar:
-            copy_task = progress_bar.add_task(f"Copy {src.name}", total=src.stat().st_size)
-            _do_copy_file(src, dst, progress_bar=progress_bar, task=copy_task)
-            logger.debug("copyfile %s %s", src, dst)
-    else:
-        _do_copy_file(src, dst)
-        logger.debug("copyfile %s %s", src, dst)
-
-    return dst
+    return _Copier(
+        with_progress=with_progress, transient=transient, console=console, strict=strict
+    ).copy_file(src, dst, keep_backup=keep_backup)
 
 
-def copy_directory(
+def copy_directory(  # noqa: PLR0913
     src: Path,
     dst: Path,
     *,
@@ -224,78 +412,32 @@ def copy_directory(
     transient: bool = True,
     keep_backup: bool = True,
     console: Console | None = None,
+    strict: bool = False,
 ) -> Path:
     """Copy a directory and its contents to a new destination path.
 
-    Recursively copy all files and subdirectories from the source directory to the destination, preserving the directory structure. Display an optional progress bar for each file being copied.
+    Recursively copy all files and subdirectories from the source directory to the destination, preserving the directory structure. Display an optional progress bar for the copy.
 
     Args:
-        src (Path): Source directory to copy from
-        dst (Path): Destination directory to copy to
+        src (Path): Source directory to copy from.
+        dst (Path): Destination directory to copy to.
         with_progress (bool, optional): Show progress bar while copying files. Defaults to False.
         transient (bool, optional): Clear progress bar after completion. Defaults to True.
         keep_backup (bool, optional): Keep a backup of the destination directory if it already exists. Defaults to True.
-        console (Console | None, optional): Rich `Console` to render the progress bar through. Defaults to None (Rich's default global console).
+        console (Console | None, optional): Rich `Console` to render the progress bar through. Defaults to None.
+        strict (bool, optional): Raise on silent failure modes (src equals dst, or src/dst nested). Defaults to False.
 
     Returns:
-        Path: Path to the destination directory
+        Path: Path to the destination directory.
 
     Raises:
-        FileNotFoundError: If source directory does not exist or is not a directory
-        ValueError: If Python version is less than 3.12
+        FileNotFoundError: If source directory does not exist or is not a directory.
+        ValueError: If Python version is less than 3.12, or if src/dst have a parent/child relationship and `strict` is True.
+        shutil.SameFileError: If src and dst are the same directory and `strict` is True.
     """
-    if not check_python_version(3, 12):
-        msg = "Copy file requires a minimum of Python version 3.12"
-        logger.error(msg)
-        raise ValueError(msg) from None
-
-    src = src.expanduser().resolve()
-    dst = dst.expanduser().resolve()
-
-    if not src.exists() or not src.is_dir():
-        msg = f"source directory `{src}` does not exist or is not a directory. Did not copy."
-        logger.error(msg)
-        raise FileNotFoundError(msg) from None
-
-    # Prevent copying a directory to itself or into itself to avoid infinite recursion
-    if src == dst:
-        msg = f"source directory `{src}` and destination directory `{dst}` are the same directory. Did not copy."
-        logger.warning(msg)
-        return src
-
-    if src in dst.parents or dst in src.parents:
-        msg = f"source directory `{src}` and destination directory `{dst}` have parent/child relationship. Did not copy."
-        logger.warning(msg)
-        return src
-
-    if dst.exists() and keep_backup:
-        logger.debug("backup %s", dst)
-        backup_path(dst, with_progress=with_progress, transient=transient, console=console)
-
-    if dst.is_symlink():
-        logger.debug("unlink %s", dst)
-        dst.unlink()
-    elif dst.is_dir():
-        logger.debug("rmtree %s", dst)
-        shutil.rmtree(dst)
-
-    logger.debug("walk %s", src)
-    for root, _, files in src.walk():
-        rel = root.relative_to(src)
-        new_parent = dst / rel
-        new_parent.mkdir(parents=True, exist_ok=True)
-        shutil.copystat(root, new_parent)
-
-        for file in files:
-            copy_file(
-                src=root / file,
-                dst=new_parent / file,
-                with_progress=with_progress,
-                transient=transient,
-                console=console,
-            )
-
-    return dst
+    return _Copier(
+        with_progress=with_progress, transient=transient, console=console, strict=strict
+    ).copy_directory(src, dst, keep_backup=keep_backup)
 
 
 def directory_tree(directory: Path, *, show_hidden: bool = False) -> Tree:
@@ -464,20 +606,26 @@ def find_files(
     return sorted(results)
 
 
-def find_user_home_dir(username: str | None = None) -> Path | None:
+def find_user_home_dir(username: str | None = None, *, strict: bool = False) -> Path | None:
     """Locate and return the home directory path for a given or current user.
 
     If no username is provided, fall back to the `SUDO_USER` environment variable so
     scripts running under sudo resolve the invoking user's home rather than `/root`.
     On POSIX systems, lookups go through the standard library `pwd` module
     (`pwd.getpwnam(username).pw_dir`). On platforms without `pwd` (e.g. Windows),
-    return `None` and log a warning.
+    return `None` and log a warning. The `pwd` unavailability path always returns None
+    regardless of `strict`, since it represents a platform capability rather than a
+    runtime error.
 
     Args:
         username (str | None, optional): Username to find home directory for. If None, use SUDO_USER or the current user. Defaults to None.
+        strict (bool, optional): Raise KeyError on unknown user. Defaults to False.
 
     Returns:
-        Path | None: Home directory path for the specified user, or None if the user is not found or the platform does not provide `pwd`.
+        Path | None: Home directory path for the specified user, or None if the user is not found, or the platform does not provide `pwd`, or both.
+
+    Raises:
+        KeyError: If `username` is not a known user and `strict` is True.
     """
     if username is None:
         sudo_user = os.getenv("SUDO_USER")
@@ -494,5 +642,9 @@ def find_user_home_dir(username: str | None = None) -> Path | None:
     try:
         return Path(pwd.getpwnam(username).pw_dir)
     except KeyError:
-        logger.debug("pwd lookup failed for `%s`", username)
+        msg = f"pwd lookup failed for `{username}`"
+        if strict:
+            logger.error(msg)  # noqa: TRY400
+            raise
+        logger.debug(msg)
         return None

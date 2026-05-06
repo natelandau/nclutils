@@ -1,5 +1,6 @@
 """Test the copy_file function."""
 
+import shutil
 from collections.abc import Callable
 from io import StringIO
 from pathlib import Path
@@ -353,3 +354,119 @@ def test_copy_file_uses_provided_console(tmp_path: Path) -> None:
 
     # Then: Progress output landed on the supplied console, not stdout
     assert "Copy test.txt" in buffer.getvalue()
+
+
+@pytest.mark.skipif(not check_python_version(3, 12), reason="Requires Python 3.12+")
+def test_copy_directory_unified_progress_no_backup(tmp_path: Path) -> None:
+    """Verify copy_directory shows a single Copy phase when dst does not exist."""
+    # Given: A source directory with a couple of files, no pre-existing dst
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "a.txt").write_text("hello")
+    (src / "b.txt").write_text("world")
+    dst = tmp_path / "dst"
+
+    buf = StringIO()
+    console = Console(file=buf, force_terminal=True, width=120)
+
+    # When: Copying with progress and a non-transient bar
+    copy_directory(src, dst, with_progress=True, transient=False, console=console)
+
+    output = buf.getvalue()
+
+    # Then: One Copy phase header appears, no Backup phase header
+    assert "Copy src" in output
+    assert "Backup" not in output
+    # And: 100% completion is shown
+    assert "100%" in output
+
+
+@pytest.mark.skipif(not check_python_version(3, 12), reason="Requires Python 3.12+")
+def test_copy_directory_unified_progress_with_backup(tmp_path: Path) -> None:
+    """Verify copy_directory shows Backup then Copy when dst exists."""
+    # Given: An existing dst directory and a fresh src
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "new.txt").write_text("new content")
+
+    dst = tmp_path / "dst"
+    dst.mkdir()
+    (dst / "old.txt").write_text("old content")
+
+    buf = StringIO()
+    console = Console(file=buf, force_terminal=True, width=120)
+
+    # When: Copying with progress, backup enabled, non-transient
+    copy_directory(src, dst, with_progress=True, transient=False, keep_backup=True, console=console)
+
+    output = buf.getvalue()
+
+    # Then: Both Backup and Copy phase headers appear, in order
+    assert "Backup dst" in output
+    assert "Copy src" in output
+    assert output.index("Backup dst") < output.index("Copy src")
+
+
+def test_copy_file_same_file_strict_raises(tmp_path: Path) -> None:
+    """Verify copy_file raises shutil.SameFileError when strict=True and src == dst."""
+    # Given: A file that exists
+    f = tmp_path / "test.txt"
+    f.write_text("hi")
+
+    # When/Then: Copying a file to itself under strict raises SameFileError
+    with pytest.raises(shutil.SameFileError):
+        copy_file(f, f, strict=True)
+
+
+@pytest.mark.skipif(not check_python_version(3, 12), reason="Requires Python 3.12+")
+def test_copy_directory_same_dir_strict_raises(tmp_path: Path) -> None:
+    """Verify copy_directory raises shutil.SameFileError when strict=True and src == dst."""
+    # Given: A directory
+    d = tmp_path / "d"
+    d.mkdir()
+
+    # When/Then: Copying a directory to itself under strict raises SameFileError
+    with pytest.raises(shutil.SameFileError):
+        copy_directory(d, d, strict=True)
+
+
+@pytest.mark.skipif(not check_python_version(3, 12), reason="Requires Python 3.12+")
+def test_copy_directory_parent_child_strict_raises(tmp_path: Path) -> None:
+    """Verify copy_directory raises ValueError when strict=True and src/dst are nested."""
+    # Given: src and dst in a parent-child relationship
+    src = tmp_path / "parent"
+    src.mkdir()
+    dst = src / "child"
+
+    # When/Then: Nested src/dst under strict raises ValueError
+    with pytest.raises(ValueError, match="parent/child"):
+        copy_directory(src, dst, strict=True)
+
+
+@pytest.mark.skipif(not check_python_version(3, 12), reason="Requires Python 3.12+")
+def test_copy_directory_progress_with_symlinked_subdir(tmp_path: Path) -> None:
+    """Verify unified progress reaches 100% for trees containing a symlinked directory."""
+    # Given: A tree with a symlink pointing to a directory containing a file
+    real = tmp_path / "real_dir"
+    real.mkdir()
+    (real / "deep.txt").write_text("deep content")
+
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "regular.txt").write_text("regular content")
+    (src / "link_to_dir").symlink_to(real)
+
+    dst = tmp_path / "dst"
+
+    buf = StringIO()
+    console = Console(file=buf, force_terminal=True, width=120)
+
+    # When: Copying with progress
+    copy_directory(src, dst, with_progress=True, transient=False, console=console)
+
+    output = buf.getvalue()
+
+    # Then: 100% is shown (would be missed if _sum_bytes didn't follow symlinks)
+    assert "100%" in output
+    # And: The symlink target's content was copied
+    assert (dst / "link_to_dir" / "deep.txt").read_text() == "deep content"

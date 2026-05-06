@@ -1,10 +1,16 @@
 """Test the backup function."""
 
+import shutil
+import stat
 from pathlib import Path
 
 import pytest
+from pytest_mock import MockerFixture
 
 from nclutils.fs import backup_path
+from nclutils.utils import check_python_version
+
+requires_py312 = pytest.mark.skipif(not check_python_version(3, 12), reason="Requires Python 3.12+")
 
 
 @pytest.fixture
@@ -91,6 +97,7 @@ def test_backup_multiple_backups_same_backup_suffix(
     assert len(list(backup3.parent.glob("*.bak"))) == 1
 
 
+@requires_py312
 def test_backup_directory(backup_test_path: tuple[Path, Path, Path]) -> None:
     """Verify backing up directories preserves structure and content."""
     # Given: A test directory
@@ -110,27 +117,24 @@ def test_backup_directory(backup_test_path: tuple[Path, Path, Path]) -> None:
 
 
 def test_backup_missing_file(tmp_path: Path) -> None:
-    """Verify backup raises error for missing files when configured."""
-    # Given: A non-existent file path
+    """Verify backup_path raises FileNotFoundError under strict=True when src is missing."""
+    # Given: A path that does not exist
     test_file = tmp_path / "test.txt"
 
-    # When/Then: Backup attempt raises error
+    # When/Then: strict=True surfaces the missing source
     with pytest.raises(FileNotFoundError):
-        backup_path(test_file, raise_on_missing=True)
-
-    assert not test_file.exists()
+        backup_path(test_file, strict=True)
 
 
 def test_backup_missing_file_no_raise(tmp_path: Path) -> None:
-    """Verify backup handles missing files gracefully when configured."""
-    # Given: A non-existent file path
+    """Verify backup_path returns None when src is missing and strict is False."""
+    # Given: A path that does not exist
     test_file = tmp_path / "test.txt"
 
-    # When: Creating backup with raise_on_missing=False
-    output = backup_path(test_file, raise_on_missing=False)
+    # When: Creating backup without strict
+    output = backup_path(test_file, strict=False)
 
-    # Then: No backup created
-    assert not test_file.exists()
+    # Then: Output is None
     assert output is None
 
 
@@ -149,6 +153,7 @@ def test_backup_path_preserves_file_mode(tmp_path: Path) -> None:
     assert (backup.stat().st_mode & 0o777) == 0o755
 
 
+@requires_py312
 def test_backup_directory_overwrites_existing_file_at_target(tmp_path: Path) -> None:
     """Verify backup_path replaces an existing regular file at the backup target when source is a directory."""
     # Given: A source directory and a regular file already sitting at the backup target
@@ -165,3 +170,146 @@ def test_backup_directory_overwrites_existing_file_at_target(tmp_path: Path) -> 
     assert backup == target
     assert backup.is_dir()
     assert (backup / "inner.txt").read_text() == "payload"
+
+
+@requires_py312
+def test_backup_directory_preserves_empty_subdirs(tmp_path: Path) -> None:
+    """Verify directory backup preserves empty subdirectories."""
+    # Given: A directory tree with an empty subdirectory
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "empty").mkdir()
+    (src / "file.txt").write_text("hi")
+
+    # When: Backing up
+    target = backup_path(src, backup_suffix=".bak")
+
+    # Then: Empty subdirectory exists in the backup
+    assert target is not None
+    assert (target / "empty").is_dir()
+    assert (target / "file.txt").read_text() == "hi"
+
+
+@requires_py312
+def test_backup_directory_preserves_file_mode(tmp_path: Path) -> None:
+    """Verify directory backup preserves file permission bits."""
+    # Given: A file with unusual permissions inside a directory
+    src = tmp_path / "src"
+    src.mkdir()
+    f = src / "secret.txt"
+    f.write_text("x")
+    f.chmod(0o600)
+
+    # When: Backing up
+    target = backup_path(src, backup_suffix=".bak")
+
+    # Then: The file in the backup has the same permission bits
+    assert target is not None
+    assert stat.S_IMODE((target / "secret.txt").stat().st_mode) == 0o600
+
+
+@requires_py312
+def test_backup_directory_preserves_directory_mode(tmp_path: Path) -> None:
+    """Verify directory backup preserves directory permission bits."""
+    # Given: A subdirectory with unusual permissions
+    src = tmp_path / "src"
+    src.mkdir()
+    sub = src / "private"
+    sub.mkdir()
+    sub.chmod(0o700)
+
+    # When: Backing up
+    target = backup_path(src, backup_suffix=".bak")
+
+    # Then: The mirrored subdirectory has the same permission bits
+    assert target is not None
+    assert stat.S_IMODE((target / "private").stat().st_mode) == 0o700
+
+
+@requires_py312
+def test_backup_directory_follows_symlink_to_file(tmp_path: Path) -> None:
+    """Verify directory backup follows symlinks (resolves to target contents)."""
+    # Given: A directory containing a symlink to a file outside the tree
+    real = tmp_path / "real.txt"
+    real.write_text("content")
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "link.txt").symlink_to(real)
+
+    # When: Backing up
+    target = backup_path(src, backup_suffix=".bak")
+
+    # Then: The backup contains the resolved file contents (matches shutil.copytree default)
+    assert target is not None
+    assert (target / "link.txt").is_file()
+    assert not (target / "link.txt").is_symlink()
+    assert (target / "link.txt").read_text() == "content"
+
+
+@requires_py312
+def test_backup_directory_follows_symlink_to_directory(tmp_path: Path) -> None:
+    """Verify directory backup descends into symlinks pointing to directories."""
+    # Given: A directory with a symlink to another directory containing a file
+    real_dir = tmp_path / "real_dir"
+    real_dir.mkdir()
+    (real_dir / "deep.txt").write_text("deep content")
+
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "link_to_dir").symlink_to(real_dir)
+
+    # When: Backing up
+    target = backup_path(src, backup_suffix=".bak")
+
+    # Then: The link is materialized as a real directory containing the symlink target's contents
+    assert target is not None
+    backed_up = target / "link_to_dir"
+    assert backed_up.exists()
+    assert backed_up.is_dir()
+    assert not backed_up.is_symlink()
+    assert (backed_up / "deep.txt").read_text() == "deep content"
+
+
+def test_backup_directory_raises_on_old_python(tmp_path: Path, mocker: MockerFixture) -> None:
+    """Verify backup_path raises ValueError when called on a directory under Python < 3.12."""
+    # Given: A directory and a mocked check_python_version returning False
+    src = tmp_path / "src"
+    src.mkdir()
+    mocker.patch(
+        "nclutils.fs.filesystem.check_python_version",
+        autospec=True,
+        return_value=False,
+    )
+
+    # When/Then: Backing up a directory raises ValueError
+    with pytest.raises(ValueError, match=r"Python version 3\.12"):
+        backup_path(src, backup_suffix=".bak")
+
+
+@requires_py312
+def test_backup_directory_matches_shutil_copytree_output(tmp_path: Path) -> None:
+    """Verify the chunked walk produces a tree functionally identical to shutil.copytree."""
+    # Given: A non-trivial directory tree
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "a.txt").write_text("alpha")
+    (src / "sub").mkdir()
+    (src / "sub" / "b.txt").write_text("beta")
+    (src / "sub" / "empty").mkdir()
+    (src / "sub" / "c.bin").write_bytes(b"\x00\x01\x02\x03")
+
+    # When: Backing up via our chunked walk and via shutil.copytree separately
+    via_backup = backup_path(src, backup_suffix=".ours")
+    via_shutil = src.with_name(src.name + ".shutil")
+    shutil.copytree(src, via_shutil)
+
+    # Then: The two trees contain identical relative paths and file contents
+    assert via_backup is not None
+    ours = sorted(p.relative_to(via_backup) for p in via_backup.rglob("*"))
+    theirs = sorted(p.relative_to(via_shutil) for p in via_shutil.rglob("*"))
+    assert ours == theirs
+    for rel in ours:
+        a = via_backup / rel
+        b = via_shutil / rel
+        if a.is_file():
+            assert a.read_bytes() == b.read_bytes()

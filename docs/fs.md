@@ -33,6 +33,8 @@ copy_file(src, dst, keep_backup=False)
 
 `with_progress=True` shows a Rich progress bar; `transient=True` (the default) clears the bar after the copy completes.
 
+For `copy_directory(..., with_progress=True)`, the bar shows the total bytes across all files plus a recycled per-file subtask. When `keep_backup=True` and the destination already exists, you'll see two sequential phases: a Backup phase (snapshotting the existing destination) that dismisses on completion, then a Copy phase. Each phase has its own progress bar.
+
 Pass `console=` to route the progress bar through your own Rich `Console` instead of Rich's global default. This is useful when you want the bar to share a console with `pretty_print.console()`:
 
 ```python
@@ -43,10 +45,13 @@ copy_file(src, dst, with_progress=True, console=console())
 ```
 
 > [!NOTE]
-> `copy_directory` requires Python 3.12+ because it uses `Path.walk()`. Calling it on an older interpreter raises `ValueError`.
+> Both `copy_directory` and `backup_path` (when given a directory) require Python 3.12+ because they use `Path.walk()`. Calling either on an older interpreter raises `ValueError`. File backups (`backup_path` on a single file) work on Python 3.10+.
 
-> [!WARNING]
-> Refusing to copy is silent. Same source and destination, or copying a directory into itself or its parent, returns the source path and logs a warning rather than raising. Check the return value or watch the `nclutils.fs` logger if this matters.
+> [!NOTE]
+> `copy_directory` and the directory variant of `backup_path` both follow symlinks: a symlink to a directory inside the source tree is materialized as a real directory in the destination, with the symlink target's contents copied recursively. This matches `shutil.copytree(symlinks=False)` (the default).
+
+> [!NOTE]
+> By default, same-source-and-destination and parent/child copy attempts return the source path and log a warning. Pass `strict=True` to raise `shutil.SameFileError` or `ValueError` instead.
 
 > [!NOTE]
 > `copy_file` raises `IsADirectoryError` when the source is a directory and `OSError` for any other non-regular file. `~` is expanded in both `src` and `dst` before validation, so `Path("~/foo")` resolves correctly. `copy_directory` preserves the source directory's permission bits (mode) through `shutil.copystat`; modification times are not preserved because file writes during copy bump the mirrored directory's mtime.
@@ -68,10 +73,10 @@ backup = backup_path(original)
 backup_path(original, backup_suffix=".pre-migration.bak")
 ```
 
-By default `backup_path` returns `None` when the source doesn't exist. Pass `raise_on_missing=True` to make a missing source an error instead.
+By default `backup_path` returns `None` when the source doesn't exist. Pass `strict=True` to raise `FileNotFoundError` instead.
 
 > [!NOTE]
-> File backups preserve the source's permission bits (mode). Directory backups inherit mode and timestamps via `shutil.copytree`.
+> File backups preserve the source's permission bits (mode); file timestamps are not preserved. Directory backups walk the tree with `Path.walk(follow_symlinks=True)`, mirror directory mode and timestamps via `shutil.copystat`, and follow symlinks (including symlinked subdirectories) so the backup contains resolved contents. This matches `shutil.copytree(src, target)` defaults.
 
 ## Cleaning a directory
 
@@ -84,7 +89,7 @@ from nclutils.fs import clean_directory
 clean_directory(Path("./tmp"))
 ```
 
-If the path isn't an existing directory, the call is a no-op and a warning is logged. Symlinks inside the directory (including dangling links and links pointing at directories) are removed via `unlink()`; their targets are not modified.
+If the path isn't an existing directory, the call is a no-op and a warning is logged. Pass `strict=True` to raise `NotADirectoryError` instead. Symlinks inside the directory (including dangling links and links pointing at directories) are removed via `unlink()`; their targets are not modified.
 
 ## Searching
 
@@ -168,7 +173,7 @@ find_user_home_dir()
 find_user_home_dir("alice")
 ```
 
-Returns `None` if the user isn't found, or if the platform does not provide `pwd` (Windows). On platforms without `pwd` a warning is logged.
+Returns `None` if the user isn't found, or if the platform does not provide `pwd` (Windows). Pass `strict=True` to raise `KeyError` when the user is unknown. The `pwd` unavailability path always returns `None` regardless of `strict`, since it represents a platform limitation rather than a runtime error. On platforms without `pwd` a warning is logged.
 
 ## Diagnostic logging
 
@@ -184,11 +189,11 @@ This is independent of `nclutils.pretty_print`. It covers internal operations li
 
 ## API reference
 
-- `backup_path(src, backup_suffix="", *, raise_on_missing=False, with_progress=False, transient=True, console=None)`. Snapshot a file or directory with a timestamped suffix, preserving the source's permission bits.
-- `clean_directory(directory)`. Recursively empty a directory in place.
-- `copy_file(src, dst, *, with_progress=False, transient=True, keep_backup=True, console=None)`. Copy a file with optional progress and destination backup. Raises `IsADirectoryError` if `src` is a directory.
-- `copy_directory(src, dst, *, with_progress=False, transient=True, keep_backup=True, console=None)`. Recursively copy a directory, preserving directory permission bits. Requires Python 3.12+.
+- `backup_path(src, backup_suffix="", *, with_progress=False, transient=True, console=None, strict=False)`. Snapshot a file or directory with a timestamped suffix, preserving the source's permission bits. Raises `FileNotFoundError` if `strict=True` and source is missing.
+- `clean_directory(directory, *, strict=False)`. Recursively empty a directory in place. Raises `NotADirectoryError` if `strict=True` and target is not a directory.
+- `copy_file(src, dst, *, with_progress=False, transient=True, keep_backup=True, console=None, strict=False)`. Copy a file with optional progress and destination backup. Raises `IsADirectoryError` if `src` is a directory; raises `shutil.SameFileError` if `strict=True` and src equals dst.
+- `copy_directory(src, dst, *, with_progress=False, transient=True, keep_backup=True, console=None, strict=False)`. Recursively copy a directory, preserving directory permission bits. Requires Python 3.12+. Raises `shutil.SameFileError` or `ValueError` if `strict=True` and src/dst are the same or nested.
 - `directory_tree(directory, *, show_hidden=False)`. Build a `rich.tree.Tree` view of a directory.
 - `find_files(path, globs=None, *, ignore_dotfiles=False)`. List files in a directory matching globs. Duplicate matches across overlapping globs are deduped.
 - `find_subdirectories(directory, depth=1, filter_regex="", *, ignore_dotfiles=False, leaf_dirs_only=False)`. Search subdirectories with depth and regex filtering. `depth` must be >= 1.
-- `find_user_home_dir(username=None)`. Resolve a user's home directory, honoring `SUDO_USER` when running under sudo.
+- `find_user_home_dir(username=None, *, strict=False)`. Resolve a user's home directory, honoring `SUDO_USER` when running under sudo. Raises `KeyError` if `strict=True` and user is unknown.
