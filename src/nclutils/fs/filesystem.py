@@ -153,11 +153,11 @@ def copy_file(
     Copy files with granular control over progress display and file conflict handling. Preserve original file permissions while providing visual feedback for long-running operations.
 
     Args:
-        src (Path): Source file to copy
-        dst (Path): Destination path for the copy
-        with_progress (bool, optional): Show a progress bar during copy. Defaults to False
-        transient (bool, optional): Remove the progress bar after completion. Defaults to True
-        keep_backup (bool, optional): Keep a backup of the destination file if it already exists. Defaults to True
+        src (Path): Source file to copy.
+        dst (Path): Destination path for the copy.
+        with_progress (bool, optional): Show a progress bar during copy. Defaults to False.
+        transient (bool, optional): Remove the progress bar after completion. Defaults to True.
+        keep_backup (bool, optional): Keep a backup of the destination file if it already exists. Defaults to True.
         console (Console | None, optional): Rich `Console` to render the progress bar through. Defaults to None (Rich's default global console).
 
     Returns:

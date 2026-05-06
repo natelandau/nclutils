@@ -312,7 +312,7 @@ def test_copy_directory_unique_name(tmp_path: Path) -> None:
 def test_copy_directory_python_version(mocker: MockerFixture, tmp_path: Path) -> None:
     """Verify copy_directory requires Python 3.12 or higher."""
     # Given: Python version below 3.12
-    mocker.patch("nclutils.fs.filesystem.check_python_version", return_value=False)
+    mocker.patch("nclutils.fs.filesystem.check_python_version", autospec=True, return_value=False)
 
     # When/Then: Copying directory raises version error
     with pytest.raises(ValueError, match=r"requires a minimum of Python version 3\.12"):
