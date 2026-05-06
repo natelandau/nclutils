@@ -33,11 +33,23 @@ copy_file(src, dst, keep_backup=False)
 
 `with_progress=True` shows a Rich progress bar; `transient=True` (the default) clears the bar after the copy completes.
 
+Pass `console=` to route the progress bar through your own Rich `Console` instead of Rich's global default. This is useful when you want the bar to share a console with `pretty_print.console()`:
+
+```python
+from nclutils import console
+from nclutils.fs import copy_file
+
+copy_file(src, dst, with_progress=True, console=console())
+```
+
 > [!NOTE]
 > `copy_directory` requires Python 3.12+ because it uses `Path.walk()`. Calling it on an older interpreter raises `ValueError`.
 
 > [!WARNING]
 > Refusing to copy is silent. Same source and destination, or copying a directory into itself or its parent, returns the source path and logs a warning rather than raising. Check the return value or watch the `nclutils.fs` logger if this matters.
+
+> [!NOTE]
+> `copy_file` raises `IsADirectoryError` when the source is a directory and `OSError` for any other non-regular file. `~` is expanded in both `src` and `dst` before validation, so `Path("~/foo")` resolves correctly. `copy_directory` preserves the source directory's permission bits (mode) through `shutil.copystat`; modification times are not preserved because file writes during copy bump the mirrored directory's mtime.
 
 ## Standalone backups
 
@@ -58,6 +70,9 @@ backup_path(original, backup_suffix=".pre-migration.bak")
 
 By default `backup_path` returns `None` when the source doesn't exist. Pass `raise_on_missing=True` to make a missing source an error instead.
 
+> [!NOTE]
+> File backups preserve the source's permission bits (mode). Directory backups inherit mode and timestamps via `shutil.copytree`.
+
 ## Cleaning a directory
 
 `clean_directory` empties a directory in place: files are unlinked and subdirectories are removed recursively, but the directory itself stays.
@@ -69,7 +84,7 @@ from nclutils.fs import clean_directory
 clean_directory(Path("./tmp"))
 ```
 
-If the path isn't an existing directory, the call is a no-op and a warning is logged.
+If the path isn't an existing directory, the call is a no-op and a warning is logged. Symlinks inside the directory (including dangling links and links pointing at directories) are removed via `unlink()`; their targets are not modified.
 
 ## Searching
 
@@ -89,6 +104,9 @@ find_files(Path("."), globs=["*.py", "*.toml"])
 ```
 
 Globs are passed through to `Path.glob`, so `**/*.py` works for recursive matching.
+
+> [!NOTE]
+> When `ignore_dotfiles=True`, files reached through a hidden directory (such as `**/.cache/foo.py`) are also excluded. The user-supplied root path is never filtered, so passing a hidden directory like `Path("~/.config")` as the search root works as expected. If multiple globs match the same file, it appears only once in the result.
 
 ### `find_subdirectories`
 
@@ -113,6 +131,9 @@ find_subdirectories(
 
 `leaf_dirs_only=True` filters the result so that directories which still contain matching subdirectories within the depth limit are excluded. The result is sorted by path.
 
+> [!NOTE]
+> `depth` must be 1 or greater; passing 0 or a negative value raises `ValueError`. The `filter_regex` is applied with `re.search`, so it matches if the pattern is found anywhere in a directory's name. Anchor with `^` or `$` for whole-name matching. When `ignore_dotfiles=True`, the user-supplied root directory is never filtered out; only descendants whose own name starts with `.` are excluded.
+
 ## Building a directory tree
 
 `directory_tree` returns a [`rich.tree.Tree`](https://rich.readthedocs.io/en/stable/tree.html) that renders nicely in a Rich `Console`.
@@ -134,7 +155,7 @@ console().print(directory_tree(Path("./src")))
 
 ## Looking up a user's home directory
 
-`find_user_home_dir` resolves a home directory in a way that's friendly to scripts running under `sudo`.
+`find_user_home_dir` resolves a home directory in a way that's friendly to scripts running under `sudo`. POSIX lookups go through the standard library `pwd` module (`pwd.getpwnam(username).pw_dir`), so no subprocess is spawned.
 
 ```python
 from nclutils.fs import find_user_home_dir
@@ -143,11 +164,11 @@ from nclutils.fs import find_user_home_dir
 # When run under sudo: returns the invoking user's home, not /root
 find_user_home_dir()
 
-# Look up a specific user (Linux: getent passwd; macOS: dscl)
+# Look up a specific user
 find_user_home_dir("alice")
 ```
 
-Returns `None` if the user isn't found or the platform isn't supported (only Linux and macOS).
+Returns `None` if the user isn't found, or if the platform does not provide `pwd` (Windows). On platforms without `pwd` a warning is logged.
 
 ## Diagnostic logging
 
@@ -163,11 +184,11 @@ This is independent of `nclutils.pretty_print`. It covers internal operations li
 
 ## API reference
 
-- `backup_path(src, backup_suffix="", *, raise_on_missing=False, with_progress=False, transient=True)`. Snapshot a file or directory with a timestamped suffix.
+- `backup_path(src, backup_suffix="", *, raise_on_missing=False, with_progress=False, transient=True, console=None)`. Snapshot a file or directory with a timestamped suffix, preserving the source's permission bits.
 - `clean_directory(directory)`. Recursively empty a directory in place.
-- `copy_file(src, dst, *, with_progress=False, transient=True, keep_backup=True)`. Copy a file with optional progress and destination backup.
-- `copy_directory(src, dst, *, with_progress=False, transient=True, keep_backup=True)`. Recursively copy a directory. Requires Python 3.12+.
+- `copy_file(src, dst, *, with_progress=False, transient=True, keep_backup=True, console=None)`. Copy a file with optional progress and destination backup. Raises `IsADirectoryError` if `src` is a directory.
+- `copy_directory(src, dst, *, with_progress=False, transient=True, keep_backup=True, console=None)`. Recursively copy a directory, preserving directory permission bits. Requires Python 3.12+.
 - `directory_tree(directory, *, show_hidden=False)`. Build a `rich.tree.Tree` view of a directory.
-- `find_files(path, globs=None, *, ignore_dotfiles=False)`. List files in a directory matching globs.
-- `find_subdirectories(directory, depth=1, filter_regex="", *, ignore_dotfiles=False, leaf_dirs_only=False)`. Search subdirectories with depth and regex filtering.
+- `find_files(path, globs=None, *, ignore_dotfiles=False)`. List files in a directory matching globs. Duplicate matches across overlapping globs are deduped.
+- `find_subdirectories(directory, depth=1, filter_regex="", *, ignore_dotfiles=False, leaf_dirs_only=False)`. Search subdirectories with depth and regex filtering. `depth` must be >= 1.
 - `find_user_home_dir(username=None)`. Resolve a user's home directory, honoring `SUDO_USER` when running under sudo.
