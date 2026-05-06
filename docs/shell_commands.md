@@ -1,6 +1,6 @@
 # Shell commands
 
-A thin wrapper over stdlib `subprocess` for running external commands. Imported from `nclutils.sh`. Results come back as a typed `CompletedCommand` dataclass rather than raw strings, and every failure mode maps to a specific exception class. Output goes to `sys.stdout`/`sys.stderr` directly — `nclutils.sh` does not route through `nclutils.pretty_print`'s console.
+A thin wrapper over stdlib `subprocess` for running external commands. Imported from `nclutils.sh`. Results come back as a typed `CompletedCommand` dataclass rather than raw strings, and every failure mode maps to a specific exception class. Output goes to `sys.stdout`/`sys.stderr` directly; `nclutils.sh` does not route through `nclutils.pretty_print`'s console.
 
 ```python
 from pathlib import Path
@@ -49,11 +49,12 @@ result = run_command(["rsync", "-av", "src/", "dst/"], stream=True)
 print(f"finished in {result.duration:.1f}s")
 ```
 
-> **Note:** stdout and stderr are drained by separate threads, so within each stream lines stay in order, but the relative interleaving between stdout and stderr is not deterministic. If you need true chronological interleaving, run the command via `sh -c "... 2>&1"` and inspect `result.stdout`.
+> [!NOTE]
+> stdout and stderr are drained by separate threads. Within each stream lines stay in order, but the relative interleaving between stdout and stderr is not deterministic. For true chronological interleaving, run the command via `sh -c "... 2>&1"` and inspect `result.stdout`.
 
 ## Options
 
-### `cwd=` — working directory
+### `cwd=`: working directory
 
 Pass a `Path` or `str` to run the command from a different directory. `None` (the default) inherits the parent process's working directory.
 
@@ -64,9 +65,9 @@ from nclutils.sh import run_command
 result = run_command(["pwd"], cwd=Path("/tmp"))
 ```
 
-If `cwd` cannot be entered — missing, not a directory, or no permission — `run_command` raises `ShellCommandFailedError` before the process starts (`result` will be `None` on that exception).
+If `cwd` cannot be entered (missing, not a directory, or no permission), `run_command` raises `ShellCommandFailedError` before the process starts. `result` is `None` on that exception because no command actually ran.
 
-### `env=` — environment variables
+### `env=`: environment variables
 
 When `env=` is provided it *replaces* the child's entire environment. To extend the current environment, merge it explicitly:
 
@@ -82,7 +83,7 @@ result = run_command(
 
 Passing `env=None` (the default) inherits the parent's environment unchanged.
 
-### `input=` — stdin
+### `input=`: stdin
 
 Pass a string or bytes to write to the child's stdin:
 
@@ -93,9 +94,10 @@ result = run_command(["wc", "-w"], input="hello world")
 print(result.stdout.strip())  # "2"
 ```
 
-For large inputs (>64 KB) where the child also produces output, a deadlock is possible because stdin is fully written before stdout starts draining. Use shell redirection in that case.
+> [!WARNING]
+> For inputs over ~64 KB where the child also produces output, a deadlock is possible because stdin is fully written before stdout starts draining. Pipe via shell redirection in that case (e.g., `run_command(["sh", "-c", "cat large.txt | wc -l"])`).
 
-### `timeout=` — time limit
+### `timeout=`: time limit
 
 Pass a number of seconds. If the process runs longer, it is killed and `ShellCommandTimeoutError` is raised:
 
@@ -109,7 +111,7 @@ except ShellCommandTimeoutError as e:
     print(f"partial stdout: {e.result.stdout!r}")
 ```
 
-### `exclude_regex=` — filter lines
+### `exclude_regex=`: filter lines
 
 Lines matching this regex are dropped from both the streamed output and the captured strings. Useful for suppressing noisy warnings:
 
@@ -119,7 +121,7 @@ from nclutils.sh import run_command
 run_command(["npm", "install"], stream=True, exclude_regex=r"^npm warn deprecated")
 ```
 
-### `check=False` — skip failure check
+### `check=False`: skip failure check
 
 By default `run_command` raises `ShellCommandFailedError` on any non-zero exit. Pass `check=False` to suppress this and inspect the return code yourself:
 
@@ -130,7 +132,7 @@ result = run_command(["false"], check=False)
 print(result.returncode)  # 1
 ```
 
-### `okay_codes=` — acceptable exit codes
+### `okay_codes=`: acceptable exit codes
 
 Some commands use non-zero exits as data. `grep` returns `1` when no lines match; `diff` returns `1` for non-identical files. Pass `okay_codes=` to treat additional codes as success:
 
@@ -144,9 +146,9 @@ result = run_command(
 )
 ```
 
-### `sudo=True` — run as root
+### `sudo=True`: run as root
 
-Prepends `["sudo"]` to the argument list. Cached credentials are used; `sudo -k` is never called. This requires an interactive TTY for the password prompt or `NOPASSWD` in sudoers — it will hang or fail in non-interactive contexts such as CI.
+Prepends `["sudo"]` to the argument list. Cached credentials are used; `sudo -k` is never called. Either an interactive TTY (for the password prompt) or `NOPASSWD` in sudoers is required. The call will hang or fail in non-interactive contexts such as CI.
 
 ```python
 from nclutils.sh import run_command
@@ -218,7 +220,7 @@ except ShellCommandTimeoutError as e:
 
 ## Interactive commands
 
-Use `run_interactive` for commands that need a real terminal — editors, pagers, SSH sessions, anything that drives the terminal directly. The child inherits stdin, stdout, and stderr from the parent; nothing is captured.
+Use `run_interactive` for commands that need a real terminal: editors, pagers, SSH sessions, anything that drives the terminal directly. The child inherits stdin, stdout, and stderr from the parent; nothing is captured.
 
 ```python
 from nclutils.sh import run_interactive
@@ -232,7 +234,7 @@ from nclutils.sh import run_interactive
 run_interactive(["ssh", "user@host"])
 ```
 
-`run_interactive` accepts `cwd=`, `env=`, and `sudo=` with the same meaning as `run_command`. It returns the child's integer exit code. When `check=True` (the default), a non-zero exit raises `ShellCommandFailedError` — though `result.stdout` and `result.stderr` will be empty strings because no capture took place.
+`run_interactive` accepts `cwd=`, `env=`, and `sudo=` with the same meaning as `run_command`. It returns the child's integer exit code. When `check=True` (the default), a non-zero exit raises `ShellCommandFailedError`. The `result.stdout` and `result.stderr` fields will be empty strings because no capture took place.
 
 ## Looking up a command
 
@@ -257,7 +259,7 @@ The previous `nclutils.sh` module was a thin wrapper around the third-party `sh`
 | `run_command("git", ["status"])`                              | `run_command(["git", "status"])`                              |
 | `output = run_command(...)` (returned `str`)                  | `result = run_command(...)` then `result.stdout`              |
 | `pushd=Path("/tmp")`                                          | `cwd=Path("/tmp")`                                            |
-| `quiet=True` (captured silently)                              | Default behavior — `stream=False` is the default             |
+| `quiet=True` (captured silently)                              | Default behavior; `stream=False` is the default               |
 | `quiet=False` (streamed to console)                           | `stream=True`                                                 |
 | `err_to_out=True`                                             | **Default behavior change.** The old default `err_to_out=True` folded stderr into the returned string. The new return value gives you `result.stdout` and `result.stderr` separately. If you previously did `output = run_command("foo", ["--bar"])` and your code expected stderr to be in `output`, switch to `result.stdout + result.stderr` after the call (or invoke `sh -c "foo --bar 2>&1"` if you need true interleaving). |
 | `fg=True` (interactive, no capture)                           | `run_interactive([...])`                                      |
