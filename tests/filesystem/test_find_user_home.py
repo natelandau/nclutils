@@ -6,7 +6,19 @@ from pathlib import Path
 import pytest
 
 from nclutils.fs import find_user_home_dir
-from nclutils.sh import ShellCommandFailedError
+from nclutils.sh import CompletedCommand, ShellCommandFailedError
+
+
+def _make_result(stdout: str) -> CompletedCommand:
+    """Build a minimal CompletedCommand for mocking run_command."""
+    return CompletedCommand(
+        argv=(),
+        returncode=0,
+        stdout=stdout,
+        stderr="",
+        duration=0.0,
+        cwd=None,
+    )
 
 
 @pytest.fixture
@@ -40,7 +52,7 @@ def test_find_user_home_dir_with_sudo_user(mocker):
     mocker.patch("platform.system", return_value="Linux")
     mocker.patch(
         "nclutils.fs.filesystem.run_command",
-        return_value="/home/testuser:x:1000:1000::/home/testuser:/bin/bash",
+        return_value=_make_result("/home/testuser:x:1000:1000::/home/testuser:/bin/bash"),
     )
 
     # When: Finding home directory without username
@@ -55,7 +67,7 @@ def test_find_user_home_dir_linux_success(mock_platform_linux, mocker):
     # Given: Mock successful command execution
     mocker.patch(
         "nclutils.fs.filesystem.run_command",
-        return_value="/home/testuser:x:1000:1000::/home/testuser:/bin/bash",
+        return_value=_make_result("/home/testuser:x:1000:1000::/home/testuser:/bin/bash"),
     )
 
     # When: Finding home directory for specific user
@@ -85,7 +97,7 @@ def test_find_user_home_dir_darwin_success(mock_platform_darwin, mocker):
     # Given: Mock successful command execution
     mocker.patch(
         "nclutils.fs.filesystem.run_command",
-        return_value="NFSHomeDirectory: /Users/testuser",
+        return_value=_make_result("NFSHomeDirectory: /Users/testuser"),
     )
 
     # When: Finding home directory for specific user
