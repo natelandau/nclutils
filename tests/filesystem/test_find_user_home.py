@@ -70,7 +70,7 @@ def test_find_user_home_dir_linux_failure(mock_platform_linux, mocker):
     # Given: Mock failed command execution
     mocker.patch(
         "nclutils.fs.filesystem.run_command",
-        side_effect=ShellCommandFailedError("Command failed"),
+        side_effect=ShellCommandFailedError(msg="Command failed"),
     )
 
     # When: Finding home directory for non-existent user
@@ -100,7 +100,7 @@ def test_find_user_home_dir_darwin_failure(mock_platform_darwin, mocker):
     # Given: Mock failed command execution
     mocker.patch(
         "nclutils.fs.filesystem.run_command",
-        side_effect=ShellCommandFailedError("Command failed"),
+        side_effect=ShellCommandFailedError(msg="Command failed"),
     )
 
     # When: Finding home directory for non-existent user

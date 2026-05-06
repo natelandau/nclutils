@@ -106,9 +106,16 @@ def run_command(  # noqa: C901, PLR0913
                 command(*args, **cmd_kwargs)
             return "".join(output_lines)
         except sh.CommandNotFound as e:
-            raise ShellCommandNotFoundError(e=e) from e
+            raise ShellCommandNotFoundError(argv=(cmd,), e=e) from e
         except sh.ErrorReturnCode as e:
-            raise ShellCommandFailedError(e=e) from e
+            stderr = e.stderr.decode("utf-8", errors="replace").strip() if e.stderr else ""
+            stdout = e.stdout.decode("utf-8", errors="replace").strip() if e.stdout else ""
+            full_cmd = str(e.full_cmd) if hasattr(e, "full_cmd") else cmd
+            raise ShellCommandFailedError(
+                msg=f"Shell command failed.\nRaised from: {e.__class__.__name__}: {e}\nFull command: {full_cmd}"
+                + (f"\nStderr: {stderr}" if stderr else "")
+                + (f"\nStdout: {stdout}" if stdout else ""),
+            ) from e
 
     if pushd:
         if not isinstance(pushd, Path):
@@ -123,6 +130,6 @@ def run_command(  # noqa: C901, PLR0913
             # as ShellCommandFailedError so callers don't get raw OSError.
             detail = e.strerror or str(e)
             msg = f"Cannot enter directory {pushd}: {detail}"
-            raise ShellCommandFailedError(msg, e=e) from e
+            raise ShellCommandFailedError(msg=msg) from e
 
     return _execute()

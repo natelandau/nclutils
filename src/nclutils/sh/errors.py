@@ -1,45 +1,98 @@
-"""Custom errors for script utilities."""
+"""Errors raised by nclutils.sh."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+    from pathlib import Path
 
 
-def _decode(output: bytes | str | None) -> str | None:
-    """Decode subprocess output (bytes/str/None) to a stripped string or None."""
-    if output is None:
-        return None
-    if isinstance(output, bytes):
-        try:
-            return output.decode("utf-8").strip()
-        except UnicodeDecodeError:  # pragma: no cover
-            return str(output).strip()
-    return str(output).strip()
+@dataclass(frozen=True, slots=True)
+class CompletedCommand:
+    """The full record of a finished subprocess invocation.
+
+    Returned from :func:`run_command` on success and exposed as ``.result`` on
+    :class:`ShellCommandFailedError` / :class:`ShellCommandTimeoutError`.
+    """
+
+    argv: tuple[str, ...]
+    returncode: int
+    stdout: str
+    stderr: str
+    duration: float
+    cwd: Path | None
+
+    @property
+    def ok(self) -> bool:
+        """Return True when the command exited with status 0."""
+        return self.returncode == 0
 
 
-class ShellCommandFailedError(Exception):
-    """Raised when a shell command fails."""
+class ShellCommandError(Exception):
+    """Base class for every error raised by nclutils.sh."""
 
-    def __init__(self, msg: str | None = None, *, e: Exception | None = None) -> None:
-        self.exit_code: int | None = getattr(e, "exit_code", None)
-        self.stderr: str | None = _decode(getattr(e, "stderr", None))
-        self.stdout: str | None = _decode(getattr(e, "stdout", None))
-        self.full_cmd: str | None = _decode(getattr(e, "full_cmd", None))
 
-        parts = [msg or "Shell command failed."]
+class ShellCommandNotFoundError(ShellCommandError):
+    """Raised when argv[0] cannot be located on PATH."""
+
+    def __init__(
+        self,
+        argv: Sequence[str],
+        *,
+        msg: str | None = None,
+        e: Exception | None = None,
+    ) -> None:
+        self.argv: tuple[str, ...] = tuple(argv)
+        executable = self.argv[0] if self.argv else "<empty>"
+        parts = [msg or f"Command not found on PATH: {executable}"]
         if e is not None:
             parts.append(f"Raised from: {e.__class__.__name__}: {e}")
-            if self.stderr:
-                parts.append(f"Stderr: {self.stderr}")
-            if self.stdout:
-                parts.append(f"Stdout: {self.stdout}")
-            if self.full_cmd:
-                parts.append(f"Full command: {self.full_cmd}")
-
         super().__init__("\n".join(parts))
 
 
-class ShellCommandNotFoundError(Exception):
-    """Raised when a shell command is not found."""
+class ShellCommandFailedError(ShellCommandError):
+    """Raised when a command ran but exited outside the configured okay codes.
 
-    def __init__(self, msg: str | None = None, *, e: Exception | None = None) -> None:
-        parts = [msg or "Shell command not found."]
-        if e is not None:
-            parts.append(f"Raised from: {e.__class__.__name__}:\n{e}")
+    Also raised when ``cwd`` cannot be entered (in which case ``result`` is None
+    because no command actually ran; the underlying OSError is chained as
+    ``__cause__``).
+    """
+
+    def __init__(
+        self,
+        *,
+        result: CompletedCommand | None = None,
+        msg: str | None = None,
+    ) -> None:
+        self.result = result
+        if msg is not None:
+            super().__init__(msg)
+            return
+
+        # Build a message from the result.
+        argv_str = " ".join(result.argv) if result is not None else "<unknown>"
+        rc = result.returncode if result is not None else "<unknown>"
+        parts = [f"Shell command failed: {argv_str} (exit code {rc})"]
+        if result is not None and result.stderr:
+            parts.append(f"Stderr: {result.stderr.rstrip()}")
+        if result is not None and result.stdout:
+            parts.append(f"Stdout: {result.stdout.rstrip()}")
         super().__init__("\n".join(parts))
+
+
+class ShellCommandTimeoutError(ShellCommandError):
+    """Raised when a command exceeded its ``timeout=`` and was killed."""
+
+    def __init__(
+        self,
+        *,
+        result: CompletedCommand,
+        timeout: float,
+    ) -> None:
+        self.result = result
+        self.timeout = timeout
+        argv_str = " ".join(result.argv)
+        super().__init__(f"Shell command timed out after {timeout}s: {argv_str}")
