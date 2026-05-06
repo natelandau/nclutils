@@ -119,6 +119,8 @@ class _Copier:
 
         target = src.with_name(src.name + backup_suffix)
 
+        # Clear the target if anything is already there. This isn't atomic across processes,
+        # but the timestamped default suffix makes a real collision very rare.
         if target.is_symlink() or target.is_file():
             logger.debug("unlink %s", target)
             target.unlink()
