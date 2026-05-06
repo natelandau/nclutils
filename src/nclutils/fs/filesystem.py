@@ -98,6 +98,23 @@ class _Copier:
         """Stub. Filled in by Tasks 5 and 6."""
         raise NotImplementedError
 
+    def _copy_tree_no_progress(self, src: Path, dst: Path) -> None:
+        """Copy a directory tree from src to dst using chunked file I/O.
+
+        Mirrors `shutil.copytree(src, dst)` (no kwargs) semantics: follows
+        symlinks, preserves dir + file mode, creates empty subdirs, propagates
+        errors. Used when no progress bar is wanted.
+        """
+        dst.mkdir(parents=True, exist_ok=True)
+        shutil.copystat(src, dst)
+        for current_root, _, files in src.walk():
+            rel = current_root.relative_to(src)
+            new_parent = dst / rel
+            new_parent.mkdir(parents=True, exist_ok=True)
+            shutil.copystat(current_root, new_parent)
+            for name in files:
+                _do_copy_file(current_root / name, new_parent / name)
+
     def backup(
         self, src: Path, backup_suffix: str = "", *, raise_on_missing: bool = False
     ) -> Path | None:
@@ -129,8 +146,8 @@ class _Copier:
             shutil.rmtree(target)
 
         if src.is_dir():
-            logger.debug("copytree %s %s", src, target)
-            shutil.copytree(src, target)
+            logger.debug("copy_tree %s %s", src, target)
+            self._copy_tree_no_progress(src, target)
         elif self.with_progress:
             with Progress(transient=self.transient, console=self.console) as progress_bar:
                 copy_task = progress_bar.add_task(f"Backup {src.name}", total=src.stat().st_size)

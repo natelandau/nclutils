@@ -1,5 +1,7 @@
 """Test the backup function."""
 
+import shutil
+import stat
 from pathlib import Path
 
 import pytest
@@ -165,3 +167,101 @@ def test_backup_directory_overwrites_existing_file_at_target(tmp_path: Path) -> 
     assert backup == target
     assert backup.is_dir()
     assert (backup / "inner.txt").read_text() == "payload"
+
+
+def test_backup_directory_preserves_empty_subdirs(tmp_path: Path) -> None:
+    """Verify directory backup preserves empty subdirectories."""
+    # Given: A directory tree with an empty subdirectory
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "empty").mkdir()
+    (src / "file.txt").write_text("hi")
+
+    # When: Backing up
+    target = backup_path(src, backup_suffix=".bak")
+
+    # Then: Empty subdirectory exists in the backup
+    assert target is not None
+    assert (target / "empty").is_dir()
+    assert (target / "file.txt").read_text() == "hi"
+
+
+def test_backup_directory_preserves_file_mode(tmp_path: Path) -> None:
+    """Verify directory backup preserves file permission bits."""
+    # Given: A file with unusual permissions inside a directory
+    src = tmp_path / "src"
+    src.mkdir()
+    f = src / "secret.txt"
+    f.write_text("x")
+    f.chmod(0o600)
+
+    # When: Backing up
+    target = backup_path(src, backup_suffix=".bak")
+
+    # Then: The file in the backup has the same permission bits
+    assert target is not None
+    assert stat.S_IMODE((target / "secret.txt").stat().st_mode) == 0o600
+
+
+def test_backup_directory_preserves_directory_mode(tmp_path: Path) -> None:
+    """Verify directory backup preserves directory permission bits."""
+    # Given: A subdirectory with unusual permissions
+    src = tmp_path / "src"
+    src.mkdir()
+    sub = src / "private"
+    sub.mkdir()
+    sub.chmod(0o700)
+
+    # When: Backing up
+    target = backup_path(src, backup_suffix=".bak")
+
+    # Then: The mirrored subdirectory has the same permission bits
+    assert target is not None
+    assert stat.S_IMODE((target / "private").stat().st_mode) == 0o700
+
+
+def test_backup_directory_follows_symlink_to_file(tmp_path: Path) -> None:
+    """Verify directory backup follows symlinks (resolves to target contents)."""
+    # Given: A directory containing a symlink to a file outside the tree
+    real = tmp_path / "real.txt"
+    real.write_text("content")
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "link.txt").symlink_to(real)
+
+    # When: Backing up
+    target = backup_path(src, backup_suffix=".bak")
+
+    # Then: The backup contains the resolved file contents (matches shutil.copytree default)
+    assert target is not None
+    assert (target / "link.txt").is_file()
+    assert not (target / "link.txt").is_symlink()
+    assert (target / "link.txt").read_text() == "content"
+
+
+def test_backup_directory_matches_shutil_copytree_output(tmp_path: Path) -> None:
+    """Verify the chunked walk produces a tree functionally identical to shutil.copytree."""
+    # Given: A non-trivial directory tree
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "a.txt").write_text("alpha")
+    (src / "sub").mkdir()
+    (src / "sub" / "b.txt").write_text("beta")
+    (src / "sub" / "empty").mkdir()
+    (src / "sub" / "c.bin").write_bytes(b"\x00\x01\x02\x03")
+
+    # When: Backing up via our chunked walk and via shutil.copytree separately
+    via_backup = backup_path(src, backup_suffix=".ours")
+    via_shutil = src.with_name(src.name + ".shutil")
+    shutil.copytree(src, via_shutil)
+
+    # Then: The two trees contain identical relative paths and file contents
+    assert via_backup is not None
+    ours = sorted(p.relative_to(via_backup) for p in via_backup.rglob("*"))
+    theirs = sorted(p.relative_to(via_shutil) for p in via_shutil.rglob("*"))
+    assert ours == theirs
+    for rel in ours:
+        a = via_backup / rel
+        b = via_shutil / rel
+        if a.is_file():
+            assert a.read_bytes() == b.read_bytes()
