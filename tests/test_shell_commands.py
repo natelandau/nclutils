@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import pytest
+from pytest_mock import MockerFixture
 
 from nclutils.sh import (
     ShellCommandFailedError,
@@ -242,3 +243,97 @@ def test_exclude_lines(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
     assert "working... 0%" not in str(output)
     assert "working... 10%" not in str(output)
     assert "done" in str(output)
+
+
+@pytest.mark.parametrize(
+    ("codes", "should_raise"),
+    [
+        ((0, 1), False),
+        ((0,), True),
+    ],
+)
+def test_run_command_okay_codes_whitelist(codes: tuple[int, ...], *, should_raise: bool) -> None:
+    """Verify okay_codes whitelists non-zero exit codes."""
+    # Given: A grep that exits 1 because no line matches
+    cmd = "grep"
+    args = ["pattern_that_will_not_match", "/dev/null"]
+
+    # When/Then: The exit code raises only when not in okay_codes
+    if should_raise:
+        with pytest.raises(ShellCommandFailedError) as excinfo:
+            run_command(cmd, args, okay_codes=codes, quiet=True)
+        assert excinfo.value.exit_code == 1
+    else:
+        result = run_command(cmd, args, okay_codes=codes, quiet=True)
+        assert result == ""
+
+
+def test_run_command_fg_passes_fg_kwarg_to_sh(mocker: MockerFixture) -> None:
+    """Verify fg=True forwards _fg=True to sh.Command and skips capture kwargs."""
+    # Given: sh.Command is mocked so the underlying invocation is intercepted
+    mock_cmd_class = mocker.patch("nclutils.sh.shell_command.sh.Command")
+
+    # When: Running with fg=True
+    run_command("echo", ["test"], fg=True)
+
+    # Then: The command was called with _fg=True and without capture callbacks
+    mock_cmd_class.assert_called_once_with("echo")
+    cmd_instance = mock_cmd_class.return_value
+    cmd_instance.assert_called_once()
+    call_kwargs = cmd_instance.call_args.kwargs
+    assert call_kwargs.get("_fg") is True
+    assert "_out" not in call_kwargs
+    assert "_err" not in call_kwargs
+    assert "_tee" not in call_kwargs
+
+
+def test_run_command_with_sudo_enters_sudo_context(mocker: MockerFixture) -> None:
+    """Verify sudo=True wraps execution in sh.contrib.sudo(_with=True)."""
+    # Given: sh.contrib is replaced with a MagicMock (sh.contrib.sudo is a property
+    # so it cannot be patched directly); sh.Command is stubbed so no real process runs
+    fake_contrib = mocker.MagicMock()
+    mocker.patch("nclutils.sh.shell_command.sh.contrib", new=fake_contrib)
+    mocker.patch("nclutils.sh.shell_command.sh.Command")
+
+    # When: Running with sudo=True
+    run_command("echo", ["hello"], sudo=True, quiet=True)
+
+    # Then: sudo was invoked with _with=True (and notably WITHOUT k=True, which
+    # would invalidate cached credentials before each call) and was entered
+    fake_contrib.sudo.assert_called_once_with(_with=True)
+    fake_contrib.sudo.return_value.__enter__.assert_called_once()
+
+
+def test_run_command_without_sudo_does_not_enter_sudo_context(
+    mocker: MockerFixture,
+) -> None:
+    """Verify sudo=False leaves sh.contrib.sudo untouched."""
+    # Given: sh.contrib is replaced with a MagicMock and sh.Command is stubbed
+    fake_contrib = mocker.MagicMock()
+    mocker.patch("nclutils.sh.shell_command.sh.contrib", new=fake_contrib)
+    mocker.patch("nclutils.sh.shell_command.sh.Command")
+
+    # When: Running without sudo
+    run_command("echo", ["hello"], quiet=True)
+
+    # Then: sudo was never invoked
+    fake_contrib.sudo.assert_not_called()
+
+
+def test_run_command_err_to_out_false_drops_successful_stderr(
+    capsys: pytest.CaptureFixture,
+) -> None:
+    """Verify err_to_out=False suppresses stderr from a successful command."""
+    # Given: A successful command emitting both stdout and stderr
+    cmd = "sh"
+    args = ["-c", "echo OUTLINE; echo ERRLINE >&2"]
+
+    # When: Running with err_to_out=False
+    output = run_command(cmd, args, err_to_out=False)
+
+    # Then: stderr is absent from both the captured return value and the streamed console
+    assert "OUTLINE" in output
+    assert "ERRLINE" not in output
+    captured = capsys.readouterr()
+    assert "OUTLINE" in captured.out
+    assert "ERRLINE" not in captured.out
