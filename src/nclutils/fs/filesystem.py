@@ -430,11 +430,7 @@ def find_files(
             return False
         if not ignore_dotfiles:
             return True
-        try:
-            rel_parts = p.relative_to(path).parts
-        except ValueError:
-            rel_parts = (p.name,)
-        return not any(part.startswith(".") for part in rel_parts)
+        return not any(part.startswith(".") for part in p.relative_to(path).parts)
 
     patterns = ["*"] if globs is None else globs
 
