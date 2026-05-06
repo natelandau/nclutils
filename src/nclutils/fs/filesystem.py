@@ -69,9 +69,10 @@ def _sum_bytes(root: Path) -> tuple[int, int]:
     """
     total = 0
     count = 0
-    for current_root, _, files in root.walk():
+    for current_root, _, files in os.walk(root):
+        base = Path(current_root)
         for name in files:
-            total += (current_root / name).stat().st_size
+            total += (base / name).stat().st_size
             count += 1
     return total, count
 
@@ -97,7 +98,7 @@ class _Copier:
         """Stub. Filled in by Tasks 5 and 6."""
         raise NotImplementedError
 
-    def backup(self, src: Path, suffix: str = "") -> Path | None:
+    def backup(self, src: Path, backup_suffix: str = "") -> Path | None:
         """Stub. Filled in by Tasks 2 and 3."""
         raise NotImplementedError
 
