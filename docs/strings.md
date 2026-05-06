@@ -117,7 +117,7 @@ If the text is already at or beyond the target length, the original string is re
 
 ### `random_string`
 
-Generate a random ASCII letter string of a given length. Uses `random.choice`, so it's not cryptographically secure — for that, use `nclutils.utils.new_uid` instead.
+Generate a random ASCII letter string of a given length. Uses `random.choice`, so it's not cryptographically secure; for that, use `nclutils.utils.new_uid` instead.
 
 ```python
 from nclutils.strings import random_string

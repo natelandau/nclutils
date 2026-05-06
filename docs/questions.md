@@ -91,7 +91,8 @@ selected = choose_multiple_from_list(
 # -> ["fe", "be"] (or whichever boxes the user checked)
 ```
 
-> **Note:** Mixing shapes in the same call works (each item is inspected independently), but it's a smell. Pick one shape per prompt.
+> [!NOTE]
+> Mixing shapes in the same call works (each item is inspected independently), but it's a smell. Pick one shape per prompt.
 
 ## API reference
 

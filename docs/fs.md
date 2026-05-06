@@ -33,9 +33,11 @@ copy_file(src, dst, keep_backup=False)
 
 `with_progress=True` shows a Rich progress bar; `transient=True` (the default) clears the bar after the copy completes.
 
-> **Note:** `copy_directory` requires Python 3.12+ because it uses `Path.walk()`. Calling it on an older interpreter raises `ValueError`.
+> [!NOTE]
+> `copy_directory` requires Python 3.12+ because it uses `Path.walk()`. Calling it on an older interpreter raises `ValueError`.
 
-> **Warning:** Refusing to copy is silent. Same source and destination, or copying a directory into itself or its parent, returns the source path and logs a warning rather than raising. Check the return value or watch the `nclutils.fs` logger if this matters.
+> [!WARNING]
+> Refusing to copy is silent. Same source and destination, or copying a directory into itself or its parent, returns the source path and logs a warning rather than raising. Check the return value or watch the `nclutils.fs` logger if this matters.
 
 ## Standalone backups
 
@@ -58,7 +60,7 @@ By default `backup_path` returns `None` when the source doesn't exist. Pass `rai
 
 ## Cleaning a directory
 
-`clean_directory` empties a directory in place — files are unlinked and subdirectories are removed recursively, but the directory itself stays.
+`clean_directory` empties a directory in place: files are unlinked and subdirectories are removed recursively, but the directory itself stays.
 
 ```python
 from pathlib import Path
@@ -157,7 +159,7 @@ logging.getLogger("nclutils.fs").setLevel(logging.DEBUG)
 logging.basicConfig()
 ```
 
-This is independent of `nclutils.pretty_print` — it covers internal operations like "starting a copy" or "skipping a backup because the source is missing."
+This is independent of `nclutils.pretty_print`. It covers internal operations like "starting a copy" or "skipping a backup because the source is missing."
 
 ## API reference
 

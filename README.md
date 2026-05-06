@@ -61,7 +61,7 @@ from nclutils.utils import iso_timestamp, unique_id
 
 ## Modules
 
-The larger modules have their own documentation pages. Smaller modules are listed inline below. Function signatures live with the source — consult docstrings (`help(func)` or your editor's hover) for authoritative argument details.
+The larger modules have their own documentation pages. Smaller modules are listed inline below. Function signatures live with the source; consult docstrings (`help(func)` or your editor's hover) for authoritative argument details.
 
 | Module                    | Summary                                                  | Docs                                  |
 | ------------------------- | -------------------------------------------------------- | ------------------------------------- |
