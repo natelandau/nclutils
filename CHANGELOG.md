@@ -1,3 +1,41 @@
+## v3.0.0 (2026-05-06)
+
+### BREAKING CHANGE
+
+- `from nclutils import info, success, ...` and similar
+root-level imports no longer work. Migrate to `from nclutils import pp`
+with `pp.info(...)` call sites, or `from nclutils.pp import info` for
+direct symbol imports.
+- `from nclutils import logger` is removed. Replace
+with stdlib `logging`: `logger = logging.getLogger("your.module")`.
+The `nclutils.logging` submodule is deleted entirely. Internal
+diagnostic output from `nclutils.fs` / `nclutils.text_processing`
+is now silent unless the consuming app attaches a handler to the
+`nclutils` logger or its descendants.
+- print_debug, pp, and PrintStyle are removed. console
+and err_console are now functions returning the default emitter's
+Console (call them: console().print(...)), not module-level Console
+instances. imports like `from nclutils import copy_file` no
+longer work. Use `from nclutils.fs import copy_file` (and equivalents
+for sh, strings, utils, questions, text_processing, network).
+
+### Feat
+
+- **sh**: redesign shell module on subprocess (#28)
+- **pretty_print**: rework around Emitter API (#24)
+- remove pytest fixtures (#23)
+
+### Fix
+
+- **sh**: repair sudo, mutable default, and test gaps (#27)
+
+### Refactor
+
+- **pp**: rename pretty_print module to pp (#31)
+- **fs**: _Copier class, strict kwarg, unified progress (#30)
+- **fs**: correctness, consistency, and ergonomics cleanup (#29)
+- drop nclutils.logging, use stdlib logging (#25)
+
 ## v2.1.0 (2025-08-02)
 
 ### Feat
