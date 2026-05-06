@@ -138,14 +138,7 @@ class _Copier:
             logger.debug("rmtree %s", dst)
             shutil.rmtree(dst)
 
-        if self.with_progress:
-            with Progress(transient=self.transient, console=self.console) as progress_bar:
-                copy_task = progress_bar.add_task(f"Copy {src.name}", total=src.stat().st_size)
-                _do_copy_file(src, dst, progress_bar=progress_bar, task=copy_task)
-                logger.debug("copyfile %s %s", src, dst)
-        else:
-            _do_copy_file(src, dst)
-            logger.debug("copyfile %s %s", src, dst)
+        self._copy_single_file(src, dst, label="Copy")
 
         return dst
 
@@ -255,6 +248,20 @@ class _Copier:
                     _do_copy_file(src_file, new_parent / name, progress_bar=progress, task=inner)
                     progress.update(outer, advance=size)
 
+    def _copy_single_file(self, src: Path, dst: Path, label: str) -> None:
+        """Copy a single file with optional Progress, using this Copier's config.
+
+        Shared by `copy_file` and `backup`'s file branch so both call sites
+        agree on Progress setup, label format, and debug logging.
+        """
+        if self.with_progress:
+            with Progress(transient=self.transient, console=self.console) as progress_bar:
+                copy_task = progress_bar.add_task(f"{label} {src.name}", total=src.stat().st_size)
+                _do_copy_file(src, dst, progress_bar=progress_bar, task=copy_task)
+        else:
+            _do_copy_file(src, dst)
+        logger.debug("copyfile %s %s", src, dst)
+
     def backup(self, src: Path, backup_suffix: str = "") -> Path | None:
         """Create a backup copy of `src` by appending `backup_suffix` to its name.
 
@@ -293,14 +300,8 @@ class _Copier:
                 self._copy_tree_with_progress(src, target, label="Backup")
             else:
                 self._copy_tree_no_progress(src, target)
-        elif self.with_progress:
-            with Progress(transient=self.transient, console=self.console) as progress_bar:
-                copy_task = progress_bar.add_task(f"Backup {src.name}", total=src.stat().st_size)
-                logger.debug("copyfile %s %s", src, target)
-                _do_copy_file(src, target, progress_bar=progress_bar, task=copy_task)
         else:
-            logger.debug("copyfile %s %s", src, target)
-            _do_copy_file(src, target)
+            self._copy_single_file(src, target, label="Backup")
 
         return target
 
