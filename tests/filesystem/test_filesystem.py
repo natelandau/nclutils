@@ -284,7 +284,7 @@ def test_clean_directory_removes_symlink_to_directory(tmp_path: Path) -> None:
     (target / "keep.txt").write_text("keep me")
     workdir = tmp_path / "workdir"
     workdir.mkdir()
-    (workdir / "link").symlink_to(target, target_is_directory=True)
+    (workdir / "link").symlink_to(target)
 
     # When: Cleaning the workdir
     clean_directory(workdir)
@@ -307,3 +307,20 @@ def test_clean_directory_removes_broken_symlink(tmp_path: Path) -> None:
 
     # Then: Broken symlink is gone
     assert not list(workdir.iterdir())
+
+
+def test_clean_directory_removes_symlink_to_file(tmp_path: Path) -> None:
+    """Verify clean_directory unlinks file symlinks without touching the target."""
+    # Given: A directory containing a symlink that points at a regular file
+    target = tmp_path / "real.txt"
+    target.write_text("content")
+    workdir = tmp_path / "workdir"
+    workdir.mkdir()
+    (workdir / "link").symlink_to(target)
+
+    # When: Cleaning the workdir
+    clean_directory(workdir)
+
+    # Then: Symlink is removed but the target file survives untouched
+    assert not list(workdir.iterdir())
+    assert target.read_text() == "content"
