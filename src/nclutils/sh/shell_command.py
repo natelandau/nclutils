@@ -55,7 +55,7 @@ def _resolve_cwd(cwd: Path | str | None) -> Path | None:
     return resolved
 
 
-def run_command(  # noqa: PLR0913, PLR0915
+def run_command(  # noqa: C901, PLR0912, PLR0913, PLR0915
     argv: Sequence[str],
     *,
     cwd: Path | str | None = None,
@@ -78,6 +78,9 @@ def run_command(  # noqa: PLR0913, PLR0915
         cwd: Working directory; None inherits the parent's cwd.
         env: If provided, replaces the child env. Caller extends via ``{**os.environ, ...}``.
         input: Text or bytes written to the child's stdin and then closed.
+            For large inputs (>64KB) where the child also produces output,
+            deadlock is possible because stdout drainage starts after stdin
+            is fully written; pipe via shell redirection in that case.
         timeout: Seconds before the child is terminated and TimeoutError raised.
         exclude_regex: Lines matching this regex are dropped from both the streamed
             output and the captured strings.
@@ -120,10 +123,19 @@ def run_command(  # noqa: PLR0913, PLR0915
         )
     except FileNotFoundError as e:
         raise ShellCommandNotFoundError(argv=final_argv_tuple, e=e) from e
+    except OSError as e:
+        raise ShellCommandFailedError(
+            msg=f"Failed to spawn {final_argv[0]}: {e}",
+            result=None,
+        ) from e
 
     if input_bytes is not None and proc.stdin is not None:
         try:
             proc.stdin.write(input_bytes)
+        except BrokenPipeError:
+            # Child exited before consuming stdin. Let the normal returncode path
+            # surface the failure via ShellCommandFailedError (or check=False).
+            pass
         finally:
             proc.stdin.close()
 
@@ -136,9 +148,19 @@ def run_command(  # noqa: PLR0913, PLR0915
     if proc.stdout is None or proc.stderr is None:  # pragma: no cover
         _msg = "Popen did not open stdout/stderr pipes as expected"
         raise RuntimeError(_msg)
+
+    pump_errors: dict[str, BaseException | None] = {"out": None, "err": None}
+
+    def _run_pump(slot: str, **kwargs: object) -> None:
+        try:
+            pump_pipe(**kwargs)  # type: ignore[arg-type]
+        except BaseException as e:  # noqa: BLE001 -- capture and re-raise from caller
+            pump_errors[slot] = e
+
     t_out = threading.Thread(
-        target=pump_pipe,
+        target=_run_pump,
         kwargs={
+            "slot": "out",
             "pipe": proc.stdout,
             "buffer": stdout_lines,
             "sink": sout_sink,
@@ -146,8 +168,9 @@ def run_command(  # noqa: PLR0913, PLR0915
         },
     )
     t_err = threading.Thread(
-        target=pump_pipe,
+        target=_run_pump,
         kwargs={
+            "slot": "err",
             "pipe": proc.stderr,
             "buffer": stderr_lines,
             "sink": serr_sink,
@@ -167,6 +190,12 @@ def run_command(  # noqa: PLR0913, PLR0915
     finally:
         t_out.join()
         t_err.join()
+
+    # Surface any pump-thread exception (e.g., UnicodeDecodeError) before evaluating
+    # the timeout/check branches so a decode error isn't masked by a normal exit.
+    for err in (pump_errors["out"], pump_errors["err"]):
+        if err is not None:
+            raise err
 
     duration = time.monotonic() - started
     result = CompletedCommand(

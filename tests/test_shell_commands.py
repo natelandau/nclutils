@@ -419,3 +419,28 @@ class TestRunCommandCapture:
         captured = capsys.readouterr()
         assert captured.out == ""
         assert captured.err == ""
+
+    def test_invalid_utf8_in_child_output_raises(self) -> None:
+        """Verify non-utf8 child output surfaces UnicodeDecodeError to the caller."""
+        # Given/When/Then: a printf that emits invalid utf-8 bytes
+        with pytest.raises(UnicodeDecodeError):
+            run_command(["printf", r"\xff\xfe"])
+
+    def test_concurrent_stdout_and_stderr_both_captured(self) -> None:
+        """Verify both stdout and stderr are captured when child writes to both."""
+        # Given/When: a shell command writing to both streams
+        result = run_command(["sh", "-c", "echo out; echo err >&2"])
+
+        # Then: both streams captured into the result's separate fields
+        assert "out" in result.stdout
+        assert "err" in result.stderr
+
+    def test_cwd_accepts_str_and_path(self, tmp_path: Path) -> None:
+        """Verify cwd accepts both str and Path."""
+        # Given: a tmp directory
+        # When: invoked once with str cwd, once with Path cwd
+        for cwd in (tmp_path, str(tmp_path)):
+            result = run_command(["pwd"], cwd=cwd)
+
+            # Then: both produce the same resolved cwd
+            assert result.cwd == tmp_path.resolve()
