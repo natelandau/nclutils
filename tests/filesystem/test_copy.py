@@ -104,21 +104,20 @@ def test_copy_file_same_file(tmp_path: Path, fs_caplog: pytest.LogCaptureFixture
     assert src.exists()
 
 
-def test_copy_directory(tmp_path: Path, fs_caplog: pytest.LogCaptureFixture) -> None:
-    """Verify copy_file raises error when copying directory."""
-    # Given: Source directory with files
+def test_copy_file_source_is_directory(tmp_path: Path, fs_caplog: pytest.LogCaptureFixture) -> None:
+    """Verify copy_file raises IsADirectoryError when the source is a directory."""
+    # Given: A source directory with files
     src = tmp_path / "src"
     dst = tmp_path / "dst"
     src.mkdir()
     (src / "file1.txt").write_text("Hello, world!")
-    (src / "file2.txt").write_text("Hello, world!")
 
-    # When: Attempting to copy directory
-    with pytest.raises(FileNotFoundError):
+    # When/Then: Calling copy_file on a directory raises the correct exception type
+    with pytest.raises(IsADirectoryError):
         copy_file(src, dst)
 
-    # Then: Warning is logged
-    assert "is not a file. Did not copy" in fs_caplog.text
+    # Then: An error is logged describing the directory rejection
+    assert "is a directory" in fs_caplog.text
 
 
 def test_copy_file_with_no_progress(

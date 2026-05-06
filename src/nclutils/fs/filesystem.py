@@ -161,19 +161,27 @@ def copy_file(
         Path: Path to the destination file after copy completion
 
     Raises:
-        FileNotFoundError: If source file does not exist or is not a regular file
+        FileNotFoundError: If the source path does not exist
+        IsADirectoryError: If the source path is a directory
+        OSError: If the source path exists but is not a regular file
     """
     if not src.exists():
         msg = f"source file `{src}` does not exist. Did not copy."
         logger.error(msg)
         raise FileNotFoundError(msg)
 
-    if not src.is_file():
-        msg = f"source file `{src}` is not a file. Did not copy."
+    if src.is_dir():
+        msg = f"source `{src}` is a directory, not a file. Did not copy."
         logger.error(msg)
-        raise FileNotFoundError(msg)
+        raise IsADirectoryError(msg)
 
-    dst = dst.parent.expanduser().resolve() / dst.name
+    if not src.is_file():
+        msg = f"source `{src}` is not a regular file. Did not copy."
+        logger.error(msg)
+        raise OSError(msg)
+
+    src = src.expanduser().resolve()
+    dst = dst.expanduser().resolve()
 
     # Check if source and destination are the same to avoid unnecessary copy
     if src == dst or (dst.exists() and src.samefile(dst)):
@@ -204,9 +212,6 @@ def copy_file(
     else:
         _do_copy_file(src, dst)
         logger.debug("copyfile %s %s", src, dst)
-
-    # Preserve original file permissions
-    shutil.copymode(str(src), str(dst))
 
     return dst
 
