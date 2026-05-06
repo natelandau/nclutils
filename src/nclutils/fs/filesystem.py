@@ -2,7 +2,6 @@
 
 import logging
 import os
-import platform
 import re
 import shutil
 from pathlib import Path
@@ -13,7 +12,6 @@ from rich.progress import Progress, TaskID
 from rich.text import Text
 from rich.tree import Tree
 
-from nclutils.sh import ShellCommandFailedError, run_command
 from nclutils.utils import check_python_version, new_timestamp_uid
 
 logger = logging.getLogger(__name__)
@@ -454,37 +452,32 @@ def find_files(
 def find_user_home_dir(username: str | None = None) -> Path | None:
     """Locate and return the home directory path for a given or current user.
 
-    Search for the home directory using system-specific commands. If no username is provided, check for sudo user first, then fall back to current user's home. For Linux, use getent passwd. For macOS, use dscl to look up NFSHomeDirectory.
+    If no username is provided, fall back to the `SUDO_USER` environment variable so
+    scripts running under sudo resolve the invoking user's home rather than `/root`.
+    On POSIX systems, lookups go through the standard library `pwd` module
+    (`pwd.getpwnam(username).pw_dir`). On platforms without `pwd` (e.g. Windows),
+    return `None` and log a warning.
 
     Args:
-        username (str | None, optional): Username to find home directory for. If None, use sudo user or current user. Defaults to None.
+        username (str | None, optional): Username to find home directory for. If None, use SUDO_USER or the current user. Defaults to None.
 
     Returns:
-        Path | None: Home directory path for the specified or current user, or None if not found
+        Path | None: Home directory path for the specified user, or None if the user is not found or the platform does not provide `pwd`.
     """
     if username is None:
-        if sudo_user := os.getenv("SUDO_USER"):
-            username = sudo_user
-        else:
+        sudo_user = os.getenv("SUDO_USER")
+        if not sudo_user:
             return Path.home()
+        username = sudo_user
 
-    if platform.system() == "Linux":
-        try:
-            return Path(
-                run_command(["getent", "passwd", username]).stdout.strip().split(":")[5].strip()
-            )
-        except ShellCommandFailedError:
-            return None
+    try:
+        import pwd  # noqa: PLC0415
+    except ImportError:
+        logger.warning("pwd module unavailable; cannot resolve home directory for `%s`", username)
+        return None
 
-    if platform.system() == "Darwin":
-        try:
-            return Path(
-                run_command(["dscl", ".", "-read", f"/Users/{username}", "NFSHomeDirectory"])
-                .stdout.strip()
-                .split(":")[1]
-                .strip()
-            )
-        except ShellCommandFailedError:
-            return None
-
-    return None
+    try:
+        return Path(pwd.getpwnam(username).pw_dir)
+    except KeyError:
+        logger.debug("pwd lookup failed for `%s`", username)
+        return None
