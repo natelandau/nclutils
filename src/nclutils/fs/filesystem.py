@@ -27,42 +27,37 @@ IO_BUFFER_SIZE = 4096 * 1024
 def _do_copy_file(
     src: Path, dst: Path, *, progress_bar: Progress | None = None, task: TaskID | None = None
 ) -> None:
-    """Copy file contents in chunks with optional progress tracking.
+    """Copy a file's contents in chunks, preserving permissions, with optional progress tracking.
 
     Args:
-        src (Path): Source file to read from
-        dst (Path): Destination file to write to
-        progress_bar (Progress | None, optional): Progress bar instance for tracking. Defaults to None
-        task (TaskID | None, optional): Task ID for progress updates. Defaults to None
+        src (Path): Source file to read from.
+        dst (Path): Destination file to write to.
+        progress_bar (Progress | None, optional): Progress bar instance for tracking. Defaults to None.
+        task (TaskID | None, optional): Task ID for progress updates. Defaults to None.
 
     Raises:
-        RuntimeError: If the copy operation fails or results in incomplete data
+        RuntimeError: If the destination file size does not match the source after the copy.
     """
     src_size = src.stat().st_size
 
     with src.open("rb") as src_bytes, dst.open("wb") as dst_bytes:
-        total_bytes_copied = 0
+        bytes_copied = 0
         while True:
             buf = src_bytes.read(IO_BUFFER_SIZE)
             if not buf:
                 break
             dst_bytes.write(buf)
-            total_bytes_copied += len(buf)
+            bytes_copied += len(buf)
             if progress_bar is not None and task is not None:
-                progress_bar.update(task, completed=total_bytes_copied)
+                progress_bar.update(task, completed=bytes_copied)
 
-    # Verify the copy was complete by checking file sizes
-    if total_bytes_copied != src_size:
-        msg = f"copy file incomplete: expected {src_size} bytes, copied {total_bytes_copied} bytes"
-        logger.error(msg)
-        raise RuntimeError(msg)
-
-    # Double-check destination file size matches source
     dst_size = dst.stat().st_size
     if dst_size != src_size:
-        msg = f"copy file incomplete: destination file size mismatch: source {src_size} bytes, destination {dst_size} bytes"
+        msg = f"copy incomplete: expected {src_size} bytes, destination has {dst_size} bytes"
         logger.error(msg)
         raise RuntimeError(msg)
+
+    shutil.copymode(src, dst)
 
 
 def backup_path(
@@ -76,56 +71,53 @@ def backup_path(
     """Create a backup copy of a file/directory by appending a suffix to the original name. If no suffix is provided, generate one using a timestamp. Skip if the source path doesn't exist.
 
     Args:
-        src (Path): Path to the file or directory to back up
-        backup_suffix (str, optional): Custom suffix to append to the backup name.
-        raise_on_missing (bool, optional): Whether to raise an error if the source path does not exist. Defaults to False.
-        with_progress (bool, optional): Show a progress bar during copy. Defaults to False
-        transient (bool, optional): Remove the progress bar after completion. Defaults to True
+        src (Path): Path to the file or directory to back up.
+        backup_suffix (str, optional): Custom suffix to append to the backup name. Defaults to a timestamp-based suffix.
+        raise_on_missing (bool, optional): Raise if the source path does not exist. Defaults to False.
+        with_progress (bool, optional): Show a progress bar during file copies. Defaults to False.
+        transient (bool, optional): Remove the progress bar after completion. Defaults to True.
 
     Returns:
-        Path | None: Path to the created backup file/directory, or None if source doesn't exist
+        Path | None: Path to the created backup file/directory, or None if the source does not exist and `raise_on_missing` is False.
 
     Raises:
-        FileNotFoundError: If the source path does not exist and raise_on_missing is True
+        FileNotFoundError: If the source path does not exist and `raise_on_missing` is True.
     """
-    if not src.exists() and raise_on_missing:
-        msg = f"skip backup: does not exist `{src}`"
-        logger.error(msg)
-        raise FileNotFoundError(msg)
-
     if not src.exists():
         msg = f"skip backup: does not exist `{src}`"
+        if raise_on_missing:
+            logger.error(msg)
+            raise FileNotFoundError(msg)
         logger.warning(msg)
         return None
 
     if not backup_suffix:
         backup_suffix = "." + new_timestamp_uid() + ".bak"
 
-    backup_path = src.with_name(src.name + backup_suffix)
+    target = src.with_name(src.name + backup_suffix)
 
-    # Clear the target of the backup in case it already exists.
-    # Note this isn't perfectly atomic, if another thread does a backup
-    # to an identical backup directory but this would be very rare.
-    if backup_path.is_symlink():
-        logger.debug("unlink %s", backup_path)
-        backup_path.unlink()
-    elif backup_path.is_dir():
-        logger.debug("rmtree %s", backup_path)
-        shutil.rmtree(backup_path)
+    # Clear the target if anything is already there. This isn't atomic across processes,
+    # but the timestamped default suffix makes a real collision very rare.
+    if target.is_symlink() or target.is_file():
+        logger.debug("unlink %s", target)
+        target.unlink()
+    elif target.is_dir():
+        logger.debug("rmtree %s", target)
+        shutil.rmtree(target)
 
     if src.is_dir():
-        logger.debug("copytree %s %s", src, backup_path)
-        shutil.copytree(src, backup_path)
+        logger.debug("copytree %s %s", src, target)
+        shutil.copytree(src, target)
     elif with_progress:
         with Progress(transient=transient) as progress_bar:
             copy_task = progress_bar.add_task(f"Backup {src.name}", total=src.stat().st_size)
-            logger.debug("copyfile %s %s", src, backup_path)
-            _do_copy_file(src, backup_path, progress_bar=progress_bar, task=copy_task)
+            logger.debug("copyfile %s %s", src, target)
+            _do_copy_file(src, target, progress_bar=progress_bar, task=copy_task)
     else:
-        logger.debug("copyfile %s %s", src, backup_path)
-        _do_copy_file(src, backup_path)
+        logger.debug("copyfile %s %s", src, target)
+        _do_copy_file(src, target)
 
-    return backup_path
+    return target
 
 
 def clean_directory(directory: Path) -> None:

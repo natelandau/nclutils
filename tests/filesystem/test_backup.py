@@ -132,3 +132,36 @@ def test_backup_missing_file_no_raise(tmp_path: Path) -> None:
     # Then: No backup created
     assert not test_file.exists()
     assert output is None
+
+
+def test_backup_path_preserves_file_mode(tmp_path: Path) -> None:
+    """Verify backup_path preserves the executable bit on file backups."""
+    # Given: An executable script
+    script = tmp_path / "run.sh"
+    script.write_text("#!/bin/sh\necho hi\n")
+    script.chmod(0o755)
+
+    # When: Creating a backup
+    backup = backup_path(script)
+
+    # Then: Backup retains executable permissions
+    assert backup is not None
+    assert (backup.stat().st_mode & 0o777) == 0o755
+
+
+def test_backup_directory_overwrites_existing_file_at_target(tmp_path: Path) -> None:
+    """Verify backup_path replaces an existing regular file at the backup target when source is a directory."""
+    # Given: A source directory and a regular file already sitting at the backup target
+    src = tmp_path / "data"
+    src.mkdir()
+    (src / "inner.txt").write_text("payload")
+    target = tmp_path / "data.bak"
+    target.write_text("stale")
+
+    # When: Backing up the directory using a custom suffix that collides with the file
+    backup = backup_path(src, backup_suffix=".bak")
+
+    # Then: The backup directory exists and contains the source's contents
+    assert backup == target
+    assert backup.is_dir()
+    assert (backup / "inner.txt").read_text() == "payload"
