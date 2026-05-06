@@ -98,9 +98,47 @@ class _Copier:
         """Stub. Filled in by Tasks 5 and 6."""
         raise NotImplementedError
 
-    def backup(self, src: Path, backup_suffix: str = "") -> Path | None:
-        """Stub. Filled in by Tasks 2 and 3."""
-        raise NotImplementedError
+    def backup(
+        self, src: Path, backup_suffix: str = "", *, raise_on_missing: bool = False
+    ) -> Path | None:
+        """Create a backup copy of `src` by appending `backup_suffix` to its name.
+
+        If `backup_suffix` is empty, generates a timestamped suffix. Skips silently when
+        `src` does not exist (or raises `FileNotFoundError` if `raise_on_missing`).
+        """
+        if not src.exists():
+            msg = f"skip backup: does not exist `{src}`"
+            if raise_on_missing:
+                logger.error(msg)
+                raise FileNotFoundError(msg) from None
+            logger.warning(msg)
+            return None
+
+        if not backup_suffix:
+            backup_suffix = "." + new_timestamp_uid() + ".bak"
+
+        target = src.with_name(src.name + backup_suffix)
+
+        if target.is_symlink() or target.is_file():
+            logger.debug("unlink %s", target)
+            target.unlink()
+        elif target.is_dir():
+            logger.debug("rmtree %s", target)
+            shutil.rmtree(target)
+
+        if src.is_dir():
+            logger.debug("copytree %s %s", src, target)
+            shutil.copytree(src, target)
+        elif self.with_progress:
+            with Progress(transient=self.transient, console=self.console) as progress_bar:
+                copy_task = progress_bar.add_task(f"Backup {src.name}", total=src.stat().st_size)
+                logger.debug("copyfile %s %s", src, target)
+                _do_copy_file(src, target, progress_bar=progress_bar, task=copy_task)
+        else:
+            logger.debug("copyfile %s %s", src, target)
+            _do_copy_file(src, target)
+
+        return target
 
 
 def backup_path(
@@ -128,41 +166,9 @@ def backup_path(
     Raises:
         FileNotFoundError: If the source path does not exist and `raise_on_missing` is True.
     """
-    if not src.exists():
-        msg = f"skip backup: does not exist `{src}`"
-        if raise_on_missing:
-            logger.error(msg)
-            raise FileNotFoundError(msg) from None
-        logger.warning(msg)
-        return None
-
-    if not backup_suffix:
-        backup_suffix = "." + new_timestamp_uid() + ".bak"
-
-    target = src.with_name(src.name + backup_suffix)
-
-    # Clear the target if anything is already there. This isn't atomic across processes,
-    # but the timestamped default suffix makes a real collision very rare.
-    if target.is_symlink() or target.is_file():
-        logger.debug("unlink %s", target)
-        target.unlink()
-    elif target.is_dir():
-        logger.debug("rmtree %s", target)
-        shutil.rmtree(target)
-
-    if src.is_dir():
-        logger.debug("copytree %s %s", src, target)
-        shutil.copytree(src, target)
-    elif with_progress:
-        with Progress(transient=transient, console=console) as progress_bar:
-            copy_task = progress_bar.add_task(f"Backup {src.name}", total=src.stat().st_size)
-            logger.debug("copyfile %s %s", src, target)
-            _do_copy_file(src, target, progress_bar=progress_bar, task=copy_task)
-    else:
-        logger.debug("copyfile %s %s", src, target)
-        _do_copy_file(src, target)
-
-    return target
+    return _Copier(with_progress=with_progress, transient=transient, console=console).backup(
+        src, backup_suffix, raise_on_missing=raise_on_missing
+    )
 
 
 def clean_directory(directory: Path) -> None:
