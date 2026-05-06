@@ -91,8 +91,59 @@ class _Copier:
     strict: bool = False
 
     def copy_file(self, src: Path, dst: Path, *, keep_backup: bool = True) -> Path:
-        """Stub. Filled in by Task 4."""
-        raise NotImplementedError
+        """Copy a file to a destination using this Copier's shared configuration.
+
+        Validates that src is a regular existing file. If dst exists and keep_backup
+        is True, snapshots dst via self.backup() before overwriting.
+        """
+        src = src.expanduser().resolve()
+        dst = dst.expanduser().resolve()
+
+        if not src.exists():
+            msg = f"source file `{src}` does not exist. Did not copy."
+            logger.error(msg)
+            raise FileNotFoundError(msg) from None
+
+        if src.is_dir():
+            msg = f"source `{src}` is a directory, not a file. Did not copy."
+            logger.error(msg)
+            raise IsADirectoryError(msg) from None
+
+        if not src.is_file():
+            msg = f"source `{src}` is not a regular file. Did not copy."
+            logger.error(msg)
+            raise OSError(msg) from None
+
+        if src == dst or (dst.exists() and src.samefile(dst)):
+            msg = (
+                f"source file `{src}` and destination file `{dst}` are the same file. Did not copy."
+            )
+            logger.warning(msg)
+            return src
+
+        if dst.exists() and keep_backup:
+            logger.debug("backup %s", dst)
+            self.backup(dst)
+
+        dst.parent.mkdir(parents=True, exist_ok=True)
+
+        if dst.is_symlink():
+            logger.debug("unlink %s", dst)
+            dst.unlink()
+        elif dst.is_dir():
+            logger.debug("rmtree %s", dst)
+            shutil.rmtree(dst)
+
+        if self.with_progress:
+            with Progress(transient=self.transient, console=self.console) as progress_bar:
+                copy_task = progress_bar.add_task(f"Copy {src.name}", total=src.stat().st_size)
+                _do_copy_file(src, dst, progress_bar=progress_bar, task=copy_task)
+                logger.debug("copyfile %s %s", src, dst)
+        else:
+            _do_copy_file(src, dst)
+            logger.debug("copyfile %s %s", src, dst)
+
+        return dst
 
     def copy_directory(self, src: Path, dst: Path, *, keep_backup: bool = True) -> Path:
         """Stub. Filled in by Tasks 5 and 6."""
@@ -243,52 +294,9 @@ def copy_file(
         IsADirectoryError: If the source path is a directory
         OSError: If the source path exists but is not a regular file
     """
-    src = src.expanduser().resolve()
-    dst = dst.expanduser().resolve()
-
-    if not src.exists():
-        msg = f"source file `{src}` does not exist. Did not copy."
-        logger.error(msg)
-        raise FileNotFoundError(msg) from None
-
-    if src.is_dir():
-        msg = f"source `{src}` is a directory, not a file. Did not copy."
-        logger.error(msg)
-        raise IsADirectoryError(msg) from None
-
-    if not src.is_file():
-        msg = f"source `{src}` is not a regular file. Did not copy."
-        logger.error(msg)
-        raise OSError(msg) from None
-
-    if src == dst or (dst.exists() and src.samefile(dst)):
-        msg = f"source file `{src}` and destination file `{dst}` are the same file. Did not copy."
-        logger.warning(msg)
-        return src
-
-    if dst.exists() and keep_backup:
-        logger.debug("backup %s", dst)
-        backup_path(dst, with_progress=with_progress, transient=transient, console=console)
-
-    dst.parent.mkdir(parents=True, exist_ok=True)
-
-    if dst.is_symlink():
-        logger.debug("unlink %s", dst)
-        dst.unlink()
-    elif dst.is_dir():
-        logger.debug("rmtree %s", dst)
-        shutil.rmtree(dst)
-
-    if with_progress:
-        with Progress(transient=transient, console=console) as progress_bar:
-            copy_task = progress_bar.add_task(f"Copy {src.name}", total=src.stat().st_size)
-            _do_copy_file(src, dst, progress_bar=progress_bar, task=copy_task)
-            logger.debug("copyfile %s %s", src, dst)
-    else:
-        _do_copy_file(src, dst)
-        logger.debug("copyfile %s %s", src, dst)
-
-    return dst
+    return _Copier(with_progress=with_progress, transient=transient, console=console).copy_file(
+        src, dst, keep_backup=keep_backup
+    )
 
 
 def copy_directory(
