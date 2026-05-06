@@ -499,3 +499,94 @@ class TestRunCommandStreaming:
         assert "a\n" in result.stdout
         assert "b" not in result.stdout
         assert "c\n" in result.stdout
+
+
+class TestRunInteractive:
+    """Tests for run_interactive."""
+
+    def test_returns_exit_code_on_success(self, mocker) -> None:
+        """Verify run_interactive returns the child's exit code without capture."""
+        # Given: a Popen mock that exits 0
+        from nclutils.sh import run_interactive  # noqa: PLC0415
+        from nclutils.sh import shell_command as sc  # noqa: PLC0415
+
+        fake = mocker.MagicMock()
+        fake.wait.return_value = 0
+        fake.returncode = 0
+        mocker.patch.object(sc.subprocess, "Popen", autospec=True, return_value=fake)
+
+        # When: invoking
+        rc = run_interactive(["true"])
+
+        # Then: the returncode is returned
+        assert rc == 0
+
+    def test_inherits_parent_stdio(self, mocker) -> None:
+        """Verify run_interactive does not pass stdin/stdout/stderr=PIPE."""
+        # Given: a Popen mock
+        from nclutils.sh import run_interactive  # noqa: PLC0415
+        from nclutils.sh import shell_command as sc  # noqa: PLC0415
+
+        fake = mocker.MagicMock()
+        fake.wait.return_value = 0
+        fake.returncode = 0
+        popen = mocker.patch.object(sc.subprocess, "Popen", autospec=True, return_value=fake)
+
+        # When: invoking
+        run_interactive(["vim"])
+
+        # Then: Popen was called without stdout=PIPE / stderr=PIPE
+        kwargs = popen.call_args.kwargs
+        assert "stdout" not in kwargs or kwargs["stdout"] is None
+        assert "stderr" not in kwargs or kwargs["stderr"] is None
+
+    def test_check_true_raises_failed_on_nonzero(self, mocker) -> None:
+        """Verify check=True raises ShellCommandFailedError for non-zero exits."""
+        # Given: a Popen mock that exits 1
+        from nclutils.sh import run_interactive  # noqa: PLC0415
+        from nclutils.sh import shell_command as sc  # noqa: PLC0415
+
+        fake = mocker.MagicMock()
+        fake.wait.return_value = 1
+        fake.returncode = 1
+        mocker.patch.object(sc.subprocess, "Popen", autospec=True, return_value=fake)
+
+        # When/Then: check=True (default) raises
+        with pytest.raises(ShellCommandFailedError) as exc:
+            run_interactive(["false"])
+        assert exc.value.result is not None
+        assert exc.value.result.returncode == 1
+
+    def test_check_false_returns_nonzero(self, mocker) -> None:
+        """Verify check=False returns the exit code without raising."""
+        # Given: a Popen mock that exits 1
+        from nclutils.sh import run_interactive  # noqa: PLC0415
+        from nclutils.sh import shell_command as sc  # noqa: PLC0415
+
+        fake = mocker.MagicMock()
+        fake.wait.return_value = 1
+        fake.returncode = 1
+        mocker.patch.object(sc.subprocess, "Popen", autospec=True, return_value=fake)
+
+        # When: check=False
+        rc = run_interactive(["false"], check=False)
+
+        # Then: returns 1
+        assert rc == 1
+
+    def test_sudo_prepends(self, mocker) -> None:
+        """Verify sudo=True prepends sudo to argv."""
+        # Given: a Popen mock recording argv
+        from nclutils.sh import run_interactive  # noqa: PLC0415
+        from nclutils.sh import shell_command as sc  # noqa: PLC0415
+
+        fake = mocker.MagicMock()
+        fake.wait.return_value = 0
+        fake.returncode = 0
+        popen = mocker.patch.object(sc.subprocess, "Popen", autospec=True, return_value=fake)
+
+        # When: running with sudo=True
+        run_interactive(["whoami"], sudo=True)
+
+        # Then: argv prefixed
+        assert popen.call_args.args[0][:2] == ["sudo", "whoami"]

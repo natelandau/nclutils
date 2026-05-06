@@ -215,3 +215,66 @@ def run_command(  # noqa: C901, PLR0912, PLR0913, PLR0915
         raise ShellCommandFailedError(result=result)
 
     return result
+
+
+def run_interactive(
+    argv: Sequence[str],
+    *,
+    cwd: Path | str | None = None,
+    env: Mapping[str, str] | None = None,
+    sudo: bool = False,
+    check: bool = True,
+) -> int:
+    """Run a command that needs a real terminal (vim, less, ssh).
+
+    Inherits the parent's stdin/stdout/stderr — no capture, no pipes, no
+    streaming layer. Use :func:`run_command` for non-interactive commands
+    where you want the captured output.
+
+    Args:
+        argv: Full command including executable.
+        cwd: Working directory; None inherits parent.
+        env: If provided, replaces the child env.
+        sudo: When True, prepends ``["sudo"]`` to argv.
+        check: When True (default), a non-zero exit raises FailedError.
+
+    Returns:
+        The child's exit code.
+    """
+    final_argv: list[str] = list(argv)
+    if sudo:
+        final_argv = ["sudo", *final_argv]
+    final_argv_tuple = tuple(final_argv)
+
+    resolved_cwd = _resolve_cwd(cwd)
+
+    started = time.monotonic()
+    try:
+        proc = subprocess.Popen(  # noqa: S603 -- argv is a list, never shelled
+            final_argv,
+            cwd=resolved_cwd,
+            env=dict(env) if env is not None else None,
+        )
+    except FileNotFoundError as e:
+        raise ShellCommandNotFoundError(argv=final_argv_tuple, e=e) from e
+    except OSError as e:
+        raise ShellCommandFailedError(
+            msg=f"Failed to spawn {final_argv[0]}: {e}",
+            result=None,
+        ) from e
+
+    rc = proc.wait()
+    duration = time.monotonic() - started
+
+    if check and rc != 0:
+        result = CompletedCommand(
+            argv=final_argv_tuple,
+            returncode=rc,
+            stdout="",
+            stderr="",
+            duration=duration,
+            cwd=resolved_cwd,
+        )
+        raise ShellCommandFailedError(result=result)
+
+    return rc

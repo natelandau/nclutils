@@ -7,7 +7,7 @@ from .errors import (
     ShellCommandNotFoundError,
     ShellCommandTimeoutError,
 )
-from .shell_command import run_command, which
+from .shell_command import run_command, run_interactive, which
 
 __all__ = [
     "CompletedCommand",
@@ -16,5 +16,6 @@ __all__ = [
     "ShellCommandNotFoundError",
     "ShellCommandTimeoutError",
     "run_command",
+    "run_interactive",
     "which",
 ]
