@@ -46,10 +46,10 @@ Some commands use exit codes as data — `grep` returns `1` when there are no ma
 from nclutils.sh import run_command
 
 # 0 (matched) and 1 (no match) are both fine; only 2+ raise
-run_command("grep", ["pattern", "file.txt"], okay_codes=[0, 1])
+run_command("grep", ["pattern", "file.txt"], okay_codes=(0, 1))
 ```
 
-`okay_codes` defaults to `[0]` when empty.
+`okay_codes` defaults to `(0,)`. An empty value falls back to `[0]`.
 
 ### Filtering output
 
@@ -64,9 +64,9 @@ run_command("npm", ["install"], exclude_regex=r"^npm warn deprecated")
 ### Other options
 
 - `quiet=True`. Collect output without printing it to the console.
-- `sudo=True`. Run under `sudo`. Uses `sh.contrib.sudo(k=True)`, which prompts once and caches credentials for the session.
-- `err_to_out=True` (the default). Fold stderr into stdout. Set to `False` to silence stderr entirely from the streamed output.
-- `fg=True`. Run the command in the foreground without capturing output. Use this for interactive commands like `vim` or `less`. The return value is an empty string.
+- `sudo=True`. Run under `sudo`. Requires either an interactive TTY for the password prompt or `NOPASSWD` configured in `sudoers`; will hang or fail in non-interactive contexts (CI, daemons) otherwise.
+- `err_to_out=True` (the default). Fold stderr into the captured stdout. Set to `False` to suppress stderr from both the streamed console output and the returned string.
+- `fg=True`. Run the command in the foreground without capturing output. Use this for interactive commands like `vim` or `less`. The return value is always an empty string.
 
 ## Errors
 
@@ -123,7 +123,7 @@ else:
 
 ## API reference
 
-- `run_command(cmd, args, pushd="", okay_codes=[], exclude_regex=None, *, quiet=False, sudo=False, err_to_out=True, fg=False) -> str`. Run a command and return its captured output.
+- `run_command(cmd, args, pushd="", okay_codes=(0,), exclude_regex=None, *, quiet=False, sudo=False, err_to_out=True, fg=False) -> str`. Run a command and return its captured output.
 - `which(cmd) -> str | None`. Resolve a command name to an absolute path, or `None`.
 - `ShellCommandFailedError`. Raised on non-zero exit. Exposes `exit_code`, `stdout`, `stderr`, `full_cmd`.
 - `ShellCommandNotFoundError`. Raised when the command isn't in `PATH`.

@@ -4,13 +4,7 @@
 class ShellCommandFailedError(Exception):
     """Raised when a shell command fails."""
 
-    def __init__(
-        self,
-        msg: str | None = None,
-        e: Exception | None = None,
-        *args: str | int,
-        **kwargs: int | str | bool,
-    ):
+    def __init__(self, msg: str | None = None, *, e: Exception | None = None) -> None:
         self.exit_code: int | None = None
         self.stderr: str | None = None
         self.stdout: str | None = None
@@ -38,7 +32,7 @@ class ShellCommandFailedError(Exception):
                     ):  # Only add to message if we have a label and value
                         msg += f"\n{label}: {getattr(self, attr)}"
 
-        super().__init__(msg, *args, **kwargs)
+        super().__init__(msg)
 
     @staticmethod
     def _decode_output(output: bytes | str) -> str:
@@ -61,17 +55,11 @@ class ShellCommandFailedError(Exception):
 class ShellCommandNotFoundError(Exception):
     """Raised when a shell command is not found."""
 
-    def __init__(
-        self,
-        msg: str | None = None,
-        e: Exception | None = None,
-        *args: str | int,
-        **kwargs: int | str | bool,
-    ):
+    def __init__(self, msg: str | None = None, *, e: Exception | None = None) -> None:
         if not msg:
             msg = "Shell command not found."
 
         if e:
             msg += f"\nRaised from: {e.__class__.__name__}:\n{e}"
 
-        super().__init__(msg, *args, **kwargs)
+        super().__init__(msg)
