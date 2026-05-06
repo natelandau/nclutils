@@ -36,7 +36,7 @@ from nclutils.sh import run_command
 run_command("pwd", [], pushd=Path("/tmp"))
 ```
 
-If `pushd` points at a directory that doesn't exist, `run_command` raises `ShellCommandFailedError`.
+If `pushd` cannot be entered (missing, not a directory, or no permission), `run_command` raises `ShellCommandFailedError` with the underlying OS error in the message.
 
 ### Allowing non-zero exit codes
 
@@ -106,7 +106,7 @@ except ShellCommandFailedError as e:
     print(e.stderr)
 ```
 
-The exception is also raised when `pushd=` points at a missing directory; in that case the `e` attributes will be `None`.
+The exception is also raised when `pushd=` cannot be entered (missing, not a directory, or no permission). In that case the four attributes above are all `None` because no command actually ran; the underlying `OSError` is chained as `__cause__` and its description is included in the message.
 
 ## Looking up a command
 
