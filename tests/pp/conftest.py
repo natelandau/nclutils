@@ -1,4 +1,4 @@
-"""Shared fixtures for nclutils.pretty_print tests."""
+"""Shared fixtures for nclutils.pp tests."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 import pytest
 from rich.console import Console
 
-from nclutils.pretty_print.emitter import (
+from nclutils.pp.emitter import (
     Emitter,
     LogLevel,
     Theme,

@@ -10,7 +10,7 @@ from rich.json import JSON
 from rich.pretty import Pretty
 from rich.text import Text
 
-from nclutils.pretty_print.emitter import Emitter, Level, LogLevel, Theme, Verbosity
+from nclutils.pp.emitter import Emitter, Level, LogLevel, Theme, Verbosity
 
 if TYPE_CHECKING:
     from pathlib import Path

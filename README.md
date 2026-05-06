@@ -10,19 +10,19 @@ Comprehensive tests are included, but this package is written and maintained for
 
 ```python
 from pathlib import Path
-from nclutils import info, success, step
+from nclutils import pp
 from nclutils.fs import copy_file, find_files
 from nclutils.strings import snake_case
 
-info("collecting Python sources")
+pp.info("collecting Python sources")
 
-with step("copying files") as s:
+with pp.step("copying files") as s:
     for src in find_files(Path("src"), globs=["*.py"]):
         dst = Path("backup") / src.name
         copy_file(src, dst)
         s.sub(f"copied {src.name}")
 
-success(f"normalized name: {snake_case('Hello World')}")
+pp.success(f"normalized name: {snake_case('Hello World')}")
 ```
 
 ## Installation
@@ -41,13 +41,16 @@ The package brings in two runtime dependencies: [questionary](https://github.com
 
 ## Importing
 
-Pretty-printing helpers are re-exported at the package root for convenience:
+Each module is imported from its submodule. The pretty-printing helpers are namespaced under `pp`:
 
 ```python
-from nclutils import info, success, error, step, configure, Verbosity
+from nclutils import pp
+
+pp.info("hello")
+pp.success("done")
 ```
 
-Everything else lives in its submodule and must be imported from there:
+Other modules follow the same pattern:
 
 ```python
 from nclutils.fs import copy_file, find_files
@@ -59,6 +62,12 @@ from nclutils.text_processing import replace_in_file
 from nclutils.utils import iso_timestamp, unique_id
 ```
 
+Individual `pp` symbols can also be imported directly when that reads better at the call site:
+
+```python
+from nclutils.pp import info, success
+```
+
 ## Modules
 
 The larger modules have their own documentation pages. Smaller modules are listed inline below. Function signatures live with the source; consult docstrings (`help(func)` or your editor's hover) for authoritative argument details.
@@ -67,7 +76,7 @@ The larger modules have their own documentation pages. Smaller modules are liste
 | ------------------------- | -------------------------------------------------------- | ------------------------------------- |
 | `nclutils.fs`             | Copy, back up, search, and visualize the filesystem.     | [docs/fs.md](docs/fs.md)              |
 | `nclutils.network`        | Lightweight network reachability check.                  | _(inline below)_                      |
-| `nclutils.pretty_print`   | Rich-based console output, verbosity gates, file logger. | [docs/pretty_print.md](docs/pretty_print.md) |
+| `nclutils.pp`             | Rich-based console output, verbosity gates, file logger. | [docs/pp.md](docs/pp.md)              |
 | `nclutils.questions`      | Single- and multi-select prompts via `questionary`.      | [docs/questions.md](docs/questions.md) |
 | `nclutils.sh`             | Run commands via subprocess; returns `CompletedCommand`, raises typed errors (`ShellCommandError` hierarchy). Includes `run_command`, `run_interactive`, `which`. | [docs/shell_commands.md](docs/shell_commands.md) |
 | `nclutils.strings`        | Case conversions, padding, tokenizing, normalization.    | [docs/strings.md](docs/strings.md)    |
@@ -106,7 +115,7 @@ logging.basicConfig(level=logging.WARNING)
 logging.getLogger("nclutils").setLevel(logging.DEBUG)
 ```
 
-This is separate from `nclutils.pretty_print`, which writes to the console (and optionally a logfile) using its own machinery.
+This is separate from `nclutils.pp`, which writes to the console (and optionally a logfile) using its own machinery.
 
 ## Contributing
 

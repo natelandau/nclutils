@@ -1,4 +1,4 @@
-"""Emitter class and module-level API for pretty_print2's console output.
+"""Emitter class and module-level API for nclutils.pp's console output.
 
 Construct an `Emitter` directly when you need isolated configuration - typically
 in tests or when a library wants to coexist with a host CLI's output settings.
@@ -69,7 +69,7 @@ THEME = RichTheme(
 class Level:
     """Per-level theme override.
 
-    Any field left as None inherits nclutils.pretty_print's built-in default. `marker=""` is
+    Any field left as None inherits nclutils.pp's built-in default. `marker=""` is
     a real value meaning "no marker"; only `None` falls back to the default.
     """
 
@@ -80,7 +80,7 @@ class Level:
 
 @dataclass(frozen=True, slots=True)
 class Theme:
-    """Per-level overrides for nclutils.pretty_print output.
+    """Per-level overrides for nclutils.pp output.
 
     Any level field left as None keeps that level's defaults entirely.
     Successive `configure(theme=...)` calls accumulate at the field level -
@@ -1026,7 +1026,7 @@ def configure(  # noqa: PLR0913
 
     Only fields explicitly passed are updated; omitted kwargs leave the
     existing value untouched. Call after parsing CLI flags to wire `-v`,
-    `--quiet`, etc. into nclutils.pretty_print's output. Theme overrides accumulate at
+    `--quiet`, etc. into nclutils.pp's output. Theme overrides accumulate at
     the field level across successive calls.
     """
     _default.configure(

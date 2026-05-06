@@ -1,6 +1,6 @@
 # Shell commands
 
-A thin wrapper over stdlib `subprocess` for running external commands. Imported from `nclutils.sh`. Results come back as a typed `CompletedCommand` dataclass rather than raw strings, and every failure mode maps to a specific exception class. Output goes to `sys.stdout`/`sys.stderr` directly; `nclutils.sh` does not route through `nclutils.pretty_print`'s console.
+A thin wrapper over stdlib `subprocess` for running external commands. Imported from `nclutils.sh`. Results come back as a typed `CompletedCommand` dataclass rather than raw strings, and every failure mode maps to a specific exception class. Output goes to `sys.stdout`/`sys.stderr` directly; `nclutils.sh` does not route through `nclutils.pp`'s console.
 
 ```python
 from pathlib import Path

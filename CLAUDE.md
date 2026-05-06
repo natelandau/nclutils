@@ -33,11 +33,11 @@ uv run pytest tests/filesystem/test_copy.py -k "backup"
 - `src/nclutils/<module>/__init__.py` — re-exports the public surface and defines `__all__`.
 - `src/nclutils/<module>/<implementation>.py` — actual code.
 
-Only `pretty_print` is re-exported at the package root (`from nclutils import info, success, ...`). Every other module must be imported from its submodule (`from nclutils.fs import copy_file`). Preserve this convention — it's the public API contract and is documented in the README.
+Every module must be imported from its submodule. The preferred form for the pretty-printer is `from nclutils import pp` and call sites use `pp.info(...)`, `pp.success(...)`, etc.; individual symbols may also be pulled with `from nclutils.pp import info`. Other modules follow the same pattern (`from nclutils.fs import copy_file`). Preserve this convention — it's the public API contract and is documented in the README.
 
-`tests/` mirrors the source layout. Larger modules have their own subdirectory (`tests/filesystem/`, `tests/pretty_print/`), each with its own `conftest.py`. Smaller modules use a single `tests/test_<module>.py` file.
+`tests/` mirrors the source layout. Larger modules have their own subdirectory (`tests/filesystem/`, `tests/pp/`), each with its own `conftest.py`. Smaller modules use a single `tests/test_<module>.py` file.
 
-`docs/` contains per-module guides (`fs.md`, `strings.md`, `utils.md`, `pretty_print.md`, `questions.md`, `shell_commands.md`). The README is an index; the `docs/` pages are the deep dives.
+`docs/` contains per-module guides (`fs.md`, `strings.md`, `utils.md`, `pp.md`, `questions.md`, `shell_commands.md`). The README is an index; the `docs/` pages are the deep dives.
 
 **Always update documentation when code changes.** Any change that affects a public function's signature, behavior, defaults, exceptions, or examples must be reflected in the matching `docs/<module>.md` page (and the README's module summary table if the surface area shifts). New public exports must be added to the relevant `__init__.py`'s `__all__`, the module's API reference section in `docs/`, and the README. Removing or renaming a public symbol is a breaking change — update the docs in the same commit.
 
@@ -45,10 +45,10 @@ Only `pretty_print` is re-exported at the package root (`from nclutils import in
 
 The project has two parallel output paths and they are intentionally separate:
 
-1. **`nclutils.pretty_print`** — Rich-based user-facing CLI output (`info`, `success`, `error`, `step()`, etc.). The `Emitter` class owns this, with module-level functions delegating to a shared default. Has its own theme, verbosity gates, and optional file logger.
+1. **`nclutils.pp`** — Rich-based user-facing CLI output (`info`, `success`, `error`, `step()`, etc.). The `Emitter` class owns this, with module-level functions delegating to a shared default. Has its own theme, verbosity gates, and optional file logger.
 2. **stdlib `logging`** — internal diagnostics inside `nclutils.fs` and `nclutils.text_processing`. Each module logs under `nclutils.<module>` and is silent unless the host application attaches a handler.
 
-Do not bridge these. `nclutils.fs` does not call `pretty_print`; `pretty_print` does not call stdlib `logging` for its own output. The project recently migrated off `loguru` (commit 6cafada) — any older guidance referencing `loguru` (including `.cursor/rules/python_preferred_tools.mdc`) is stale.
+Do not bridge these. `nclutils.fs` does not call `pp`; `pp` does not call stdlib `logging` for its own output. The project recently migrated off `loguru` (commit 6cafada) — any older guidance referencing `loguru` (including `.cursor/rules/python_preferred_tools.mdc`) is stale.
 
 ## Testing conventions
 

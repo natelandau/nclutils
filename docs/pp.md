@@ -3,10 +3,10 @@
 Themed console output and file logging for Python CLI scripts. A thin layer over [Rich](https://github.com/Textualize/rich) that gives you `info` / `success` / `warning` / `error` / `debug` / `trace` / `dryrun` calls, a spinner-driven `step()` context manager, and an optional parallel logfile.
 
 ```python
-from nclutils import success, warning
+from nclutils import pp
 
-success("deployed to production")
-warning("API rate limit at 80%")
+pp.success("deployed to production")
+pp.warning("API rate limit at 80%")
 ```
 
 ```
@@ -17,93 +17,93 @@ warning("API rate limit at 80%")
 
 ## What it owns
 
-`pretty_print` handles the four things that grow out of `print()` in any non-trivial CLI script: the verbosity gates (`--verbose` / `--quiet`), the stdout/stderr split, Rich-markup escaping for untrusted input, and a preset theme.
+`pp` handles the four things that grow out of `print()` in any non-trivial CLI script: the verbosity gates (`--verbose` / `--quiet`), the stdout/stderr split, Rich-markup escaping for untrusted input, and a preset theme.
 
 ## Quick start
 
 ```python
 import time
-from nclutils import configure, info, success, step, Verbosity
+from nclutils import pp
 
-configure(verbosity=Verbosity.DEBUG)
+pp.configure(verbosity=pp.Verbosity.DEBUG)
 
-info("starting build")
+pp.info("starting build")
 
-with step("compiling sources") as s:
+with pp.step("compiling sources") as s:
     time.sleep(0.5)
     s.sub("compiling src/api.py")
     s.sub("compiling src/cli.py")
 
-success("build complete", details=["artifact: dist/app-1.4.2.tar.gz"])
+pp.success("build complete", details=["artifact: dist/app-1.4.2.tar.gz"])
 ```
 
-The `step()` block shows a live spinner with sub-items beneath it. On success it turns into a green checkmark; on any exception (including `SystemExit` and `KeyboardInterrupt`) it turns into a red X and the exception re-raises.
+The `pp.step()` block shows a live spinner with sub-items beneath it. On success it turns into a green checkmark; on any exception (including `SystemExit` and `KeyboardInterrupt`) it turns into a red X and the exception re-raises.
 
 ## Output levels
 
-Every level routes through the same shape: `func(message, details=[...])`. `details` is optional. String items render as indented continuation lines in a dimmer shade; Rich markup is escaped by default so user-supplied strings can't inject styling. Non-strings are auto-rendered with Rich (dicts, dataclasses, and arbitrary objects via `Pretty`; `JSON` / `Syntax` / `Table` pass through unchanged).
+Every level routes through the same shape: `pp.func(message, details=[...])`. `details` is optional. String items render as indented continuation lines in a dimmer shade; Rich markup is escaped by default so user-supplied strings can't inject styling. Non-strings are auto-rendered with Rich (dicts, dataclasses, and arbitrary objects via `Pretty`; `JSON` / `Syntax` / `Table` pass through unchanged).
 
 Pass `markup=True` to opt into Rich markup parsing for `message` and any string `details` items in that call:
 
 ```python
 from rich.text import Text
-from nclutils import info
+from nclutils import pp
 
-info("Found [bold]42[/] matches", markup=True)
-info(Text.from_markup("Found [bold]42[/] matches"))  # Text instances always keep their styling
+pp.info("Found [bold]42[/] matches", markup=True)
+pp.info(Text.from_markup("Found [bold]42[/] matches"))  # Text instances always keep their styling
 ```
 
 Use `markup=True` when _you_ control the string. When the message comes from arbitrary input (file paths, exception messages, JSON snippets), keep the default escape so brackets in the input can't accidentally render as styling or raise `MarkupError`.
 
-| Function   | Stream | Marker                   | Gated by                   |
-| ---------- | ------ | ------------------------ | -------------------------- |
-| `info`     | stdout | (none)                   | `quiet` suppresses         |
-| `success`  | stdout | `✓`                      | `quiet` suppresses         |
-| `warning`  | stderr | `!`                      | always renders             |
-| `error`    | stderr | `✗`                      | always renders             |
-| `critical` | stderr | `‼`                      | always renders             |
-| `dryrun`   | stdout | `~ [dry-run]`            | always renders             |
-| `debug`    | stdout | `›`                      | shown at `DEBUG` or higher |
-| `trace`    | stdout | `·`                      | shown at `TRACE`           |
-| `header`   | stdout | (rule line)              | `quiet` suppresses         |
-| `step`     | stdout | spinner, then `✓` or `✗` | always renders             |
+| Function      | Stream | Marker                   | Gated by                   |
+| ------------- | ------ | ------------------------ | -------------------------- |
+| `pp.info`     | stdout | (none)                   | `quiet` suppresses         |
+| `pp.success`  | stdout | `✓`                      | `quiet` suppresses         |
+| `pp.warning`  | stderr | `!`                      | always renders             |
+| `pp.error`    | stderr | `✗`                      | always renders             |
+| `pp.critical` | stderr | `‼`                      | always renders             |
+| `pp.dryrun`   | stdout | `~ [dry-run]`            | always renders             |
+| `pp.debug`    | stdout | `›`                      | shown at `DEBUG` or higher |
+| `pp.trace`    | stdout | `·`                      | shown at `TRACE`           |
+| `pp.header`   | stdout | (rule line)              | `quiet` suppresses         |
+| `pp.step`     | stdout | spinner, then `✓` or `✗` | always renders             |
 
-`critical` is severity-only and does not raise. Use it for "the world is broken" notices that warrant a more emphatic visual than `error`.
+`pp.critical` is severity-only and does not raise. Use it for "the world is broken" notices that warrant a more emphatic visual than `pp.error`.
 
 You can pass Rich renderables in `details` to get syntax-aware output, which is especially useful at `debug` / `trace`:
 
 ```python
 from rich.json import JSON
-from nclutils import debug
+from nclutils import pp
 
-debug("got response", details=[response_dict])
-debug("raw payload", details=[JSON(resp.text)])
+pp.debug("got response", details=[response_dict])
+pp.debug("raw payload", details=[JSON(resp.text)])
 ```
 
-`header()` draws a `Console.rule()` with an optional centered title to break long output into scannable sections:
+`pp.header()` draws a `Console.rule()` with an optional centered title to break long output into scannable sections:
 
 ```python
-from nclutils import header
+from nclutils import pp
 
-header("phase 1: download")
+pp.header("phase 1: download")
 # ... work ...
-header("phase 2: process")
+pp.header("phase 2: process")
 ```
 
 ## Wiring up `--verbose` and `--quiet`
 
-`Verbosity` is an `IntEnum` with three levels (`INFO`, `DEBUG`, `TRACE`), so a `-v` count flag maps cleanly:
+`pp.Verbosity` is an `IntEnum` with three levels (`INFO`, `DEBUG`, `TRACE`), so a `-v` count flag maps cleanly:
 
 ```python
 import argparse
-from nclutils import configure, Verbosity
+from nclutils import pp
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-v", "--verbose", action="count", default=0)
 parser.add_argument("-q", "--quiet", action="store_true")
 args = parser.parse_args()
 
-configure(verbosity=args.verbose, quiet=args.quiet)
+pp.configure(verbosity=args.verbose, quiet=args.quiet)
 ```
 
 Out-of-range integers are clamped, so `-vvvvv` is safe.
@@ -114,21 +114,21 @@ The two flags are independent gates:
 - `quiet=True` suppresses `info`, `success`, and `header`. Warnings, errors, dry-run notices, and steps still render.
 - `--verbose --quiet` is a sensible combination: you get debug output without the routine info chatter.
 
-`configure()` is a partial update. Fields you don't pass are left alone. Call it as many times as you like:
+`pp.configure()` is a partial update. Fields you don't pass are left alone. Call it as many times as you like:
 
 ```python
-configure(verbosity=Verbosity.DEBUG)
-configure(quiet=True)         # verbosity still DEBUG
+pp.configure(verbosity=pp.Verbosity.DEBUG)
+pp.configure(quiet=True)         # verbosity still DEBUG
 ```
 
 ## The `step()` context manager
 
-`step()` renders a Rich `Live` spinner that updates while your code runs, then resolves to a success or failure marker:
+`pp.step()` renders a Rich `Live` spinner that updates while your code runs, then resolves to a success or failure marker:
 
 ```python
-from nclutils import step
+from nclutils import pp
 
-with step("running migrations") as s:
+with pp.step("running migrations") as s:
     for migration in pending:
         run(migration)
         s.sub(f"applied {migration.name}")
@@ -139,14 +139,14 @@ On exit the spinner stops, the marker (`✓` or `✗`) is rendered, and any sub-
 For transient progress that shouldn't clutter the final transcript, pass `ephemeral=True`. The spinner and sub-items are wiped on success; on failure only the red X surfaces:
 
 ```python
-with step("warming caches", ephemeral=True) as s:
+with pp.step("warming caches", ephemeral=True) as s:
     warm_cache()
     s.sub("cache populated")
 # success leaves no trace; failure still prints "✗ warming caches"
 ```
 
 > [!WARNING]
-> `step()` cannot nest. Rich's `Live` doesn't stack, so nesting silently corrupts the parent's display. `pretty_print` raises `RuntimeError` when you try.
+> `pp.step()` cannot nest. Rich's `Live` doesn't stack, so nesting silently corrupts the parent's display. `pp` raises `RuntimeError` when you try.
 
 ## File logging
 
@@ -154,11 +154,11 @@ Pass `logfile=` to write a parallel record of every emission to disk:
 
 ```python
 from pathlib import Path
-from nclutils import Emitter, LogLevel
+from nclutils import pp
 
-e = Emitter(
+e = pp.Emitter(
     logfile=Path("./run.log"),
-    loglevel=LogLevel.INFO,        # default; filter cutoff for the file
+    loglevel=pp.LogLevel.INFO,        # default; filter cutoff for the file
     # logfmt="%(asctime)s [%(levelname)s] %(message)s",  # optional override
 )
 
@@ -194,60 +194,60 @@ Console rendering and file rendering are independent. The console ignores `logle
 | `Step.sub()`                  | `INFO`                            | Indented continuation, written immediately.                                   |
 | `header()`                    | (not logged)                      | Console-only structural sugar.                                                |
 
-Filtering with `loglevel=LogLevel.WARNING` drops every `info` / `success` / `dryrun` / `debug` / `trace` emission and its detail continuations as a unit. `LogLevel` is severity-shaped, not emission-shaped, so there's no way to "log only successes."
+Filtering with `loglevel=pp.LogLevel.WARNING` drops every `info` / `success` / `dryrun` / `debug` / `trace` emission and its detail continuations as a unit. `LogLevel` is severity-shaped, not emission-shaped, so there's no way to "log only successes."
 
 ### What's not included
 
-The logfile is for CLI audit and diagnostic capture. It does not ship rotation, JSON output, syslog, or multi-process safety. If you need those, run `pretty_print` on top of your own preconfigured `logging.Logger`, or use external rotation (`logrotate`, `savelog`).
+The logfile is for CLI audit and diagnostic capture. It does not ship rotation, JSON output, syslog, or multi-process safety. If you need those, run `pp` on top of your own preconfigured `logging.Logger`, or use external rotation (`logrotate`, `savelog`).
 
 ## Customizing the theme
 
 The seven output levels (`info`, `success`, `warning`, `error`, `debug`, `trace`, `dryrun`) each expose three things you can override: the main message style, the indented detail style, and the marker glyph. Override any combination in a `Theme`:
 
 ```python
-from nclutils import configure, Theme, Level, success
+from nclutils import pp
 
-configure(
-    theme=Theme(
-        success=Level(style="cyan", marker="🎉 "),
-        warning=Level(marker=""),  # hide the warning marker entirely
+pp.configure(
+    theme=pp.Theme(
+        success=pp.Level(style="cyan", marker="🎉 "),
+        warning=pp.Level(marker=""),  # hide the warning marker entirely
     ),
 )
 
-success("deployed", details=["build #1742"])
+pp.success("deployed", details=["build #1742"])
 ```
 
-Anything you don't set keeps its default. `Level(style="cyan")` only changes the main color; `detail_style` and `marker` stay as the defaults. Pass `marker=""` (empty string) to suppress a marker; `marker=None` (the default) keeps the built-in glyph.
+Anything you don't set keeps its default. `pp.Level(style="cyan")` only changes the main color; `detail_style` and `marker` stay as the defaults. Pass `marker=""` (empty string) to suppress a marker; `marker=None` (the default) keeps the built-in glyph.
 
-Successive `configure(theme=...)` calls accumulate at the field level:
+Successive `pp.configure(theme=...)` calls accumulate at the field level:
 
 ```python
-from nclutils import configure, Theme, Level, success
+from nclutils import pp
 
-configure(theme=Theme(success=Level(style="blue", marker="🎉 ")))
-configure(theme=Theme(success=Level(detail_style="navy")))
+pp.configure(theme=pp.Theme(success=pp.Level(style="blue", marker="🎉 ")))
+pp.configure(theme=pp.Theme(success=pp.Level(detail_style="navy")))
 # success now has style="blue", detail_style="navy", marker="🎉 "
 ```
 
-To fully reset, build a fresh emitter: `set_default(Emitter())`.
+To fully reset, build a fresh emitter: `pp.set_default(pp.Emitter())`.
 
 ### What's not themed
 
-The horizontal rule under `header()`, the connector glyphs beneath `step()` (`├─`, `└─`), and the `[dry-run]` tag are not customizable.
+The horizontal rule under `pp.header()`, the connector glyphs beneath `pp.step()` (`├─`, `└─`), and the `[dry-run]` tag are not customizable.
 
 ## Reaching the underlying consoles
 
-When you need to render a Rich object (`Table`, `Syntax`, `Panel`, …) on the same stream the level functions write to, use the `console()` and `err_console()` accessors:
+When you need to render a Rich object (`Table`, `Syntax`, `Panel`, …) on the same stream the level functions write to, use the `pp.console()` and `pp.err_console()` accessors:
 
 ```python
 from rich.table import Table
-from nclutils import console, err_console
+from nclutils import pp
 
 table = Table("name", "status")
 table.add_row("api", "ok")
-console().print(table)
+pp.console().print(table)
 
-err_console().print("[bold red]fatal[/]")
+pp.err_console().print("[bold red]fatal[/]")
 ```
 
 ## Library use: isolated emitters
@@ -255,9 +255,9 @@ err_console().print("[bold red]fatal[/]")
 The module-level functions delegate to a shared default `Emitter`. If you're writing a library that needs its own output configuration without trampling its host CLI's settings, instantiate an `Emitter` directly:
 
 ```python
-from nclutils import Emitter, Verbosity
+from nclutils import pp
 
-logger = Emitter(verbosity=Verbosity.DEBUG, quiet=False)
+logger = pp.Emitter(verbosity=pp.Verbosity.DEBUG, quiet=False)
 logger.info("library-internal message")
 logger.debug("only this emitter's verbosity matters here")
 ```
@@ -268,10 +268,10 @@ For tests, swap in a recording console so you can assert on output:
 
 ```python
 from rich.console import Console
-from nclutils import Emitter, THEME
+from nclutils import pp
 
-capture = Console(theme=THEME, record=True, force_terminal=True, width=80)
-e = Emitter(console=capture, err_console=capture)
+capture = Console(theme=pp.THEME, record=True, force_terminal=True, width=80)
+e = pp.Emitter(console=capture, err_console=capture)
 e.info("captured")
 assert "captured" in capture.export_text()
 ```
@@ -279,24 +279,24 @@ assert "captured" in capture.export_text()
 > [!NOTE]
 > Use the `theme=` argument to customize level styles, not a custom `Console(theme=...)`. Level styles are resolved inline at print time, so a theme dict on a user-supplied `Console` no longer overrides level rendering.
 >
-> The `Console(theme=THEME)` pattern is still valid when you need to capture the default theme's structural styles (`header`, `header.rule`, `sub.pipe`) on your own console.
+> The `Console(theme=pp.THEME)` pattern is still valid when you need to capture the default theme's structural styles (`header`, `header.rule`, `sub.pipe`) on your own console.
 
 To route the module-level functions through a test emitter:
 
 ```python
-from nclutils import set_default, get_default
+from nclutils import pp
 
-original = get_default()
-set_default(e)
+original = pp.get_default()
+pp.set_default(e)
 try:
     run_code_under_test()
 finally:
-    set_default(original)
+    pp.set_default(original)
 ```
 
 ## API reference
 
-Every name below is re-exported from `nclutils` for convenience and is also available from `nclutils.pretty_print`.
+Every name below is available on the `pp` namespace (`from nclutils import pp`) and from `nclutils.pp` directly (e.g. `from nclutils.pp import info`).
 
 - `info`, `success`, `warning`, `error`, `critical`, `dryrun`, `debug`, `trace`, `header`. Output functions.
 - `step(message, *, ephemeral=False)`. Spinner context manager.

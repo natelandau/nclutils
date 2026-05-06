@@ -11,15 +11,15 @@ import pytest
 from rich.json import JSON
 from rich.text import Text
 
-from nclutils.pretty_print._logsink import _LogSink
-from nclutils.pretty_print.emitter import Emitter, LogLevel, Verbosity
+from nclutils.pp._logsink import _LogSink
+from nclutils.pp.emitter import Emitter, LogLevel, Verbosity
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
 
 class TestLogSinkModule:
-    """`nclutils.pretty_print._logsink` registers TRACE at import and exposes _LogSink."""
+    """`nclutils.pp._logsink` registers TRACE at import and exposes _LogSink."""
 
     def test_trace_level_name_registered(self) -> None:
         """Verify importing _logsink registers level 5 as 'TRACE' with stdlib logging."""

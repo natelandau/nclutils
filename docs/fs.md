@@ -35,13 +35,13 @@ copy_file(src, dst, keep_backup=False)
 
 For `copy_directory(..., with_progress=True)`, the bar shows the total bytes across all files plus a recycled per-file subtask. When `keep_backup=True` and the destination already exists, you'll see two sequential phases: a Backup phase (snapshotting the existing destination) that dismisses on completion, then a Copy phase. Each phase has its own progress bar.
 
-Pass `console=` to route the progress bar through your own Rich `Console` instead of Rich's global default. This is useful when you want the bar to share a console with `pretty_print.console()`:
+Pass `console=` to route the progress bar through your own Rich `Console` instead of Rich's global default. This is useful when you want the bar to share a console with `pp.console()`:
 
 ```python
-from nclutils import console
+from nclutils import pp
 from nclutils.fs import copy_file
 
-copy_file(src, dst, with_progress=True, console=console())
+copy_file(src, dst, with_progress=True, console=pp.console())
 ```
 
 > [!NOTE]
@@ -151,11 +151,11 @@ from nclutils.fs import directory_tree
 Console().print(directory_tree(Path("./src"), show_hidden=False))
 ```
 
-Pair it with `pretty_print.console()` to render through the same console that the rest of `nclutils` uses:
+Pair it with `pp.console()` to render through the same console that the rest of `nclutils` uses:
 
 ```python
-from nclutils import console
-console().print(directory_tree(Path("./src")))
+from nclutils import pp
+pp.console().print(directory_tree(Path("./src")))
 ```
 
 ## Looking up a user's home directory
@@ -185,7 +185,7 @@ logging.getLogger("nclutils.fs").setLevel(logging.DEBUG)
 logging.basicConfig()
 ```
 
-This is independent of `nclutils.pretty_print`. It covers internal operations like "starting a copy" or "skipping a backup because the source is missing."
+This is independent of `nclutils.pp`. It covers internal operations like "starting a copy" or "skipping a backup because the source is missing."
 
 ## API reference
 

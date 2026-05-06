@@ -1,4 +1,4 @@
-"""Tests for nclutils.pretty_print's theme customization API.
+"""Tests for nclutils.pp's theme customization API.
 
 Covers the `Level` and `Theme` dataclasses, `_merge_theme` field-merge
 semantics, `Emitter._resolve` overlay resolution, and the rendered output of
@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from nclutils.pretty_print.emitter import Emitter, Level, Theme, _merge_theme
+from nclutils.pp.emitter import Emitter, Level, Theme, _merge_theme
 
 if TYPE_CHECKING:
     from .conftest import RecordingEmitterFactory
