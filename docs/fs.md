@@ -33,6 +33,8 @@ copy_file(src, dst, keep_backup=False)
 
 `with_progress=True` shows a Rich progress bar; `transient=True` (the default) clears the bar after the copy completes.
 
+For `copy_directory(..., with_progress=True)`, the bar shows the total bytes across all files plus a recycled per-file subtask. When `keep_backup=True` and the destination already exists, you'll see two sequential phases: a Backup phase (snapshotting the existing destination) that dismisses on completion, then a Copy phase. Each phase has its own progress bar.
+
 Pass `console=` to route the progress bar through your own Rich `Console` instead of Rich's global default. This is useful when you want the bar to share a console with `pretty_print.console()`:
 
 ```python
@@ -43,7 +45,10 @@ copy_file(src, dst, with_progress=True, console=console())
 ```
 
 > [!NOTE]
-> `copy_directory` requires Python 3.12+ because it uses `Path.walk()`. Calling it on an older interpreter raises `ValueError`.
+> Both `copy_directory` and `backup_path` (when given a directory) require Python 3.12+ because they use `Path.walk()`. Calling either on an older interpreter raises `ValueError`. File backups (`backup_path` on a single file) work on Python 3.10+.
+
+> [!NOTE]
+> `copy_directory` and the directory variant of `backup_path` both follow symlinks: a symlink to a directory inside the source tree is materialized as a real directory in the destination, with the symlink target's contents copied recursively. This matches `shutil.copytree(symlinks=False)` (the default).
 
 > [!NOTE]
 > By default, same-source-and-destination and parent/child copy attempts return the source path and log a warning. Pass `strict=True` to raise `shutil.SameFileError` or `ValueError` instead.
@@ -71,7 +76,7 @@ backup_path(original, backup_suffix=".pre-migration.bak")
 By default `backup_path` returns `None` when the source doesn't exist. Pass `strict=True` to raise `FileNotFoundError` instead.
 
 > [!NOTE]
-> File backups preserve the source's permission bits (mode). Directory backups inherit mode and timestamps via `shutil.copytree`.
+> File backups preserve the source's permission bits (mode); file timestamps are not preserved. Directory backups walk the tree with `Path.walk(follow_symlinks=True)`, mirror directory mode and timestamps via `shutil.copystat`, and follow symlinks (including symlinked subdirectories) so the backup contains resolved contents. This matches `shutil.copytree(src, target)` defaults.
 
 ## Cleaning a directory
 
