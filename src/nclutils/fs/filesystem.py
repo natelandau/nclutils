@@ -363,50 +363,57 @@ def find_subdirectories(
     """Search and filter subdirectories in a directory tree with precise depth control.
 
     Use this function to traverse directory structures when you need fine-grained control over:
-    - How deep to search (depth parameter)
-    - Which directories to include (regex filtering)
-    - Whether to include hidden directories
-    - Whether to return only leaf directories (those without subdirectories)
-
-    This is particularly useful for tasks like:
-    - Finding all project directories in a workspace
-    - Locating leaf directories for processing
-    - Selective directory traversal with pattern matching
+    - How deep to search (depth parameter, must be >= 1)
+    - Which directories to include (regex filtering — the regex is applied with `re.search`, so it matches if the pattern is found *anywhere* in the directory name; anchor with `^` or `$` for whole-name matching)
+    - Whether to skip hidden subdirectories (the user-supplied `directory` itself is never filtered)
+    - Whether to return only leaf directories (those without other matching subdirectories within the depth limit)
 
     Args:
-        directory (Path): Root directory to begin the search
-        depth (int, optional): Maximum directory depth to traverse. Depth of 1 means immediate subdirectories only. Defaults to 1
-        filter_regex (str, optional): Regular expression pattern to filter directory names. Only matching directories are included. Defaults to ""
-        ignore_dotfiles (bool, optional): Skip directories starting with a dot (hidden directories). Defaults to False
-        leaf_dirs_only (bool, optional): Return only directories that have no subdirectories within the specified depth. Defaults to False
+        directory (Path): Root directory to begin the search.
+        depth (int, optional): Maximum directory depth to traverse. Must be >= 1. A depth of 1 means immediate subdirectories only. Defaults to 1.
+        filter_regex (str, optional): Regular expression pattern matched against each directory's name with `re.search`. Empty string matches everything. Defaults to "".
+        ignore_dotfiles (bool, optional): Skip directories whose name starts with a dot, and do not descend into them. Defaults to False.
+        leaf_dirs_only (bool, optional): Return only directories that have no matching descendant within the depth limit. Defaults to False.
 
     Returns:
-        list[Path]: Sorted list of directory paths matching the specified criteria
+        list[Path]: Sorted list of directory paths matching the specified criteria.
+
+    Raises:
+        ValueError: If `depth` is less than 1.
     """
-    # Collect subdirectories for all depths up to the specified depth
-    subdirs = []
-    for current_depth in range(1, depth + 1):
-        pattern = f"{'*/' * current_depth}"
-        current_level = [
-            p
-            for p in directory.glob(pattern)
-            if p.is_dir()
-            and (not ignore_dotfiles or not any(part.startswith(".") for part in p.parts))
-            and (not filter_regex or re.search(filter_regex, p.name))
-        ]
-        subdirs.extend(current_level)
+    if depth < 1:
+        msg = f"depth must be >= 1, got {depth}"
+        raise ValueError(msg)
+
+    pattern = re.compile(filter_regex) if filter_regex else None
+
+    matches: list[Path] = []
+    for current_root, dirnames, _ in os.walk(directory):
+        current_path = Path(current_root)
+        try:
+            current_depth = len(current_path.relative_to(directory).parts)
+        except ValueError:  # pragma: no cover — os.walk roots are always under `directory`
+            continue
+
+        # Stop os.walk from descending past the user-requested depth.
+        if current_depth >= depth:
+            dirnames[:] = []
+            continue
+
+        if ignore_dotfiles:
+            # Mutating dirnames in place both filters this level and prevents descent.
+            dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+
+        for dirname in dirnames:
+            if pattern is not None and not pattern.search(dirname):
+                continue
+            matches.append(current_path / dirname)
 
     if leaf_dirs_only:
-        # Keep only directories that don't have subdirectories within our depth limit
-        result = []
-        for p in subdirs:
-            # Check if this directory has any subdirectories in our collection
-            is_parent = any(other != p and str(other).startswith(str(p)) for other in subdirs)
-            if not is_parent:
-                result.append(p)
-        return sorted(result)
+        leaves = [p for p in matches if not any(p in other.parents for other in matches)]
+        return sorted(leaves)
 
-    return sorted(subdirs)
+    return sorted(matches)
 
 
 def find_files(

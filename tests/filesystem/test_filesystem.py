@@ -364,3 +364,47 @@ def test_find_files_root_dotfile_is_not_filtered(tmp_path: Path) -> None:
 
     # Then: The non-hidden file inside the hidden root is returned
     assert result == [root / "settings.toml"]
+
+
+def test_fetch_subdirectories_invalid_depth_zero() -> None:
+    """Verify depth < 1 raises ValueError."""
+    # Given: A real directory and an invalid depth
+    # When/Then: depth=0 is rejected
+    with pytest.raises(ValueError, match=r"depth must be >= 1"):
+        find_subdirectories(Path(), depth=0)
+
+
+def test_fetch_subdirectories_invalid_depth_negative() -> None:
+    """Verify negative depth raises ValueError."""
+    # Given: An invalid depth value
+    # When/Then: A negative depth is rejected
+    with pytest.raises(ValueError, match=r"depth must be >= 1"):
+        find_subdirectories(Path(), depth=-1)
+
+
+def test_fetch_subdirectories_leaf_dirs_only_with_prefix_siblings(tmp_path: Path) -> None:
+    """Verify leaf detection treats sibling directories with shared name prefixes as independent leaves."""
+    # Given: Two sibling dirs whose names share a string prefix but are not parent/child
+    (tmp_path / "ab").mkdir()
+    (tmp_path / "abc").mkdir()
+
+    # When: Listing leaves
+    result = find_subdirectories(tmp_path, depth=1, leaf_dirs_only=True)
+
+    # Then: Both siblings are leaves
+    assert sorted(result) == sorted([tmp_path / "ab", tmp_path / "abc"])
+
+
+def test_fetch_subdirectories_root_dotfile_is_supported(tmp_path: Path) -> None:
+    """Verify ignore_dotfiles treats the search root as ordinary even when its own name starts with a dot."""
+    # Given: A hidden root with non-hidden children
+    root = tmp_path / ".config"
+    root.mkdir()
+    (root / "kit").mkdir()
+    (root / "tools").mkdir()
+
+    # When: Searching the hidden root with dotfiles ignored
+    result = find_subdirectories(root, depth=1, ignore_dotfiles=True)
+
+    # Then: Non-hidden children are returned
+    assert sorted(result) == sorted([root / "kit", root / "tools"])
