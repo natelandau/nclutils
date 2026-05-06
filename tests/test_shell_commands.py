@@ -256,3 +256,18 @@ class TestStreamingPump:
         with pytest.raises(UnicodeDecodeError):
             pump_pipe(pipe=reader, buffer=[], sink=None, exclude_pattern=None)
         assert reader.closed
+
+    def test_pump_pipe_partial_final_line_without_newline(self) -> None:
+        """Verify pump_pipe captures a final line that lacks a trailing newline."""
+        # Given: a pipe whose final line has no newline
+        read_fd, write_fd = os.pipe()
+        os.write(write_fd, b"a\nno-newline-end")
+        os.close(write_fd)
+        reader = os.fdopen(read_fd, "rb")
+        buffer: list[str] = []
+
+        # When: pumping
+        pump_pipe(pipe=reader, buffer=buffer, sink=None, exclude_pattern=None)
+
+        # Then: the trailing line is included as-is
+        assert buffer == ["a\n", "no-newline-end"]
