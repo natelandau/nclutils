@@ -8,6 +8,9 @@ import pytest
 from pytest_mock import MockerFixture
 
 from nclutils.fs import backup_path
+from nclutils.utils import check_python_version
+
+requires_py312 = pytest.mark.skipif(not check_python_version(3, 12), reason="Requires Python 3.12+")
 
 
 @pytest.fixture
@@ -94,6 +97,7 @@ def test_backup_multiple_backups_same_backup_suffix(
     assert len(list(backup3.parent.glob("*.bak"))) == 1
 
 
+@requires_py312
 def test_backup_directory(backup_test_path: tuple[Path, Path, Path]) -> None:
     """Verify backing up directories preserves structure and content."""
     # Given: A test directory
@@ -149,6 +153,7 @@ def test_backup_path_preserves_file_mode(tmp_path: Path) -> None:
     assert (backup.stat().st_mode & 0o777) == 0o755
 
 
+@requires_py312
 def test_backup_directory_overwrites_existing_file_at_target(tmp_path: Path) -> None:
     """Verify backup_path replaces an existing regular file at the backup target when source is a directory."""
     # Given: A source directory and a regular file already sitting at the backup target
@@ -167,6 +172,7 @@ def test_backup_directory_overwrites_existing_file_at_target(tmp_path: Path) -> 
     assert (backup / "inner.txt").read_text() == "payload"
 
 
+@requires_py312
 def test_backup_directory_preserves_empty_subdirs(tmp_path: Path) -> None:
     """Verify directory backup preserves empty subdirectories."""
     # Given: A directory tree with an empty subdirectory
@@ -184,6 +190,7 @@ def test_backup_directory_preserves_empty_subdirs(tmp_path: Path) -> None:
     assert (target / "file.txt").read_text() == "hi"
 
 
+@requires_py312
 def test_backup_directory_preserves_file_mode(tmp_path: Path) -> None:
     """Verify directory backup preserves file permission bits."""
     # Given: A file with unusual permissions inside a directory
@@ -201,6 +208,7 @@ def test_backup_directory_preserves_file_mode(tmp_path: Path) -> None:
     assert stat.S_IMODE((target / "secret.txt").stat().st_mode) == 0o600
 
 
+@requires_py312
 def test_backup_directory_preserves_directory_mode(tmp_path: Path) -> None:
     """Verify directory backup preserves directory permission bits."""
     # Given: A subdirectory with unusual permissions
@@ -218,6 +226,7 @@ def test_backup_directory_preserves_directory_mode(tmp_path: Path) -> None:
     assert stat.S_IMODE((target / "private").stat().st_mode) == 0o700
 
 
+@requires_py312
 def test_backup_directory_follows_symlink_to_file(tmp_path: Path) -> None:
     """Verify directory backup follows symlinks (resolves to target contents)."""
     # Given: A directory containing a symlink to a file outside the tree
@@ -237,6 +246,7 @@ def test_backup_directory_follows_symlink_to_file(tmp_path: Path) -> None:
     assert (target / "link.txt").read_text() == "content"
 
 
+@requires_py312
 def test_backup_directory_follows_symlink_to_directory(tmp_path: Path) -> None:
     """Verify directory backup descends into symlinks pointing to directories."""
     # Given: A directory with a symlink to another directory containing a file
@@ -276,6 +286,7 @@ def test_backup_directory_raises_on_old_python(tmp_path: Path, mocker: MockerFix
         backup_path(src, backup_suffix=".bak")
 
 
+@requires_py312
 def test_backup_directory_matches_shutil_copytree_output(tmp_path: Path) -> None:
     """Verify the chunked walk produces a tree functionally identical to shutil.copytree."""
     # Given: A non-trivial directory tree
