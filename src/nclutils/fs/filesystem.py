@@ -458,10 +458,7 @@ def find_user_home_dir(username: str | None = None) -> Path | None:
     if platform.system() == "Linux":
         try:
             return Path(
-                run_command("getent", ["passwd", username], quiet=True)
-                .strip()
-                .split(":")[5]
-                .strip()
+                run_command(["getent", "passwd", username]).stdout.strip().split(":")[5].strip()
             )
         except ShellCommandFailedError:
             return None
@@ -469,10 +466,8 @@ def find_user_home_dir(username: str | None = None) -> Path | None:
     if platform.system() == "Darwin":
         try:
             return Path(
-                run_command(
-                    "dscl", [".", "-read", f"/Users/{username}", "NFSHomeDirectory"], quiet=True
-                )
-                .strip()
+                run_command(["dscl", ".", "-read", f"/Users/{username}", "NFSHomeDirectory"])
+                .stdout.strip()
                 .split(":")[1]
                 .strip()
             )

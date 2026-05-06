@@ -6,7 +6,7 @@
         "Programming Language :: Python :: 3.12",
         "Programming Language :: Python :: 3.13",
     ]
-    dependencies = ["questionary>=2.1.1", "rich>=15.0.0", "sh>=2.2.2"]
+    dependencies = ["questionary>=2.1.1", "rich>=15.0.0"]
     description = "Collection of convenience functions used in Python packages and scripts."
     license = "MIT"
     license-files = ["LICENSE"]

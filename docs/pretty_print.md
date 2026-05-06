@@ -145,7 +145,8 @@ with step("warming caches", ephemeral=True) as s:
 # success leaves no trace; failure still prints "✗ warming caches"
 ```
 
-> **Warning:** `step()` cannot nest. Rich's `Live` doesn't stack, so nesting silently corrupts the parent's display. `pretty_print` raises `RuntimeError` when you try.
+> [!WARNING]
+> `step()` cannot nest. Rich's `Live` doesn't stack, so nesting silently corrupts the parent's display. `pretty_print` raises `RuntimeError` when you try.
 
 ## File logging
 
@@ -275,7 +276,8 @@ e.info("captured")
 assert "captured" in capture.export_text()
 ```
 
-> **Note:** Use the `theme=` argument to customize level styles, not a custom `Console(theme=...)`. Level styles are resolved inline at print time, so a theme dict on a user-supplied `Console` no longer overrides level rendering.
+> [!NOTE]
+> Use the `theme=` argument to customize level styles, not a custom `Console(theme=...)`. Level styles are resolved inline at print time, so a theme dict on a user-supplied `Console` no longer overrides level rendering.
 >
 > The `Console(theme=THEME)` pattern is still valid when you need to capture the default theme's structural styles (`header`, `header.rule`, `sub.pipe`) on your own console.
 

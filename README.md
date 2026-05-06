@@ -37,7 +37,7 @@ uv add nclutils
 pip install nclutils
 ```
 
-The package brings in three runtime dependencies: [questionary](https://github.com/tmbo/questionary), [rich](https://github.com/Textualize/rich), and [sh](https://github.com/amoffat/sh).
+The package brings in two runtime dependencies: [questionary](https://github.com/tmbo/questionary) and [rich](https://github.com/Textualize/rich).
 
 ## Importing
 
@@ -53,7 +53,7 @@ Everything else lives in its submodule and must be imported from there:
 from nclutils.fs import copy_file, find_files
 from nclutils.network import network_available
 from nclutils.questions import choose_one_from_list
-from nclutils.sh import run_command, ShellCommandFailedError
+from nclutils.sh import run_command, run_interactive, which, CompletedCommand, ShellCommandError
 from nclutils.strings import camel_case, deburr
 from nclutils.text_processing import replace_in_file
 from nclutils.utils import iso_timestamp, unique_id
@@ -61,7 +61,7 @@ from nclutils.utils import iso_timestamp, unique_id
 
 ## Modules
 
-The larger modules have their own documentation pages. Smaller modules are listed inline below. Function signatures live with the source — consult docstrings (`help(func)` or your editor's hover) for authoritative argument details.
+The larger modules have their own documentation pages. Smaller modules are listed inline below. Function signatures live with the source; consult docstrings (`help(func)` or your editor's hover) for authoritative argument details.
 
 | Module                    | Summary                                                  | Docs                                  |
 | ------------------------- | -------------------------------------------------------- | ------------------------------------- |
@@ -69,7 +69,7 @@ The larger modules have their own documentation pages. Smaller modules are liste
 | `nclutils.network`        | Lightweight network reachability check.                  | _(inline below)_                      |
 | `nclutils.pretty_print`   | Rich-based console output, verbosity gates, file logger. | [docs/pretty_print.md](docs/pretty_print.md) |
 | `nclutils.questions`      | Single- and multi-select prompts via `questionary`.      | [docs/questions.md](docs/questions.md) |
-| `nclutils.sh`             | Run shell commands with streamed output and typed errors. | [docs/shell_commands.md](docs/shell_commands.md) |
+| `nclutils.sh`             | Run commands via subprocess; returns `CompletedCommand`, raises typed errors (`ShellCommandError` hierarchy). Includes `run_command`, `run_interactive`, `which`. | [docs/shell_commands.md](docs/shell_commands.md) |
 | `nclutils.strings`        | Case conversions, padding, tokenizing, normalization.    | [docs/strings.md](docs/strings.md)    |
 | `nclutils.text_processing` | In-place file edits.                                    | _(inline below)_                      |
 | `nclutils.utils`          | Timestamps, unique IDs, Python version check.            | [docs/utils.md](docs/utils.md)        |

@@ -74,7 +74,8 @@ unique_id("id_")   # "id_2"
 unique_id()        # "3"
 ```
 
-> **Note:** `unique_id` is sequential, not random. It's useful for short-lived labels (test fixtures, in-memory IDs) but isn't safe across processes or restarts.
+> [!NOTE]
+> `unique_id` is sequential, not random. It's useful for short-lived labels (test fixtures, in-memory IDs) but isn't safe across processes or restarts.
 
 ## Python version checks
 
