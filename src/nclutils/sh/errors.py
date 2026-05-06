@@ -40,8 +40,8 @@ class ShellCommandNotFoundError(ShellCommandError):
 
     def __init__(
         self,
-        argv: Sequence[str],
         *,
+        argv: Sequence[str],
         msg: str | None = None,
         e: Exception | None = None,
     ) -> None:
@@ -56,9 +56,13 @@ class ShellCommandNotFoundError(ShellCommandError):
 class ShellCommandFailedError(ShellCommandError):
     """Raised when a command ran but exited outside the configured okay codes.
 
-    Also raised when ``cwd`` cannot be entered (in which case ``result`` is None
+    Also raised when ``cwd`` cannot be entered, in which case ``result`` is None
     because no command actually ran; the underlying OSError is chained as
-    ``__cause__``).
+    ``__cause__``.
+
+    When both ``result`` and ``msg`` are provided, ``msg`` is used verbatim as
+    the exception message and ``result`` remains reachable via ``self.result``.
+    When only ``result`` is provided, the message is auto-built from the result.
     """
 
     def __init__(

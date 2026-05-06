@@ -9,7 +9,16 @@ from rich.text import Text
 
 from nclutils.pretty_print import console as get_console
 
-from .errors import ShellCommandFailedError, ShellCommandNotFoundError
+from .errors import CompletedCommand, ShellCommandFailedError, ShellCommandNotFoundError
+
+
+def _decode_sh(value: bytes | str | None) -> str:
+    """Decode sh's stdout/stderr bytes to str, tolerating encoding errors."""
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return str(value)
 
 
 def which(cmd: str) -> str | None:
@@ -108,14 +117,17 @@ def run_command(  # noqa: C901, PLR0913
         except sh.CommandNotFound as e:
             raise ShellCommandNotFoundError(argv=(cmd,), e=e) from e
         except sh.ErrorReturnCode as e:
-            stderr = e.stderr.decode("utf-8", errors="replace").strip() if e.stderr else ""
-            stdout = e.stdout.decode("utf-8", errors="replace").strip() if e.stdout else ""
-            full_cmd = str(e.full_cmd) if hasattr(e, "full_cmd") else cmd
-            raise ShellCommandFailedError(
-                msg=f"Shell command failed.\nRaised from: {e.__class__.__name__}: {e}\nFull command: {full_cmd}"
-                + (f"\nStderr: {stderr}" if stderr else "")
-                + (f"\nStdout: {stdout}" if stdout else ""),
-            ) from e
+            stdout_text = _decode_sh(e.stdout)
+            stderr_text = _decode_sh(e.stderr)
+            completed = CompletedCommand(
+                argv=(cmd, *args),
+                returncode=e.exit_code,
+                stdout=stdout_text,
+                stderr=stderr_text,
+                duration=0.0,
+                cwd=None,
+            )
+            raise ShellCommandFailedError(result=completed) from e
 
     if pushd:
         if not isinstance(pushd, Path):

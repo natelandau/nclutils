@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import FrozenInstanceError
 from pathlib import Path
 
 import pytest
@@ -27,7 +28,7 @@ class TestCompletedCommand:
             stdout="hi\n",
             stderr="",
             duration=0.01,
-            cwd=Path("/tmp"),  # noqa: S108
+            cwd=Path("/some/cwd"),
         )
 
         # Then: every field is reachable and ok is True
@@ -36,7 +37,7 @@ class TestCompletedCommand:
         assert result.stdout == "hi\n"
         assert result.stderr == ""
         assert result.duration == 0.01
-        assert result.cwd == Path("/tmp")  # noqa: S108
+        assert result.cwd == Path("/some/cwd")
         assert result.ok is True
 
     def test_ok_false_on_nonzero(self) -> None:
@@ -62,7 +63,7 @@ class TestCompletedCommand:
         )
 
         # When: attempting to mutate, it raises; hashing succeeds
-        with pytest.raises(Exception):  # noqa: B017, PT011  # FrozenInstanceError or AttributeError
+        with pytest.raises(FrozenInstanceError):
             result.returncode = 1  # type: ignore[misc]
         assert isinstance(hash(result), int)
 
@@ -87,7 +88,7 @@ class TestErrorHierarchy:
             stdout="",
             stderr="rejected",
             duration=0.5,
-            cwd=Path("/tmp"),  # noqa: S108
+            cwd=Path("/some/cwd"),
         )
         err = ShellCommandFailedError(result=result)
 
