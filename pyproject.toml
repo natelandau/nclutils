@@ -41,9 +41,9 @@
     ]
 
 [tool.commitizen]
-    bump_message               = "bump(release): v${current_version} → v${new_version}"
+    bump_message               = "bump(release): v$current_version → v$new_version"
     changelog_merge_prerelease = true
-    tag_format                 = "v${version}"
+    tag_format                 = "v$version"
     update_changelog_on_bump   = true
     version_provider           = "uv"
 
