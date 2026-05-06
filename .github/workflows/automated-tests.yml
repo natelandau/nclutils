@@ -1,11 +1,11 @@
 ---
-name: "Tests"
+name: "Automated Tests"
 
 on:
     workflow_dispatch:
     push:
         paths:
-            - ".github/workflows/test.yml"
+            - ".github/workflows/automated-tests.yml"
             - ".github/actions/**"
             - "**.py"
             - "pyproject.toml"
@@ -18,7 +18,7 @@ on:
             - reopened
             - synchronize
         paths:
-            - ".github/workflows/test.yml"
+            - ".github/workflows/automated-tests.yml"
             - ".github/actions/**"
             - "**.py"
             - "pyproject.toml"
