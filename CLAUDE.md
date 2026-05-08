@@ -37,7 +37,7 @@ Every module must be imported from its submodule. The preferred form for the pre
 
 `tests/` mirrors the source layout. Larger modules have their own subdirectory (`tests/filesystem/`, `tests/pp/`), each with its own `conftest.py`. Smaller modules use a single `tests/test_<module>.py` file.
 
-`docs/` contains per-module guides (`fs.md`, `strings.md`, `utils.md`, `pp.md`, `questions.md`, `shell_commands.md`). The README is an index; the `docs/` pages are the deep dives.
+`docs/` contains per-module guides (`fs.md`, `strings.md`, `utils.md`, `pp.md`, `ask.md`, `shell_commands.md`). The README is an index; the `docs/` pages are the deep dives.
 
 **Always update documentation when code changes.** Any change that affects a public function's signature, behavior, defaults, exceptions, or examples must be reflected in the matching `docs/<module>.md` page (and the README's module summary table if the surface area shifts). New public exports must be added to the relevant `__init__.py`'s `__all__`, the module's API reference section in `docs/`, and the README. Removing or renaming a public symbol is a breaking change — update the docs in the same commit.
 
