@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from nclutils.text_processing import ensure_lines_in_file, replace_in_file
+from nclutils.text import ensure_lines_in_file, replace_in_file
 
 
 def create_test_file(parent_dir: Path) -> Path:
@@ -22,7 +22,7 @@ Nec dubitamus multa iter quae et nos invenerat. A communi observantia non est re
 
 def test_fail_file_not_found(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     """Verify replace_in_file logs an error and returns False when the file is missing."""
-    caplog.set_level(logging.ERROR, logger="nclutils.text_processing.text_processing")
+    caplog.set_level(logging.ERROR, logger="nclutils.text.text")
     path = tmp_path / "test.txt"
     assert not replace_in_file(path, {"no_match": "no_matches"})
     assert "test.txt does not exist" in caplog.text
