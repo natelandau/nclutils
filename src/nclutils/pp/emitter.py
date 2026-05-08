@@ -369,13 +369,14 @@ class _DetailTree:
 
     def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
         last = len(self._items) - 1
+        # 5 = 2 leading spaces + 2-cell glyph (├─/└─/│ ) + 1 trailing space
+        sub_options = options.update(width=max(1, options.max_width - 5))
         for i, item in enumerate(self._items):
             is_last = i == last
             head = "└─" if is_last else "├─"
             cont = "  " if is_last else "│ "
 
             rendered = self._wrap(item)
-            sub_options = options.update(width=max(1, options.max_width - 5))
             for line_idx, segments in enumerate(console.render_lines(rendered, sub_options)):
                 line = Text("  ")
                 line.append(head if line_idx == 0 else cont, style="sub.pipe")

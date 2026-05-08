@@ -14,13 +14,13 @@ deburr("crème brûlée")              # "creme brulee"
 
 All five case helpers accept arbitrary text and tokenize it the same way: `list_words` splits on word boundaries, contractions are folded, and accents are stripped via `deburr` before joining.
 
-| Function          | Example input         | Output                       |
-| ----------------- | --------------------- | ---------------------------- |
-| `camel_case`      | `"FOO BAR_bAz"`       | `"fooBarBaz"`                |
-| `kebab_case`      | `"The b c_d-e!f"`     | `"the-b-c-d-e-f"`            |
-| `pascal_case`     | `"FOO BAR_bAz"`       | `"FooBarBaz"`                |
-| `separator_case`  | `"a!!b___c.d"` (`_`)  | `"a_b_c_d"`                  |
-| `snake_case`      | `"This is Snake!"`    | `"this_is_snake"`            |
+| Function         | Example input        | Output            |
+| ---------------- | -------------------- | ----------------- |
+| `camel_case`     | `"FOO BAR_bAz"`      | `"fooBarBaz"`     |
+| `kebab_case`     | `"The b c_d-e!f"`    | `"the-b-c-d-e-f"` |
+| `pascal_case`    | `"FOO BAR_bAz"`      | `"FooBarBaz"`     |
+| `separator_case` | `"a!!b___c.d"` (`_`) | `"a_b_c_d"`       |
+| `snake_case`     | `"This is Snake!"`   | `"this_is_snake"` |
 
 `separator_case` takes a second argument, the joiner character, and defaults to `-`. Use it when you want a separator other than `_` or `-` without writing your own join.
 

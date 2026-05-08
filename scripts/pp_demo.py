@@ -16,14 +16,9 @@ from nclutils import pp
 from nclutils.pp import Emitter, Level, Theme, Verbosity
 
 
-def _section(title: str) -> None:
-    """Print a left-aligned section header rule."""
-    pp.header(title, align="left")
-
-
 def _levels() -> None:
     """Print one line at every built-in level."""
-    _section("Levels")
+    pp.header("Levels", align="left")
     pp.info("info: informational message")
     pp.success("success: operation completed")
     pp.warning("warning: something to watch")
@@ -36,7 +31,7 @@ def _levels() -> None:
 
 def _headers() -> None:
     """Print headers with each alignment plus a bare rule."""
-    _section("Headers")
+    pp.header("Headers", align="left")
     pp.header("centered title")
     pp.header("left title", align="left")
     pp.header("right title", align="right")
@@ -45,7 +40,7 @@ def _headers() -> None:
 
 def _steps() -> None:
     """Demonstrate the success, failure, and ephemeral step paths."""
-    _section("Steps")
+    pp.header("Steps", align="left")
 
     with pp.step("success path") as s:
         s.sub("first sub-item")
@@ -55,7 +50,7 @@ def _steps() -> None:
         with pp.step("failure path") as s:
             s.sub("attempted this")
             msg = "boom"
-            raise RuntimeError(msg)  # noqa: TRY301
+            raise RuntimeError(msg)  # noqa: TRY301 -- intentional, exercises step() failure branch
     except RuntimeError:
         pass
 
@@ -65,7 +60,7 @@ def _steps() -> None:
 
 def _details_simple() -> None:
     """Demonstrate details with tree connectors: single, multiple, and markup."""
-    _section("Details (tree connectors)")
+    pp.header("Details (tree connectors)", align="left")
     pp.info("one detail", details=["only-item"])
     pp.success("multiple details", details=["first", "second", "third"])
     pp.warning(
@@ -77,7 +72,7 @@ def _details_simple() -> None:
 
 def _details_multiline() -> None:
     """Demonstrate `│` continuation under non-final and blank gutter under final."""
-    _section("Multi-line details")
+    pp.header("Multi-line details", align="left")
     pp.info(
         "multi-line string in non-final position",
         details=["line one\nline two\nline three", "trailing item"],
@@ -90,7 +85,7 @@ def _details_multiline() -> None:
 
 def _per_call_overrides() -> None:
     """Demonstrate per-call style, marker, and detail_style overrides."""
-    _section("Per-call overrides")
+    pp.header("Per-call overrides", align="left")
     pp.info("custom marker", marker="→ ", details=["one"])
     pp.info(
         "custom style",
@@ -103,7 +98,7 @@ def _per_call_overrides() -> None:
 
 def _theme_override() -> None:
     """Demonstrate a custom Theme via a dedicated Emitter."""
-    _section("Theme override")
+    pp.header("Theme override", align="left")
     e = Emitter(
         verbosity=Verbosity.TRACE,
         theme=Theme(
@@ -117,7 +112,7 @@ def _theme_override() -> None:
 
 def _verbosity_matrix() -> None:
     """Show what's visible at each verbosity setting and under quiet."""
-    _section("Verbosity/quiet matrix")
+    pp.header("Verbosity/quiet matrix", align="left")
 
     e_info = Emitter(verbosity=Verbosity.INFO)
     e_info.info("INFO emitter: debug and trace are suppressed")

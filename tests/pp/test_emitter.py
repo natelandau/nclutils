@@ -1065,7 +1065,7 @@ class TestDetailTree:
     def test_markup_true_still_parses_string_details(
         self, make_recording_emitter: RecordingEmitterFactory
     ) -> None:
-        """Verify markup=True parses Rich markup inside string details when multiple details are present."""
+        """Verify markup=True parses Rich markup inside string details."""
         # Given an Emitter wired to a recording stdout
         e, out, _ = make_recording_emitter()
 
