@@ -1,9 +1,12 @@
-# Questions
+# Ask
 
-Two thin wrappers around [questionary](https://github.com/tmbo/questionary) for the most common interactive prompts: pick one item or pick many. Imported from `nclutils.questions`.
+Two thin wrappers around [questionary](https://github.com/tmbo/questionary) for the most common interactive prompts: pick one item or pick many. Imported from `nclutils.ask`.
+
+> [!NOTE]
+> The legacy import path `nclutils.questions` still works but is deprecated and will be removed in v4.0.0. New code should use `nclutils.ask`.
 
 ```python
-from nclutils.questions import choose_one_from_list
+from nclutils.ask import choose_one_from_list
 
 color = choose_one_from_list(["red", "green", "blue"], "Pick a color")
 ```
@@ -13,7 +16,7 @@ color = choose_one_from_list(["red", "green", "blue"], "Pick a color")
 `choose_one_from_list(choices, message)` displays a select widget and returns the chosen value, or `None` if the user cancels (Esc / Ctrl-C) or the choices list is empty.
 
 ```python
-from nclutils.questions import choose_one_from_list
+from nclutils.ask import choose_one_from_list
 
 color = choose_one_from_list(["red", "green", "blue"], "Pick a color")
 if color is None:
@@ -25,7 +28,7 @@ if color is None:
 `choose_multiple_from_list(choices, message)` shows a checkbox widget and returns a list of selected values. Like the single-select version, it returns `None` if nothing was selected or the user cancelled.
 
 ```python
-from nclutils.questions import choose_multiple_from_list
+from nclutils.ask import choose_multiple_from_list
 
 picks = choose_multiple_from_list(
     ["api", "cli", "docs", "tests"],
@@ -45,7 +48,7 @@ A list of `Path`, `str`, `int`, `float`, or `bool`. The display string is the va
 
 ```python
 from pathlib import Path
-from nclutils.questions import choose_one_from_list
+from nclutils.ask import choose_one_from_list
 
 # Display will show just the filename, but the returned value is the full Path
 config = choose_one_from_list(
@@ -60,7 +63,7 @@ When you need a different display string than the value, pass a list of two-tupl
 
 ```python
 from dataclasses import dataclass
-from nclutils.questions import choose_one_from_list
+from nclutils.ask import choose_one_from_list
 
 @dataclass
 class Profile:
@@ -82,7 +85,7 @@ profile = choose_one_from_list(
 A list of single-key `{label: value}` dicts works the same as the tuple form. Use it when your data is already shaped that way.
 
 ```python
-from nclutils.questions import choose_multiple_from_list
+from nclutils.ask import choose_multiple_from_list
 
 selected = choose_multiple_from_list(
     [{"Frontend": "fe"}, {"Backend": "be"}, {"Infra": "infra"}],

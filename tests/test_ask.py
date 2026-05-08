@@ -1,4 +1,4 @@
-"""Tests for the questions module."""
+"""Tests for the ask module."""
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -6,7 +6,7 @@ from pathlib import Path
 import questionary
 from pytest_mock import MockerFixture
 
-from nclutils.questions import choose_multiple_from_list, choose_one_from_list
+from nclutils.ask import choose_multiple_from_list, choose_one_from_list
 
 
 def test_choose_from_list_path(mocker: MockerFixture) -> None:
