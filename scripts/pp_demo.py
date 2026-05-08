@@ -127,6 +127,29 @@ def _per_call_tags() -> None:
     pp.debug("auto elapsed (default)")
 
 
+def _exceptions() -> None:
+    """Demonstrate the exception= kwarg with instance, True, and show_locals forms."""
+    pp.header("Exceptions", align="left")
+
+    try:
+        msg = "403 Forbidden"
+        raise RuntimeError(msg)  # noqa: TRY301 -- intentional, exercises exception= instance form
+    except RuntimeError as exc:
+        pp.error("upload failed (instance)", exception=exc)
+
+    try:
+        msg = "boom"
+        raise ValueError(msg)  # noqa: TRY301 -- intentional, exercises exception=True form
+    except ValueError:
+        pp.error("operation aborted (exception=True)", exception=True)
+
+    try:
+        msg = "verbose"
+        raise KeyError(msg)  # noqa: TRY301 -- intentional, exercises show_locals=True form
+    except KeyError as exc:
+        pp.warning("retry triggered (show_locals=True)", exception=exc, show_locals=True)
+
+
 def _theme_override() -> None:
     """Demonstrate a custom Theme via a dedicated Emitter."""
     pp.header("Theme override", align="left")
@@ -178,6 +201,7 @@ def main() -> None:
     _details_multiline()
     _per_call_overrides()
     _per_call_tags()
+    _exceptions()
     _theme_override()
     _verbosity_matrix()
 

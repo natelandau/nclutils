@@ -121,6 +121,44 @@ When `right_tag` is passed to `pp.debug` or `pp.trace`, the caller's value repla
 > [!NOTE]
 > The caller is responsible for Rich-markup-escaping any `[`, `]`, or other reserved characters in `tag` and `right_tag`. Pass plain ASCII tags or pre-escaped strings.
 
+### Exceptions and tracebacks
+
+Every level method accepts an `exception=` kwarg. Pass an exception instance to render a styled Rich Traceback below the message:
+
+```python
+try:
+    upload()
+except UploadError as exc:
+    pp.error("upload failed", exception=exc)
+```
+
+```text
+✗ upload failed
+  └─ ╭─ Traceback ─────────────────────────────────
+       File "upload.py", line 42, in upload
+         raise UploadError("403 Forbidden")
+       UploadError: 403 Forbidden
+     ╰─────────────────────────────────────────────
+```
+
+Inside an `except` block you can pass `exception=True` to grab the active exception via `sys.exc_info()`:
+
+```python
+try:
+    upload()
+except UploadError:
+    pp.error("upload failed", exception=True)
+```
+
+Outside an `except` block, `exception=True` is a silent no-op (matches the behavior of `logging.exception()`).
+
+Pass `show_locals=True` for verbose dumps that include each frame's local variables. Rich handles its own glyph fallbacks based on console encoding, so the traceback renders cleanly on terminals that can't display box-drawing characters.
+
+The formatted traceback is also written to the logfile as continuation lines under the parent record at the same severity, so a level filter drops the traceback alongside its message.
+
+> [!NOTE]
+> `exception=` is accepted on every level method (`info`, `success`, `warning`, `error`, `critical`, `debug`, `trace`, `dryrun`). It is not supported on `header()` or `step()`, both of which already manage their own exception display.
+
 You can pass Rich renderables in `details` to get syntax-aware output, which is especially useful at `debug` / `trace`:
 
 ```python
@@ -370,7 +408,7 @@ finally:
 
 Every name below is available on the `pp` namespace (`from nclutils import pp`) and from `nclutils.pp` directly (e.g. `from nclutils.pp import info`).
 
-- `info`, `success`, `warning`, `error`, `critical`, `dryrun`, `debug`, `trace`, `header`. Output functions. Every level function accepts `tag=` and `right_tag=` kwargs - see [Per-call tags](#per-call-tags) above.
+- `info`, `success`, `warning`, `error`, `critical`, `dryrun`, `debug`, `trace`, `header`. Output functions. Every level function accepts `tag=` / `right_tag=` (see [Per-call tags](#per-call-tags)) and `exception=` / `show_locals=` (see [Exceptions and tracebacks](#exceptions-and-tracebacks)).
 - `step(message, *, ephemeral=False)`. Spinner context manager.
 - `configure(*, verbosity=None, quiet=None, console=None, err_console=None, theme=None, logfile=None, loglevel=None, logfmt=None)`. Partial update of the default emitter.
 - `Emitter`. Instantiate directly for isolated configuration.
