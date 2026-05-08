@@ -53,12 +53,12 @@ pp.success("done")
 Other modules follow the same pattern:
 
 ```python
+from nclutils.ask import choose_one_from_list
 from nclutils.fs import copy_file, find_files
-from nclutils.network import network_available
-from nclutils.questions import choose_one_from_list
+from nclutils.net import network_available
 from nclutils.sh import run_command, run_interactive, which, CompletedCommand, ShellCommandError
 from nclutils.strings import camel_case, deburr
-from nclutils.text_processing import replace_in_file
+from nclutils.text import replace_in_file
 from nclutils.utils import iso_timestamp, unique_id
 ```
 
@@ -72,28 +72,28 @@ from nclutils.pp import info, success
 
 The larger modules have their own documentation pages. Smaller modules are listed inline below. Function signatures live with the source; consult docstrings (`help(func)` or your editor's hover) for authoritative argument details.
 
-| Module                     | Summary                                                                                                                                                           | Docs                                             |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| `nclutils.fs`              | Copy, back up, search, and visualize the filesystem.                                                                                                              | [docs/fs.md](docs/fs.md)                         |
-| `nclutils.network`         | Lightweight network reachability check.                                                                                                                           | _(inline below)_                                 |
-| `nclutils.pp`              | Rich-based console output, verbosity gates, file logger.                                                                                                          | [docs/pp.md](docs/pp.md)                         |
-| `nclutils.questions`       | Single- and multi-select prompts via `questionary`.                                                                                                               | [docs/questions.md](docs/questions.md)           |
-| `nclutils.sh`              | Run commands via subprocess; returns `CompletedCommand`, raises typed errors (`ShellCommandError` hierarchy). Includes `run_command`, `run_interactive`, `which`. | [docs/shell_commands.md](docs/shell_commands.md) |
-| `nclutils.strings`         | Case conversions, padding, tokenizing, normalization.                                                                                                             | [docs/strings.md](docs/strings.md)               |
-| `nclutils.text_processing` | In-place file edits.                                                                                                                                              | _(inline below)_                                 |
-| `nclutils.utils`           | Timestamps, unique IDs, Python version check.                                                                                                                     | [docs/utils.md](docs/utils.md)                   |
+| Module             | Summary                                                                                                                                                           | Docs                                             |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `nclutils.ask`     | Single- and multi-select prompts via `questionary`.                                                                                                               | [docs/ask.md](docs/ask.md)                       |
+| `nclutils.fs`      | Copy, back up, search, and visualize the filesystem.                                                                                                              | [docs/fs.md](docs/fs.md)                         |
+| `nclutils.net`     | Lightweight network reachability check.                                                                                                                           | _(inline below)_                                 |
+| `nclutils.pp`      | Rich-based console output, verbosity gates, file logger.                                                                                                          | [docs/pp.md](docs/pp.md)                         |
+| `nclutils.sh`      | Run commands via subprocess; returns `CompletedCommand`, raises typed errors (`ShellCommandError` hierarchy). Includes `run_command`, `run_interactive`, `which`. | [docs/shell_commands.md](docs/shell_commands.md) |
+| `nclutils.strings` | Case conversions, padding, tokenizing, normalization.                                                                                                             | [docs/strings.md](docs/strings.md)               |
+| `nclutils.text`    | In-place file edits.                                                                                                                                              | _(inline below)_                                 |
+| `nclutils.utils`   | Timestamps, unique IDs, Python version check.                                                                                                                     | [docs/utils.md](docs/utils.md)                   |
 
-### `nclutils.network`
+### `nclutils.net`
 
 - `network_available(address="8.8.4.4", port=53, timeout=5)`. Return `True` if a TCP connection to the given host and port succeeds within `timeout` seconds.
 
-### `nclutils.text_processing`
+### `nclutils.text`
 
 - `replace_in_file(path, replacements, *, use_regex=False)`. Apply a dict of replacements to a file in place. Returns `True` if the file changed.
 - `ensure_lines_in_file(path, lines, *, at_top=False)`. Add lines to a file if they aren't already present. Returns `True` if the file changed.
 
 ```python
-from nclutils.text_processing import ensure_lines_in_file, replace_in_file
+from nclutils.text import ensure_lines_in_file, replace_in_file
 
 replace_in_file("config.toml", {"old": "new"})
 
@@ -105,7 +105,7 @@ ensure_lines_in_file(".gitignore", [".env", "*.pyc"])
 
 ## Diagnostic logging
 
-Internal modules (`nclutils.fs`, `nclutils.text_processing`) emit diagnostic messages through the stdlib `logging` module under their own logger names. By default these are silent. Attach a handler in your application to see them:
+Internal modules (`nclutils.fs`, `nclutils.text`) emit diagnostic messages through the stdlib `logging` module under their own logger names. By default these are silent. Attach a handler in your application to see them:
 
 ```python
 import logging
