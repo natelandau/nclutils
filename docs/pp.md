@@ -179,6 +179,46 @@ pp.header("phase 1: download")
 pp.header("phase 2: process")
 ```
 
+## Key/value blocks
+
+`pp.kv()` renders aligned key/value pairs as a clean section block, which is handy for status summaries and final-state output:
+
+```python
+pp.header("Build Status")
+pp.kv({
+    "Branch":   "main",
+    "Commit":   "abc1234",
+    "Status":   "clean",
+    "Duration": "3.2s",
+})
+```
+
+```text
+─── Build Status ───
+
+  Branch:   main
+  Commit:   abc1234
+  Status:   clean
+  Duration: 3.2s
+```
+
+Keys are padded automatically, so you don't need to pre-align them. Pass a `list[tuple[str, Any]]` when you need duplicate keys or want to control ordering explicitly:
+
+```python
+pp.kv([
+    ("Step", "init"),
+    ("Step", "build"),
+    ("Step", "deploy"),
+])
+```
+
+The default `indent=2` and `separator=": "` work for typical CLI output. Pass `markup=True` to parse Rich markup in string values; keys are always escaped (treated as identifiers).
+
+> [!NOTE]
+> `pp.kv()` is suppressed on the console by `quiet=True`, the same as `pp.info()` and `pp.success()`. Each pair is still recorded as one INFO record in the logfile (or one record per visual line for multi-line values), so the audit trail stays complete even under quiet.
+
+Non-string, non-renderable values pass through `str()`. Rich renderables (Tables, JSON, etc.) render below the key, indented to the value column.
+
 ## Wiring up `--verbose` and `--quiet`
 
 `pp.Verbosity` is an `IntEnum` with three levels (`INFO`, `DEBUG`, `TRACE`), so a `-v` count flag maps cleanly:
@@ -409,6 +449,7 @@ finally:
 Every name below is available on the `pp` namespace (`from nclutils import pp`) and from `nclutils.pp` directly (e.g. `from nclutils.pp import info`).
 
 - `info`, `success`, `warning`, `error`, `critical`, `dryrun`, `debug`, `trace`, `header`. Output functions. Every level function accepts `tag=` / `right_tag=` (see [Per-call tags](#per-call-tags)) and `exception=` / `show_locals=` (see [Exceptions and tracebacks](#exceptions-and-tracebacks)).
+- `kv(items, *, indent=2, separator=": ", markup=False)`. Render aligned key/value blocks (see [Key/value blocks](#keyvalue-blocks)).
 - `step(message, *, ephemeral=False)`. Spinner context manager.
 - `configure(*, verbosity=None, quiet=None, console=None, err_console=None, theme=None, logfile=None, loglevel=None, logfmt=None)`. Partial update of the default emitter.
 - `Emitter`. Instantiate directly for isolated configuration.
