@@ -199,6 +199,27 @@ with pp.step("warming caches", ephemeral=True) as s:
 > [!WARNING]
 > `pp.step()` cannot nest. Rich's `Live` doesn't stack, so nesting silently corrupts the parent's display. `pp` raises `RuntimeError` when you try.
 
+### Customizing the success and failure messages
+
+By default `step()` reuses the original message for both success and failure. To show different text on completion, pass `success_msg` and/or `failure_msg`:
+
+```python
+with pp.step(
+    "compiling sources",
+    success_msg="compiled 42 files in 1.2s",
+    failure_msg="compilation aborted",
+) as s:
+    s.sub("api.py")
+    s.sub("cli.py")
+```
+
+On success the spinner resolves to `✓ compiled 42 files in 1.2s`; on failure to `✗ compilation aborted`. Either kwarg can be omitted independently, and the omitted side falls back to the original message. The single `markup=` flag covers all three messages.
+
+The override messages are also recorded in the logfile (`succeeded: ...` / `failed: ...`) so the audit trail matches what the user saw.
+
+> [!NOTE]
+> When `ephemeral=True`, the success branch wipes the screen as usual; `success_msg` is still recorded in the logfile. The failure branch surfaces `failure_msg` on stderr if provided, otherwise the original message.
+
 ## File logging
 
 Pass `logfile=` to write a parallel record of every emission to disk:

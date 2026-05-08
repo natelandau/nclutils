@@ -1003,6 +1003,8 @@ class Emitter:
         *,
         ephemeral: bool = False,
         markup: bool = False,
+        success_msg: str | RenderableType | None = None,
+        failure_msg: str | RenderableType | None = None,
     ) -> Generator[Step]:
         """Show a spinner while the block runs, then a completion marker.
 
@@ -1016,6 +1018,14 @@ class Emitter:
         console on completion. Success leaves no trace; failure prints only the
         error marker so errors are not silently hidden.
 
+        `success_msg` overrides the success-state header; defaults to the
+        original `message` styled as success. `failure_msg` overrides the
+        failure-state header; defaults to the original `message` styled as
+        error. Either side may be omitted independently. The single `markup=`
+        flag covers all three messages. The succeeded:/failed: log lines also
+        use the override messages when provided so the audit trail matches
+        what the user saw on the console.
+
         Args:
             message: Title shown next to the spinner. Strings are escaped by
                 default; pass `markup=True` to embed Rich markup. A `Text`
@@ -1024,6 +1034,10 @@ class Emitter:
             ephemeral: If True, clear sub-items and the success marker on completion.
             markup: When True, parses Rich markup in a `str` `message`
                 instead of escaping.
+            success_msg: Optional message to display on success in place of
+                the original `message`. Falls back to `message` when None.
+            failure_msg: Optional message to display on failure in place of
+                the original `message`. Falls back to `message` when None.
 
         Yields:
             A `Step` whose `sub()` method appends sub-items beneath the spinner.
@@ -1040,7 +1054,20 @@ class Emitter:
         info_style, _, _ = self._resolve("info")
         success_style, _, success_marker = self._resolve("success")
         error_style, _, error_marker = self._resolve("error")
+
         log_text = _message_to_log_text(message, markup=markup)
+        success_text = (
+            _message_to_log_text(success_msg, markup=markup)
+            if success_msg is not None
+            else log_text
+        )
+        failure_text = (
+            _message_to_log_text(failure_msg, markup=markup)
+            if failure_msg is not None
+            else log_text
+        )
+        success_message = success_msg if success_msg is not None else message
+        failure_message = failure_msg if failure_msg is not None else message
 
         self._logsink.emit(
             level=_LEVEL_TO_LOG_SEVERITY["info"],
@@ -1058,14 +1085,20 @@ class Emitter:
                     failed_exc = exc
                     if not ephemeral:
                         error_header = _build_message_text(
-                            message, style=error_style, marker=error_marker, markup=markup
+                            failure_message,
+                            style=error_style,
+                            marker=error_marker,
+                            markup=markup,
                         )
                         if error_header is not None:
                             s.header = error_header
                     raise
                 if not ephemeral:
                     success_header = _build_message_text(
-                        message, style=success_style, marker=success_marker, markup=markup
+                        success_message,
+                        style=success_style,
+                        marker=success_marker,
+                        markup=markup,
                     )
                     if success_header is not None:
                         s.header = success_header
@@ -1074,15 +1107,15 @@ class Emitter:
             if failed_exc is not None:
                 self._logsink.emit(
                     level=_LEVEL_TO_LOG_SEVERITY["error"],
-                    message=f"failed: {log_text}",
+                    message=f"failed: {failure_text}",
                     details=[f"{type(failed_exc).__name__}: {failed_exc}"],
                 )
                 if ephemeral:
-                    self.error(log_text)
+                    self.error(failure_text)
             else:
                 self._logsink.emit(
                     level=_LEVEL_TO_LOG_SEVERITY["info"],
-                    message=f"succeeded: {log_text}",
+                    message=f"succeeded: {success_text}",
                     details=None,
                 )
 
@@ -1401,13 +1434,24 @@ def header(
 
 @contextmanager
 def step(
-    message: str | RenderableType, *, ephemeral: bool = False, markup: bool = False
+    message: str | RenderableType,
+    *,
+    ephemeral: bool = False,
+    markup: bool = False,
+    success_msg: str | RenderableType | None = None,
+    failure_msg: str | RenderableType | None = None,
 ) -> Generator[Step]:
     """Run a spinner-driven step on the default emitter.
 
-    See `Emitter.step` for `message`/`markup` semantics.
+    See `Emitter.step` for `message`/`markup`/`success_msg`/`failure_msg` semantics.
     """
-    with _default.step(message, ephemeral=ephemeral, markup=markup) as s:
+    with _default.step(
+        message,
+        ephemeral=ephemeral,
+        markup=markup,
+        success_msg=success_msg,
+        failure_msg=failure_msg,
+    ) as s:
         yield s
 
 
