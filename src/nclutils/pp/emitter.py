@@ -247,8 +247,9 @@ def _print_level(  # noqa: PLR0913
             renderable.
         markup: When True, Rich markup in `message` and any string item in
             `details` is parsed instead of escaped.
-        details: Optional follow-up items, all indented to the same
-            2-space column. Strings are escaped (or parsed when `markup=True`)
+        details: Optional follow-up items, rendered as a tree beneath the
+            message with `├─` prefixed on non-final items and `└─` on the
+            final item. Strings are escaped (or parsed when `markup=True`)
             and rendered with `detail_style`. Rich renderables (e.g. `JSON`,
             `Syntax`, `Table`) pass through and render with their own
             coloring. Any other Python object is wrapped in `Pretty()` so

@@ -63,7 +63,7 @@ renders as:
 The `├─` and `└─` glyphs are styled via the `sub.pipe` theme key (the same key `pp.step()` uses for its sub-item connectors), so retuning that one entry restyles every tree connector across the API.
 
 > [!NOTE]
-> Tree connectors appear in stdout/stderr only. Logfile records (configured via `pp.configure(logfile=...)`) format details using the logfmt's `%(detail)s` field; they do not contain `├─`, `└─`, or `│` characters.
+> Tree connectors appear in stdout/stderr only. In logfile records, each detail item becomes its own log record at the parent's severity with the detail text in the standard `%(message)s` field, prefixed by two spaces; the file does not contain `├─`, `└─`, or `│` characters.
 
 Pass `markup=True` to opt into Rich markup parsing for `message` and any string `details` items in that call:
 
@@ -255,7 +255,7 @@ To fully reset, build a fresh emitter: `pp.set_default(pp.Emitter())`.
 
 ### What's not themed
 
-The horizontal rule under `pp.header()`, the connector glyphs beneath `pp.step()` (`├─`, `└─`), and the `[dry-run]` tag are not customizable.
+The horizontal rule under `pp.header()` and the `[dry-run]` tag are not customizable. The `├─`/`└─` connector glyphs beneath `pp.step()` and `details` lists share the `sub.pipe` Rich theme entry on the underlying console (defaulting to `bright_black`); the glyph characters themselves are fixed, and the `pp.Theme` dataclass does not expose a field to retune their style. To override it, build a custom `Console(theme=...)` and pass it via `pp.Emitter(console=...)`.
 
 ## Reaching the underlying consoles
 
