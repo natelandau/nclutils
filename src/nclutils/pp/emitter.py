@@ -214,6 +214,17 @@ def _message_to_log_text(message: str | RenderableType, *, markup: bool) -> str:
     return _render_renderable_to_plain(message).rstrip("\n")
 
 
+def _apply_tag_to_logmsg(tag: str | None, message: str) -> str:
+    """Prepend `[tag] ` to a log message body when tag is set.
+
+    Keeps caller-supplied audit metadata visible in the logfile so grep over
+    file output finds the same labels the operator saw on the console.
+    """
+    if tag:
+        return f"[{tag}] {message}"
+    return message
+
+
 def _print_level(  # noqa: PLR0913
     target: Console,
     *,
@@ -542,7 +553,7 @@ class Emitter:
             self._log_t0 = time.monotonic()
         return f"\\[+{time.monotonic() - self._log_t0:.3f}s]"
 
-    def info(
+    def info(  # noqa: PLR0913
         self,
         message: str | RenderableType,
         *,
@@ -551,6 +562,8 @@ class Emitter:
         style: str | None = None,
         detail_style: str | None = None,
         marker: str | None = None,
+        tag: str | None = None,
+        right_tag: str | None = None,
         **kwargs: Any,
     ) -> None:
         """Print info-level output to stdout. Suppressed when `quiet` is True.
@@ -570,10 +583,20 @@ class Emitter:
         this call only - useful for one-off emphasis without restyling the
         whole emitter. `marker=""` suppresses the marker for the call. The
         logfile record is unaffected; these are presentation-only.
+
+        `tag` adds a dim left-side metadata tag rendered between marker and
+        message (e.g. `[api] ✓ saved`). The tag is recorded inline in the
+        logfile message as `[tag] msg` so audit grep stays useful. The caller
+        is responsible for escaping any Rich markup characters in the tag.
+
+        `right_tag` adds a dim right-aligned metadata tag on the first line
+        only. It is presentation-only and is NOT recorded in the logfile. The
+        caller is responsible for escaping any Rich markup characters in the
+        tag.
         """
         self._logsink.emit(
             level=_LEVEL_TO_LOG_SEVERITY["info"],
-            message=_message_to_log_text(message, markup=markup),
+            message=_apply_tag_to_logmsg(tag, _message_to_log_text(message, markup=markup)),
             details=details,
         )
         if self.quiet:
@@ -589,10 +612,12 @@ class Emitter:
             message=message,
             markup=markup,
             details=details,
+            tag=tag,
+            right_tag=right_tag,
             **kwargs,
         )
 
-    def success(
+    def success(  # noqa: PLR0913
         self,
         message: str | RenderableType,
         *,
@@ -601,6 +626,8 @@ class Emitter:
         style: str | None = None,
         detail_style: str | None = None,
         marker: str | None = None,
+        tag: str | None = None,
+        right_tag: str | None = None,
         **kwargs: Any,
     ) -> None:
         """Print success-level output to stdout. Suppressed when `quiet` is True.
@@ -611,11 +638,11 @@ class Emitter:
         is wrapped in `Pretty()`.
 
         See `Emitter.info` for `message`/`markup`/`style`/`detail_style`/`marker`
-        semantics.
+        and `tag`/`right_tag` semantics.
         """
         self._logsink.emit(
             level=_LEVEL_TO_LOG_SEVERITY["success"],
-            message=_message_to_log_text(message, markup=markup),
+            message=_apply_tag_to_logmsg(tag, _message_to_log_text(message, markup=markup)),
             details=details,
         )
         if self.quiet:
@@ -631,10 +658,12 @@ class Emitter:
             message=message,
             markup=markup,
             details=details,
+            tag=tag,
+            right_tag=right_tag,
             **kwargs,
         )
 
-    def debug(
+    def debug(  # noqa: PLR0913
         self,
         message: str | RenderableType,
         *,
@@ -643,6 +672,8 @@ class Emitter:
         style: str | None = None,
         detail_style: str | None = None,
         marker: str | None = None,
+        tag: str | None = None,
+        right_tag: str | None = None,
         **kwargs: Any,
     ) -> None:
         """Print debug-level output to stdout. Shown with `-v` or higher.
@@ -652,13 +683,20 @@ class Emitter:
         is dropped from the console line when `message` is a non-Text
         renderable (still recorded in the logfile).
 
+        Pass `right_tag` to override the auto-elapsed marker on the console
+        for one call (e.g. `right_tag="db: 1.2s"`); the logfile still records
+        the auto-elapsed `[+s.fffs]` marker so the audit timeline is preserved.
+
         See `Emitter.info` for `message`/`markup`/`style`/`detail_style`/`marker`
-        semantics.
+        and `tag`/`right_tag` semantics.
         """
         elapsed = self._elapsed_tag()
         self._logsink.emit(
             level=_LEVEL_TO_LOG_SEVERITY["debug"],
-            message=f"{_message_to_log_text(message, markup=markup)}  {elapsed}",
+            message=_apply_tag_to_logmsg(
+                tag,
+                f"{_message_to_log_text(message, markup=markup)}  {elapsed}",
+            ),
             details=details,
         )
         if self.verbosity < Verbosity.DEBUG:
@@ -674,11 +712,12 @@ class Emitter:
             message=message,
             markup=markup,
             details=details,
-            right_tag=elapsed,
+            tag=tag,
+            right_tag=right_tag if right_tag is not None else elapsed,
             **kwargs,
         )
 
-    def trace(
+    def trace(  # noqa: PLR0913
         self,
         message: str | RenderableType,
         *,
@@ -687,17 +726,27 @@ class Emitter:
         style: str | None = None,
         detail_style: str | None = None,
         marker: str | None = None,
+        tag: str | None = None,
+        right_tag: str | None = None,
         **kwargs: Any,
     ) -> None:
         """Print trace-level output to stdout. Shown with `-vv`.
 
+        Pass `right_tag` to override the auto-elapsed marker on the console
+        for one call; the logfile still records the auto-elapsed `[+s.fffs]`
+        marker so the audit timeline is preserved.
+
         See `Emitter.info` for `message`/`markup`/`style`/`detail_style`/`marker`
-        semantics, and `Emitter.debug` for the right-aligned elapsed tag.
+        and `tag`/`right_tag` semantics, and `Emitter.debug` for the
+        right-aligned elapsed tag.
         """
         elapsed = self._elapsed_tag()
         self._logsink.emit(
             level=_LEVEL_TO_LOG_SEVERITY["trace"],
-            message=f"{_message_to_log_text(message, markup=markup)}  {elapsed}",
+            message=_apply_tag_to_logmsg(
+                tag,
+                f"{_message_to_log_text(message, markup=markup)}  {elapsed}",
+            ),
             details=details,
         )
         if self.verbosity < Verbosity.TRACE:
@@ -713,11 +762,12 @@ class Emitter:
             message=message,
             markup=markup,
             details=details,
-            right_tag=elapsed,
+            tag=tag,
+            right_tag=right_tag if right_tag is not None else elapsed,
             **kwargs,
         )
 
-    def dryrun(
+    def dryrun(  # noqa: PLR0913
         self,
         message: str | RenderableType,
         *,
@@ -726,6 +776,8 @@ class Emitter:
         style: str | None = None,
         detail_style: str | None = None,
         marker: str | None = None,
+        tag: str | None = None,
+        right_tag: str | None = None,
         **kwargs: Any,
     ) -> None:
         """Print a dry-run notice to stdout. Always shown, even when `quiet`.
@@ -733,19 +785,29 @@ class Emitter:
         Bypasses `quiet` because a dry-run notice describes an action that
         would otherwise have happened - silencing it defeats the purpose.
 
+        When `tag` is supplied, it renders before the existing `[dry-run]`
+        marker (e.g. `[deploy] [dry-run] would push`) on both the console
+        and in the logfile.
+
         See `Emitter.info` for `message`/`markup`/`style`/`detail_style`/`marker`
-        semantics.
+        and `tag`/`right_tag` semantics.
         """
-        # Include [dry-run] inline in the file message for grep-ability.
+        # Include [dry-run] inline in the file message for grep-ability, and
+        # prepend any caller-supplied tag so audit grep finds the same labels
+        # the operator saw on the console.
+        log_body = f"[dry-run] {_message_to_log_text(message, markup=markup)}"
+        log_body = _apply_tag_to_logmsg(tag, log_body)
         self._logsink.emit(
             level=_LEVEL_TO_LOG_SEVERITY["dryrun"],
-            message=f"[dry-run] {_message_to_log_text(message, markup=markup)}",
+            message=log_body,
             details=details,
         )
         style, detail_style, marker = self._resolve_with_overrides(
             "dryrun", style=style, detail_style=detail_style, marker=marker
         )
-        # Escape the leading [ so Rich doesn't parse "[dry-run]" as a markup tag.
+        # Escape the leading [ so Rich doesn't parse "[dry-run]" as a markup
+        # tag; the same escape applies when combining with a caller tag.
+        combined_tag = f"{tag} \\[dry-run]" if tag else "\\[dry-run]"
         _print_level(
             self.console,
             style=style,
@@ -754,11 +816,12 @@ class Emitter:
             message=message,
             markup=markup,
             details=details,
-            tag="\\[dry-run]",
+            tag=combined_tag,
+            right_tag=right_tag,
             **kwargs,
         )
 
-    def warning(
+    def warning(  # noqa: PLR0913
         self,
         message: str | RenderableType,
         *,
@@ -767,16 +830,18 @@ class Emitter:
         style: str | None = None,
         detail_style: str | None = None,
         marker: str | None = None,
+        tag: str | None = None,
+        right_tag: str | None = None,
         **kwargs: Any,
     ) -> None:
         """Print warning output to stderr. Always shown, even when `quiet`.
 
         See `Emitter.info` for `message`/`markup`/`style`/`detail_style`/`marker`
-        semantics.
+        and `tag`/`right_tag` semantics.
         """
         self._logsink.emit(
             level=_LEVEL_TO_LOG_SEVERITY["warning"],
-            message=_message_to_log_text(message, markup=markup),
+            message=_apply_tag_to_logmsg(tag, _message_to_log_text(message, markup=markup)),
             details=details,
         )
         style, detail_style, marker = self._resolve_with_overrides(
@@ -793,10 +858,12 @@ class Emitter:
             message=message,
             markup=markup,
             details=details,
+            tag=tag,
+            right_tag=right_tag,
             **kwargs,
         )
 
-    def error(
+    def error(  # noqa: PLR0913
         self,
         message: str | RenderableType,
         *,
@@ -805,16 +872,18 @@ class Emitter:
         style: str | None = None,
         detail_style: str | None = None,
         marker: str | None = None,
+        tag: str | None = None,
+        right_tag: str | None = None,
         **kwargs: Any,
     ) -> None:
         """Print error output to stderr. Always shown, even when `quiet`.
 
         See `Emitter.info` for `message`/`markup`/`style`/`detail_style`/`marker`
-        semantics.
+        and `tag`/`right_tag` semantics.
         """
         self._logsink.emit(
             level=_LEVEL_TO_LOG_SEVERITY["error"],
-            message=_message_to_log_text(message, markup=markup),
+            message=_apply_tag_to_logmsg(tag, _message_to_log_text(message, markup=markup)),
             details=details,
         )
         style, detail_style, marker = self._resolve_with_overrides(
@@ -829,10 +898,12 @@ class Emitter:
             message=message,
             markup=markup,
             details=details,
+            tag=tag,
+            right_tag=right_tag,
             **kwargs,
         )
 
-    def critical(
+    def critical(  # noqa: PLR0913
         self,
         message: str | RenderableType,
         *,
@@ -841,6 +912,8 @@ class Emitter:
         style: str | None = None,
         detail_style: str | None = None,
         marker: str | None = None,
+        tag: str | None = None,
+        right_tag: str | None = None,
         **kwargs: Any,
     ) -> None:
         """Print critical output to stderr. Always shown, even when `quiet`.
@@ -852,11 +925,11 @@ class Emitter:
         `‼ `, customizable via `Theme(critical=Level(...))`).
 
         See `Emitter.info` for `message`/`markup`/`style`/`detail_style`/`marker`
-        semantics.
+        and `tag`/`right_tag` semantics.
         """
         self._logsink.emit(
             level=_LEVEL_TO_LOG_SEVERITY["critical"],
-            message=_message_to_log_text(message, markup=markup),
+            message=_apply_tag_to_logmsg(tag, _message_to_log_text(message, markup=markup)),
             details=details,
         )
         style, detail_style, marker = self._resolve_with_overrides(
@@ -871,6 +944,8 @@ class Emitter:
             message=message,
             markup=markup,
             details=details,
+            tag=tag,
+            right_tag=right_tag,
             **kwargs,
         )
 
@@ -1077,7 +1152,7 @@ def configure(  # noqa: PLR0913
     )
 
 
-def info(
+def info(  # noqa: PLR0913
     message: str | RenderableType,
     *,
     details: list[Any] | None = None,
@@ -1085,12 +1160,13 @@ def info(
     style: str | None = None,
     detail_style: str | None = None,
     marker: str | None = None,
+    tag: str | None = None,
+    right_tag: str | None = None,
     **kwargs: Any,
 ) -> None:
     """Print info-level output via the default emitter.
 
-    See `Emitter.info` for `message`/`markup`/`style`/`detail_style`/`marker`
-    semantics.
+    See `Emitter.info` for full kwarg semantics including `tag`/`right_tag`.
     """
     _default.info(
         message,
@@ -1099,11 +1175,13 @@ def info(
         style=style,
         detail_style=detail_style,
         marker=marker,
+        tag=tag,
+        right_tag=right_tag,
         **kwargs,
     )
 
 
-def success(
+def success(  # noqa: PLR0913
     message: str | RenderableType,
     *,
     details: list[Any] | None = None,
@@ -1111,12 +1189,13 @@ def success(
     style: str | None = None,
     detail_style: str | None = None,
     marker: str | None = None,
+    tag: str | None = None,
+    right_tag: str | None = None,
     **kwargs: Any,
 ) -> None:
     """Print success-level output via the default emitter.
 
-    See `Emitter.success` for `message`/`markup`/`style`/`detail_style`/`marker`
-    semantics.
+    See `Emitter.success` for full kwarg semantics including `tag`/`right_tag`.
     """
     _default.success(
         message,
@@ -1125,11 +1204,13 @@ def success(
         style=style,
         detail_style=detail_style,
         marker=marker,
+        tag=tag,
+        right_tag=right_tag,
         **kwargs,
     )
 
 
-def debug(
+def debug(  # noqa: PLR0913
     message: str | RenderableType,
     *,
     details: list[Any] | None = None,
@@ -1137,12 +1218,13 @@ def debug(
     style: str | None = None,
     detail_style: str | None = None,
     marker: str | None = None,
+    tag: str | None = None,
+    right_tag: str | None = None,
     **kwargs: Any,
 ) -> None:
     """Print debug-level output via the default emitter.
 
-    See `Emitter.debug` for `message`/`markup`/`style`/`detail_style`/`marker`
-    semantics.
+    See `Emitter.debug` for full kwarg semantics including `tag`/`right_tag`.
     """
     _default.debug(
         message,
@@ -1151,11 +1233,13 @@ def debug(
         style=style,
         detail_style=detail_style,
         marker=marker,
+        tag=tag,
+        right_tag=right_tag,
         **kwargs,
     )
 
 
-def trace(
+def trace(  # noqa: PLR0913
     message: str | RenderableType,
     *,
     details: list[Any] | None = None,
@@ -1163,12 +1247,13 @@ def trace(
     style: str | None = None,
     detail_style: str | None = None,
     marker: str | None = None,
+    tag: str | None = None,
+    right_tag: str | None = None,
     **kwargs: Any,
 ) -> None:
     """Print trace-level output via the default emitter.
 
-    See `Emitter.trace` for `message`/`markup`/`style`/`detail_style`/`marker`
-    semantics.
+    See `Emitter.trace` for full kwarg semantics including `tag`/`right_tag`.
     """
     _default.trace(
         message,
@@ -1177,11 +1262,13 @@ def trace(
         style=style,
         detail_style=detail_style,
         marker=marker,
+        tag=tag,
+        right_tag=right_tag,
         **kwargs,
     )
 
 
-def dryrun(
+def dryrun(  # noqa: PLR0913
     message: str | RenderableType,
     *,
     details: list[Any] | None = None,
@@ -1189,12 +1276,13 @@ def dryrun(
     style: str | None = None,
     detail_style: str | None = None,
     marker: str | None = None,
+    tag: str | None = None,
+    right_tag: str | None = None,
     **kwargs: Any,
 ) -> None:
     """Print a dry-run notice via the default emitter.
 
-    See `Emitter.dryrun` for `message`/`markup`/`style`/`detail_style`/`marker`
-    semantics.
+    See `Emitter.dryrun` for full kwarg semantics including `tag`/`right_tag`.
     """
     _default.dryrun(
         message,
@@ -1203,11 +1291,13 @@ def dryrun(
         style=style,
         detail_style=detail_style,
         marker=marker,
+        tag=tag,
+        right_tag=right_tag,
         **kwargs,
     )
 
 
-def warning(
+def warning(  # noqa: PLR0913
     message: str | RenderableType,
     *,
     details: list[Any] | None = None,
@@ -1215,12 +1305,13 @@ def warning(
     style: str | None = None,
     detail_style: str | None = None,
     marker: str | None = None,
+    tag: str | None = None,
+    right_tag: str | None = None,
     **kwargs: Any,
 ) -> None:
     """Print warning output via the default emitter.
 
-    See `Emitter.warning` for `message`/`markup`/`style`/`detail_style`/`marker`
-    semantics.
+    See `Emitter.warning` for full kwarg semantics including `tag`/`right_tag`.
     """
     _default.warning(
         message,
@@ -1229,11 +1320,13 @@ def warning(
         style=style,
         detail_style=detail_style,
         marker=marker,
+        tag=tag,
+        right_tag=right_tag,
         **kwargs,
     )
 
 
-def error(
+def error(  # noqa: PLR0913
     message: str | RenderableType,
     *,
     details: list[Any] | None = None,
@@ -1241,12 +1334,13 @@ def error(
     style: str | None = None,
     detail_style: str | None = None,
     marker: str | None = None,
+    tag: str | None = None,
+    right_tag: str | None = None,
     **kwargs: Any,
 ) -> None:
     """Print error output via the default emitter.
 
-    See `Emitter.error` for `message`/`markup`/`style`/`detail_style`/`marker`
-    semantics.
+    See `Emitter.error` for full kwarg semantics including `tag`/`right_tag`.
     """
     _default.error(
         message,
@@ -1255,11 +1349,13 @@ def error(
         style=style,
         detail_style=detail_style,
         marker=marker,
+        tag=tag,
+        right_tag=right_tag,
         **kwargs,
     )
 
 
-def critical(
+def critical(  # noqa: PLR0913
     message: str | RenderableType,
     *,
     details: list[Any] | None = None,
@@ -1267,11 +1363,14 @@ def critical(
     style: str | None = None,
     detail_style: str | None = None,
     marker: str | None = None,
+    tag: str | None = None,
+    right_tag: str | None = None,
     **kwargs: Any,
 ) -> None:
     """Print critical output via the default emitter. Always shown, even when `quiet`.
 
-    Severity-only; does not raise. See `Emitter.critical` for full semantics.
+    Severity-only; does not raise. See `Emitter.critical` for full semantics
+    including `tag`/`right_tag`.
     """
     _default.critical(
         message,
@@ -1280,6 +1379,8 @@ def critical(
         style=style,
         detail_style=detail_style,
         marker=marker,
+        tag=tag,
+        right_tag=right_tag,
         **kwargs,
     )
 

@@ -92,6 +92,35 @@ Use `markup=True` when _you_ control the string. When the message comes from arb
 
 `pp.critical` is severity-only and does not raise. Use it for "the world is broken" notices that warrant a more emphatic visual than `pp.error`.
 
+Every level method (`info`, `success`, `warning`, `error`, `critical`, `dryrun`, `debug`, `trace`) accepts the optional `tag=` and `right_tag=` kwargs documented in [Per-call tags](#per-call-tags) below.
+
+### Per-call tags
+
+Every level method accepts `tag=` and `right_tag=` for one-off metadata that doesn't warrant a theme change:
+
+```python
+pp.info("saved", tag="api", right_tag="200ms")
+pp.error("upload failed", tag="uploader")
+```
+
+Renders:
+
+```text
+[api] saved                                                            200ms
+[uploader] ✗ upload failed
+```
+
+`tag` is dim text rendered between the marker and the message. It is recorded inline in the logfile (`[api] saved`) so file consumers see the same metadata that appeared on the console.
+
+`right_tag` is dim text right-aligned to the console width on the first line only. It is **presentation-only** and is never written to the logfile.
+
+When `right_tag` is passed to `pp.debug` or `pp.trace`, the caller's value replaces the auto-elapsed `[+s.fffs]` marker on the console; the logfile still records the elapsed timing so the audit trail is preserved.
+
+`pp.dryrun` combines a caller-supplied `tag` with its built-in `[dry-run]` marker on both the console and the logfile, with the caller's tag rendered first (`[deploy] [dry-run] would push`).
+
+> [!NOTE]
+> The caller is responsible for Rich-markup-escaping any `[`, `]`, or other reserved characters in `tag` and `right_tag`. Pass plain ASCII tags or pre-escaped strings.
+
 You can pass Rich renderables in `details` to get syntax-aware output, which is especially useful at `debug` / `trace`:
 
 ```python
@@ -320,7 +349,7 @@ finally:
 
 Every name below is available on the `pp` namespace (`from nclutils import pp`) and from `nclutils.pp` directly (e.g. `from nclutils.pp import info`).
 
-- `info`, `success`, `warning`, `error`, `critical`, `dryrun`, `debug`, `trace`, `header`. Output functions.
+- `info`, `success`, `warning`, `error`, `critical`, `dryrun`, `debug`, `trace`, `header`. Output functions. Every level function accepts `tag=` and `right_tag=` kwargs - see [Per-call tags](#per-call-tags) above.
 - `step(message, *, ephemeral=False)`. Spinner context manager.
 - `configure(*, verbosity=None, quiet=None, console=None, err_console=None, theme=None, logfile=None, loglevel=None, logfmt=None)`. Partial update of the default emitter.
 - `Emitter`. Instantiate directly for isolated configuration.

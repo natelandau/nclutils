@@ -96,6 +96,19 @@ def _per_call_overrides() -> None:
     pp.info("no marker (suppressed)", marker="", details=["bare"])
 
 
+def _per_call_tags() -> None:
+    """Demonstrate per-call tag and right_tag kwargs."""
+    pp.header("Per-call tags", align="left")
+    pp.info("with left tag only", tag="api")
+    pp.info("with right tag only", right_tag="200ms")
+    pp.info("with both tags", tag="api", right_tag="200ms")
+    pp.success("operation done", tag="deploy", right_tag="3.2s")
+    pp.error("upload failed", tag="uploader")
+    pp.dryrun("would push image", tag="deploy")
+    pp.debug("custom right tag overrides elapsed", right_tag="db: 1.2s")
+    pp.debug("auto elapsed (default)")
+
+
 def _theme_override() -> None:
     """Demonstrate a custom Theme via a dedicated Emitter."""
     pp.header("Theme override", align="left")
@@ -146,6 +159,7 @@ def main() -> None:
     _details_simple()
     _details_multiline()
     _per_call_overrides()
+    _per_call_tags()
     _theme_override()
     _verbosity_matrix()
 
