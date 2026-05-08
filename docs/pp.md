@@ -41,7 +41,29 @@ The `pp.step()` block shows a live spinner with sub-items beneath it. On success
 
 ## Output levels
 
-Every level routes through the same shape: `pp.func(message, details=[...])`. `details` is optional. String items render as indented continuation lines in a dimmer shade; Rich markup is escaped by default so user-supplied strings can't inject styling. Non-strings are auto-rendered with Rich (dicts, dataclasses, and arbitrary objects via `Pretty`; `JSON` / `Syntax` / `Table` pass through unchanged).
+Every level routes through the same shape: `pp.func(message, details=[...])`. `details` is optional. Items render as a tree beneath the message. Non-final items are prefixed with `├─` and the final item with `└─`, matching `pp.step()`'s sub-item layout. Multi-line renderables (Tables, JSON, multi-line `Pretty` outputs) get a `│ ` continuation pipe under non-final positions and a blank gutter under the final position. String items are colored with the level's `detail_style`; Rich markup is escaped by default so user-supplied strings can't inject styling. Non-strings are auto-rendered with Rich (dicts, dataclasses, and arbitrary objects via `Pretty`; `JSON` / `Syntax` / `Table` pass through unchanged).
+
+For example, this call:
+
+```python
+from nclutils import pp
+
+pp.success("deployed", details=["build #1742", "rollout 100%", "duration: 3.2s"])
+```
+
+renders as:
+
+```text
+✓ deployed
+  ├─ build #1742
+  ├─ rollout 100%
+  └─ duration: 3.2s
+```
+
+The `├─` and `└─` glyphs are styled via the `sub.pipe` theme key (the same key `pp.step()` uses for its sub-item connectors), so retuning that one entry restyles every tree connector across the API.
+
+> [!NOTE]
+> Tree connectors appear in stdout/stderr only. Logfile records (configured via `pp.configure(logfile=...)`) format details using the logfmt's `%(detail)s` field; they do not contain `├─`, `└─`, or `│` characters.
 
 Pass `markup=True` to opt into Rich markup parsing for `message` and any string `details` items in that call:
 

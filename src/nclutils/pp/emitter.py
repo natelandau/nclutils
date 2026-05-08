@@ -18,7 +18,6 @@ from typing import TYPE_CHECKING, Any
 from rich.console import Console
 from rich.live import Live
 from rich.markup import escape
-from rich.padding import Padding
 from rich.pretty import Pretty
 from rich.protocol import is_renderable
 from rich.spinner import Spinner
@@ -284,20 +283,10 @@ def _print_level(  # noqa: PLR0913
         target.print(message, **kwargs)
 
     if details:
-        # is_renderable(str) is True, so the str branch must come first to keep
-        # markup escaping and detail_style intact for plain strings.
-        for item in details:
-            if isinstance(item, str):
-                detail_text = item if markup else escape(item)
-                rendered = Text.from_markup(f"[{detail_style}]{detail_text}[/]")
-            elif is_renderable(item):
-                rendered = item
-            else:
-                # detail_style intentionally not applied - Pretty has its own
-                # syntax-aware highlighting and layering markup over it would
-                # clobber number/key/string colors.
-                rendered = Pretty(item)  # type: ignore[assignment]
-            target.print(Padding.indent(rendered, 2), **kwargs)
+        target.print(
+            _DetailTree(details, detail_style=detail_style, markup=markup),
+            **kwargs,
+        )
 
 
 class Step:
@@ -357,6 +346,51 @@ class Step:
             line = Text.from_markup(f"  [sub.pipe]{connector}[/] ")
             line.append_text(sub_text)
             yield line
+
+
+class _DetailTree:
+    """Render a `details` list with tree connectors prefixed on every line.
+
+    Wrap each item (str -> escaped+styled Text, Rich renderable -> as-is,
+    other -> Pretty) and prefix every rendered line with the appropriate
+    tree glyph: `├─` for non-final items, `└─` for the final item, `│ `
+    for continuation lines under a non-final item, two spaces under the
+    final item.
+
+    The connector glyphs use the `sub.pipe` theme key, matching `Step.sub()`
+    so theme retuning happens in one place.
+    """
+
+    def __init__(self, items: list[Any], *, detail_style: str, markup: bool) -> None:
+        self._items = items
+        self._detail_style = detail_style
+        self._markup = markup
+
+    def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
+        last = len(self._items) - 1
+        for i, item in enumerate(self._items):
+            is_last = i == last
+            head = "└─" if is_last else "├─"
+            cont = "  " if is_last else "│ "
+
+            rendered = self._wrap(item)
+            sub_options = options.update(width=max(1, options.max_width - 5))
+            for line_idx, segments in enumerate(console.render_lines(rendered, sub_options)):
+                line = Text("  ")
+                line.append(head if line_idx == 0 else cont, style="sub.pipe")
+                line.append(" ")
+                for seg in segments:
+                    if seg.text:
+                        line.append(seg.text, style=seg.style if seg.style is not None else "")
+                yield line
+
+    def _wrap(self, item: Any) -> RenderableType:
+        if isinstance(item, str):
+            text = item if self._markup else escape(item)
+            return Text.from_markup(f"[{self._detail_style}]{text}[/]")
+        if is_renderable(item):
+            return item
+        return Pretty(item)
 
 
 class Emitter:

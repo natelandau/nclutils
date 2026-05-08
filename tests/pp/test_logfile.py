@@ -17,6 +17,8 @@ from nclutils.pp.emitter import Emitter, LogLevel, Verbosity
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from .conftest import RecordingEmitterFactory
+
 
 class TestLogSinkModule:
     """`nclutils.pp._logsink` registers TRACE at import and exposes _LogSink."""
@@ -590,3 +592,33 @@ class TestLogfileAcceptsStringPaths:
         assert "first" in text
         assert "second" in text
         assert id(e._logsink._handler) == first_handler_id
+
+
+class TestLogfileTreeGlyphs:
+    """Tree connectors render to stdout/stderr only and never leak into the logfile."""
+
+    def test_logfile_does_not_contain_tree_glyphs(
+        self,
+        make_recording_emitter: RecordingEmitterFactory,
+        tmp_path: Path,
+    ) -> None:
+        """Verify tree connectors live on stdout only and never leak into the logfile."""
+        # Given an Emitter wired to a logfile at TRACE level
+        logfile = tmp_path / "out.log"
+        e, _, _ = make_recording_emitter(
+            verbosity=Verbosity.TRACE,
+            logfile=logfile,
+            loglevel=LogLevel.TRACE,
+        )
+
+        # When several level methods emit with multiple details
+        e.info("hi", details=["a", "b", "c"])
+        e.error("boom", details=["x", "y"])
+
+        # Then the logfile contains the detail text but none of the tree glyphs
+        contents = logfile.read_text()
+        assert "a" in contents
+        assert "x" in contents
+        assert "├─" not in contents
+        assert "└─" not in contents
+        assert "│" not in contents
