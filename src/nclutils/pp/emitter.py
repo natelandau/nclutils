@@ -10,7 +10,9 @@ terminal, no instance threading.
 from __future__ import annotations
 
 import logging
+import sys
 import time
+import traceback as _traceback
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -223,6 +225,69 @@ def _apply_tag_to_logmsg(tag: str | None, message: str) -> str:
     if tag:
         return f"[{tag}] {message}"
     return message
+
+
+def _resolve_exception(exception: BaseException | bool) -> BaseException | None:  # noqa: FBT001 -- bool is a real value in the public contract (mirrors logging.exception)
+    """Resolve the `exception=` kwarg to an actual exception instance or None.
+
+    `False` returns None. `True` calls `sys.exc_info()` and returns the active
+    exception (None if there isn't one, matching `logging.exception()` semantics
+    so callers outside an `except` block become a silent no-op). A
+    `BaseException` instance is returned as-is.
+    """
+    if exception is False:
+        return None
+    if exception is True:
+        _, exc, _ = sys.exc_info()
+        return exc
+    return exception
+
+
+def _attach_exception_to_details(
+    details: list[Any] | None,
+    exception: BaseException | bool,  # noqa: FBT001 -- bool is a real value in the public contract
+    *,
+    show_locals: bool,
+) -> list[Any] | None:
+    """Append a Rich Traceback for `exception` to `details`.
+
+    Returns a new list with the Traceback renderable as the final item, or
+    `details` unchanged when `exception` resolves to no traceback. Imports
+    `rich.traceback.Traceback` lazily so callers that never use this kwarg
+    don't pay the import cost at module load time.
+    """
+    exc = _resolve_exception(exception)
+    if exc is None:
+        return details
+    # Lazy import: callers without exception= avoid the rich.traceback module cost.
+    from rich.traceback import Traceback  # noqa: PLC0415
+
+    rich_tb = Traceback.from_exception(
+        type(exc),
+        exc,
+        exc.__traceback__,
+        show_locals=show_locals,
+    )
+    new_details = list(details) if details else []
+    new_details.append(rich_tb)
+    return new_details
+
+
+def _format_exception_for_logfile(exception: BaseException | bool) -> list[str] | None:  # noqa: FBT001 -- bool is a real value in the public contract
+    """Format an exception's traceback as a list of strings for logfile continuation lines.
+
+    Returns None when there's nothing to attach (`exception=False` or
+    `exception=True` with no active exception). The resulting strings have no
+    color codes; the logfile path strips Rich coloring anyway.
+    """
+    exc = _resolve_exception(exception)
+    if exc is None:
+        return None
+    return [
+        line.rstrip("\n")
+        for chunk in _traceback.format_exception(type(exc), exc, exc.__traceback__)
+        for line in chunk.splitlines()
+    ]
 
 
 def _print_level(  # noqa: PLR0913
@@ -564,6 +629,8 @@ class Emitter:
         marker: str | None = None,
         tag: str | None = None,
         right_tag: str | None = None,
+        exception: BaseException | bool = False,
+        show_locals: bool = False,
         **kwargs: Any,
     ) -> None:
         """Print info-level output to stdout. Suppressed when `quiet` is True.
@@ -593,11 +660,24 @@ class Emitter:
         only. It is presentation-only and is NOT recorded in the logfile. The
         caller is responsible for escaping any Rich markup characters in the
         tag.
+
+        `exception` attaches a styled Rich Traceback below the message. Pass
+        an explicit exception instance, or `True` inside an `except` block to
+        grab `sys.exc_info()`. Outside an except block, `exception=True` is a
+        silent no-op (matches `logging.exception()` behavior). The formatted
+        traceback is also written to the logfile as continuation lines under
+        the parent record at the same severity. `show_locals=True` flows
+        through to Rich's Traceback for verbose dumps.
         """
+        log_message = _apply_tag_to_logmsg(tag, _message_to_log_text(message, markup=markup))
+        log_details = list(details) if details else []
+        tb_lines = _format_exception_for_logfile(exception)
+        if tb_lines:
+            log_details.extend(tb_lines)
         self._logsink.emit(
             level=_LEVEL_TO_LOG_SEVERITY["info"],
-            message=_apply_tag_to_logmsg(tag, _message_to_log_text(message, markup=markup)),
-            details=details,
+            message=log_message,
+            details=log_details or None,
         )
         if self.quiet:
             return
@@ -611,7 +691,7 @@ class Emitter:
             marker=marker,
             message=message,
             markup=markup,
-            details=details,
+            details=_attach_exception_to_details(details, exception, show_locals=show_locals),
             tag=tag,
             right_tag=right_tag,
             **kwargs,
@@ -628,6 +708,8 @@ class Emitter:
         marker: str | None = None,
         tag: str | None = None,
         right_tag: str | None = None,
+        exception: BaseException | bool = False,
+        show_locals: bool = False,
         **kwargs: Any,
     ) -> None:
         """Print success-level output to stdout. Suppressed when `quiet` is True.
@@ -637,13 +719,18 @@ class Emitter:
         (`JSON`, `Syntax`, `Table`, …) pass through unchanged; anything else
         is wrapped in `Pretty()`.
 
-        See `Emitter.info` for `message`/`markup`/`style`/`detail_style`/`marker`
-        and `tag`/`right_tag` semantics.
+        See `Emitter.info` for `message`/`markup`/`style`/`detail_style`/`marker`,
+        `tag`/`right_tag`, and `exception`/`show_locals` semantics.
         """
+        log_message = _apply_tag_to_logmsg(tag, _message_to_log_text(message, markup=markup))
+        log_details = list(details) if details else []
+        tb_lines = _format_exception_for_logfile(exception)
+        if tb_lines:
+            log_details.extend(tb_lines)
         self._logsink.emit(
             level=_LEVEL_TO_LOG_SEVERITY["success"],
-            message=_apply_tag_to_logmsg(tag, _message_to_log_text(message, markup=markup)),
-            details=details,
+            message=log_message,
+            details=log_details or None,
         )
         if self.quiet:
             return
@@ -657,7 +744,7 @@ class Emitter:
             marker=marker,
             message=message,
             markup=markup,
-            details=details,
+            details=_attach_exception_to_details(details, exception, show_locals=show_locals),
             tag=tag,
             right_tag=right_tag,
             **kwargs,
@@ -674,6 +761,8 @@ class Emitter:
         marker: str | None = None,
         tag: str | None = None,
         right_tag: str | None = None,
+        exception: BaseException | bool = False,
+        show_locals: bool = False,
         **kwargs: Any,
     ) -> None:
         """Print debug-level output to stdout. Shown with `-v` or higher.
@@ -687,17 +776,22 @@ class Emitter:
         for one call (e.g. `right_tag="db: 1.2s"`); the logfile still records
         the auto-elapsed `[+s.fffs]` marker so the audit timeline is preserved.
 
-        See `Emitter.info` for `message`/`markup`/`style`/`detail_style`/`marker`
-        and `tag`/`right_tag` semantics.
+        See `Emitter.info` for `message`/`markup`/`style`/`detail_style`/`marker`,
+        `tag`/`right_tag`, and `exception`/`show_locals` semantics.
         """
         elapsed = self._elapsed_tag()
+        log_message = _apply_tag_to_logmsg(
+            tag,
+            f"{_message_to_log_text(message, markup=markup)}  {elapsed}",
+        )
+        log_details = list(details) if details else []
+        tb_lines = _format_exception_for_logfile(exception)
+        if tb_lines:
+            log_details.extend(tb_lines)
         self._logsink.emit(
             level=_LEVEL_TO_LOG_SEVERITY["debug"],
-            message=_apply_tag_to_logmsg(
-                tag,
-                f"{_message_to_log_text(message, markup=markup)}  {elapsed}",
-            ),
-            details=details,
+            message=log_message,
+            details=log_details or None,
         )
         if self.verbosity < Verbosity.DEBUG:
             return
@@ -711,7 +805,7 @@ class Emitter:
             marker=marker,
             message=message,
             markup=markup,
-            details=details,
+            details=_attach_exception_to_details(details, exception, show_locals=show_locals),
             tag=tag,
             right_tag=right_tag if right_tag is not None else elapsed,
             **kwargs,
@@ -728,6 +822,8 @@ class Emitter:
         marker: str | None = None,
         tag: str | None = None,
         right_tag: str | None = None,
+        exception: BaseException | bool = False,
+        show_locals: bool = False,
         **kwargs: Any,
     ) -> None:
         """Print trace-level output to stdout. Shown with `-vv`.
@@ -736,18 +832,23 @@ class Emitter:
         for one call; the logfile still records the auto-elapsed `[+s.fffs]`
         marker so the audit timeline is preserved.
 
-        See `Emitter.info` for `message`/`markup`/`style`/`detail_style`/`marker`
-        and `tag`/`right_tag` semantics, and `Emitter.debug` for the
-        right-aligned elapsed tag.
+        See `Emitter.info` for `message`/`markup`/`style`/`detail_style`/`marker`,
+        `tag`/`right_tag`, and `exception`/`show_locals` semantics, and
+        `Emitter.debug` for the right-aligned elapsed tag.
         """
         elapsed = self._elapsed_tag()
+        log_message = _apply_tag_to_logmsg(
+            tag,
+            f"{_message_to_log_text(message, markup=markup)}  {elapsed}",
+        )
+        log_details = list(details) if details else []
+        tb_lines = _format_exception_for_logfile(exception)
+        if tb_lines:
+            log_details.extend(tb_lines)
         self._logsink.emit(
             level=_LEVEL_TO_LOG_SEVERITY["trace"],
-            message=_apply_tag_to_logmsg(
-                tag,
-                f"{_message_to_log_text(message, markup=markup)}  {elapsed}",
-            ),
-            details=details,
+            message=log_message,
+            details=log_details or None,
         )
         if self.verbosity < Verbosity.TRACE:
             return
@@ -761,7 +862,7 @@ class Emitter:
             marker=marker,
             message=message,
             markup=markup,
-            details=details,
+            details=_attach_exception_to_details(details, exception, show_locals=show_locals),
             tag=tag,
             right_tag=right_tag if right_tag is not None else elapsed,
             **kwargs,
@@ -778,6 +879,8 @@ class Emitter:
         marker: str | None = None,
         tag: str | None = None,
         right_tag: str | None = None,
+        exception: BaseException | bool = False,
+        show_locals: bool = False,
         **kwargs: Any,
     ) -> None:
         """Print a dry-run notice to stdout. Always shown, even when `quiet`.
@@ -789,18 +892,22 @@ class Emitter:
         marker (e.g. `[deploy] [dry-run] would push`) on both the console
         and in the logfile.
 
-        See `Emitter.info` for `message`/`markup`/`style`/`detail_style`/`marker`
-        and `tag`/`right_tag` semantics.
+        See `Emitter.info` for `message`/`markup`/`style`/`detail_style`/`marker`,
+        `tag`/`right_tag`, and `exception`/`show_locals` semantics.
         """
         # Include [dry-run] inline in the file message for grep-ability, and
         # prepend any caller-supplied tag so audit grep finds the same labels
         # the operator saw on the console.
         log_body = f"[dry-run] {_message_to_log_text(message, markup=markup)}"
         log_body = _apply_tag_to_logmsg(tag, log_body)
+        log_details = list(details) if details else []
+        tb_lines = _format_exception_for_logfile(exception)
+        if tb_lines:
+            log_details.extend(tb_lines)
         self._logsink.emit(
             level=_LEVEL_TO_LOG_SEVERITY["dryrun"],
             message=log_body,
-            details=details,
+            details=log_details or None,
         )
         style, detail_style, marker = self._resolve_with_overrides(
             "dryrun", style=style, detail_style=detail_style, marker=marker
@@ -815,7 +922,7 @@ class Emitter:
             marker=marker,
             message=message,
             markup=markup,
-            details=details,
+            details=_attach_exception_to_details(details, exception, show_locals=show_locals),
             tag=combined_tag,
             right_tag=right_tag,
             **kwargs,
@@ -832,17 +939,24 @@ class Emitter:
         marker: str | None = None,
         tag: str | None = None,
         right_tag: str | None = None,
+        exception: BaseException | bool = False,
+        show_locals: bool = False,
         **kwargs: Any,
     ) -> None:
         """Print warning output to stderr. Always shown, even when `quiet`.
 
-        See `Emitter.info` for `message`/`markup`/`style`/`detail_style`/`marker`
-        and `tag`/`right_tag` semantics.
+        See `Emitter.info` for `message`/`markup`/`style`/`detail_style`/`marker`,
+        `tag`/`right_tag`, and `exception`/`show_locals` semantics.
         """
+        log_message = _apply_tag_to_logmsg(tag, _message_to_log_text(message, markup=markup))
+        log_details = list(details) if details else []
+        tb_lines = _format_exception_for_logfile(exception)
+        if tb_lines:
+            log_details.extend(tb_lines)
         self._logsink.emit(
             level=_LEVEL_TO_LOG_SEVERITY["warning"],
-            message=_apply_tag_to_logmsg(tag, _message_to_log_text(message, markup=markup)),
-            details=details,
+            message=log_message,
+            details=log_details or None,
         )
         style, detail_style, marker = self._resolve_with_overrides(
             "warning", style=style, detail_style=detail_style, marker=marker
@@ -857,7 +971,7 @@ class Emitter:
             marker=marker,
             message=message,
             markup=markup,
-            details=details,
+            details=_attach_exception_to_details(details, exception, show_locals=show_locals),
             tag=tag,
             right_tag=right_tag,
             **kwargs,
@@ -874,17 +988,27 @@ class Emitter:
         marker: str | None = None,
         tag: str | None = None,
         right_tag: str | None = None,
+        exception: BaseException | bool = False,
+        show_locals: bool = False,
         **kwargs: Any,
     ) -> None:
         """Print error output to stderr. Always shown, even when `quiet`.
 
-        See `Emitter.info` for `message`/`markup`/`style`/`detail_style`/`marker`
-        and `tag`/`right_tag` semantics.
+        See `Emitter.info` for `message`/`markup`/`style`/`detail_style`/`marker`,
+        `tag`/`right_tag`, and `exception`/`show_locals` semantics. The
+        `exception=` kwarg is particularly natural here: pass `True` from
+        inside an `except` block to attach the active traceback alongside the
+        message.
         """
+        log_message = _apply_tag_to_logmsg(tag, _message_to_log_text(message, markup=markup))
+        log_details = list(details) if details else []
+        tb_lines = _format_exception_for_logfile(exception)
+        if tb_lines:
+            log_details.extend(tb_lines)
         self._logsink.emit(
             level=_LEVEL_TO_LOG_SEVERITY["error"],
-            message=_apply_tag_to_logmsg(tag, _message_to_log_text(message, markup=markup)),
-            details=details,
+            message=log_message,
+            details=log_details or None,
         )
         style, detail_style, marker = self._resolve_with_overrides(
             "error", style=style, detail_style=detail_style, marker=marker
@@ -897,7 +1021,7 @@ class Emitter:
             marker=marker,
             message=message,
             markup=markup,
-            details=details,
+            details=_attach_exception_to_details(details, exception, show_locals=show_locals),
             tag=tag,
             right_tag=right_tag,
             **kwargs,
@@ -914,6 +1038,8 @@ class Emitter:
         marker: str | None = None,
         tag: str | None = None,
         right_tag: str | None = None,
+        exception: BaseException | bool = False,
+        show_locals: bool = False,
         **kwargs: Any,
     ) -> None:
         """Print critical output to stderr. Always shown, even when `quiet`.
@@ -924,13 +1050,18 @@ class Emitter:
         with the level's resolved style, detail style, and marker (default
         `‼ `, customizable via `Theme(critical=Level(...))`).
 
-        See `Emitter.info` for `message`/`markup`/`style`/`detail_style`/`marker`
-        and `tag`/`right_tag` semantics.
+        See `Emitter.info` for `message`/`markup`/`style`/`detail_style`/`marker`,
+        `tag`/`right_tag`, and `exception`/`show_locals` semantics.
         """
+        log_message = _apply_tag_to_logmsg(tag, _message_to_log_text(message, markup=markup))
+        log_details = list(details) if details else []
+        tb_lines = _format_exception_for_logfile(exception)
+        if tb_lines:
+            log_details.extend(tb_lines)
         self._logsink.emit(
             level=_LEVEL_TO_LOG_SEVERITY["critical"],
-            message=_apply_tag_to_logmsg(tag, _message_to_log_text(message, markup=markup)),
-            details=details,
+            message=log_message,
+            details=log_details or None,
         )
         style, detail_style, marker = self._resolve_with_overrides(
             "critical", style=style, detail_style=detail_style, marker=marker
@@ -943,7 +1074,7 @@ class Emitter:
             marker=marker,
             message=message,
             markup=markup,
-            details=details,
+            details=_attach_exception_to_details(details, exception, show_locals=show_locals),
             tag=tag,
             right_tag=right_tag,
             **kwargs,
@@ -1198,11 +1329,14 @@ def info(  # noqa: PLR0913
     marker: str | None = None,
     tag: str | None = None,
     right_tag: str | None = None,
+    exception: BaseException | bool = False,
+    show_locals: bool = False,
     **kwargs: Any,
 ) -> None:
     """Print info-level output via the default emitter.
 
-    See `Emitter.info` for full kwarg semantics including `tag`/`right_tag`.
+    See `Emitter.info` for full kwarg semantics including `tag`/`right_tag`
+    and `exception`/`show_locals`.
     """
     _default.info(
         message,
@@ -1213,6 +1347,8 @@ def info(  # noqa: PLR0913
         marker=marker,
         tag=tag,
         right_tag=right_tag,
+        exception=exception,
+        show_locals=show_locals,
         **kwargs,
     )
 
@@ -1227,11 +1363,14 @@ def success(  # noqa: PLR0913
     marker: str | None = None,
     tag: str | None = None,
     right_tag: str | None = None,
+    exception: BaseException | bool = False,
+    show_locals: bool = False,
     **kwargs: Any,
 ) -> None:
     """Print success-level output via the default emitter.
 
-    See `Emitter.success` for full kwarg semantics including `tag`/`right_tag`.
+    See `Emitter.success` for full kwarg semantics including `tag`/`right_tag`
+    and `exception`/`show_locals`.
     """
     _default.success(
         message,
@@ -1242,6 +1381,8 @@ def success(  # noqa: PLR0913
         marker=marker,
         tag=tag,
         right_tag=right_tag,
+        exception=exception,
+        show_locals=show_locals,
         **kwargs,
     )
 
@@ -1256,11 +1397,14 @@ def debug(  # noqa: PLR0913
     marker: str | None = None,
     tag: str | None = None,
     right_tag: str | None = None,
+    exception: BaseException | bool = False,
+    show_locals: bool = False,
     **kwargs: Any,
 ) -> None:
     """Print debug-level output via the default emitter.
 
-    See `Emitter.debug` for full kwarg semantics including `tag`/`right_tag`.
+    See `Emitter.debug` for full kwarg semantics including `tag`/`right_tag`
+    and `exception`/`show_locals`.
     """
     _default.debug(
         message,
@@ -1271,6 +1415,8 @@ def debug(  # noqa: PLR0913
         marker=marker,
         tag=tag,
         right_tag=right_tag,
+        exception=exception,
+        show_locals=show_locals,
         **kwargs,
     )
 
@@ -1285,11 +1431,14 @@ def trace(  # noqa: PLR0913
     marker: str | None = None,
     tag: str | None = None,
     right_tag: str | None = None,
+    exception: BaseException | bool = False,
+    show_locals: bool = False,
     **kwargs: Any,
 ) -> None:
     """Print trace-level output via the default emitter.
 
-    See `Emitter.trace` for full kwarg semantics including `tag`/`right_tag`.
+    See `Emitter.trace` for full kwarg semantics including `tag`/`right_tag`
+    and `exception`/`show_locals`.
     """
     _default.trace(
         message,
@@ -1300,6 +1449,8 @@ def trace(  # noqa: PLR0913
         marker=marker,
         tag=tag,
         right_tag=right_tag,
+        exception=exception,
+        show_locals=show_locals,
         **kwargs,
     )
 
@@ -1314,11 +1465,14 @@ def dryrun(  # noqa: PLR0913
     marker: str | None = None,
     tag: str | None = None,
     right_tag: str | None = None,
+    exception: BaseException | bool = False,
+    show_locals: bool = False,
     **kwargs: Any,
 ) -> None:
     """Print a dry-run notice via the default emitter.
 
-    See `Emitter.dryrun` for full kwarg semantics including `tag`/`right_tag`.
+    See `Emitter.dryrun` for full kwarg semantics including `tag`/`right_tag`
+    and `exception`/`show_locals`.
     """
     _default.dryrun(
         message,
@@ -1329,6 +1483,8 @@ def dryrun(  # noqa: PLR0913
         marker=marker,
         tag=tag,
         right_tag=right_tag,
+        exception=exception,
+        show_locals=show_locals,
         **kwargs,
     )
 
@@ -1343,11 +1499,14 @@ def warning(  # noqa: PLR0913
     marker: str | None = None,
     tag: str | None = None,
     right_tag: str | None = None,
+    exception: BaseException | bool = False,
+    show_locals: bool = False,
     **kwargs: Any,
 ) -> None:
     """Print warning output via the default emitter.
 
-    See `Emitter.warning` for full kwarg semantics including `tag`/`right_tag`.
+    See `Emitter.warning` for full kwarg semantics including `tag`/`right_tag`
+    and `exception`/`show_locals`.
     """
     _default.warning(
         message,
@@ -1358,6 +1517,8 @@ def warning(  # noqa: PLR0913
         marker=marker,
         tag=tag,
         right_tag=right_tag,
+        exception=exception,
+        show_locals=show_locals,
         **kwargs,
     )
 
@@ -1372,11 +1533,14 @@ def error(  # noqa: PLR0913
     marker: str | None = None,
     tag: str | None = None,
     right_tag: str | None = None,
+    exception: BaseException | bool = False,
+    show_locals: bool = False,
     **kwargs: Any,
 ) -> None:
     """Print error output via the default emitter.
 
-    See `Emitter.error` for full kwarg semantics including `tag`/`right_tag`.
+    See `Emitter.error` for full kwarg semantics including `tag`/`right_tag`
+    and `exception`/`show_locals`.
     """
     _default.error(
         message,
@@ -1387,6 +1551,8 @@ def error(  # noqa: PLR0913
         marker=marker,
         tag=tag,
         right_tag=right_tag,
+        exception=exception,
+        show_locals=show_locals,
         **kwargs,
     )
 
@@ -1401,12 +1567,14 @@ def critical(  # noqa: PLR0913
     marker: str | None = None,
     tag: str | None = None,
     right_tag: str | None = None,
+    exception: BaseException | bool = False,
+    show_locals: bool = False,
     **kwargs: Any,
 ) -> None:
     """Print critical output via the default emitter. Always shown, even when `quiet`.
 
     Severity-only; does not raise. See `Emitter.critical` for full semantics
-    including `tag`/`right_tag`.
+    including `tag`/`right_tag` and `exception`/`show_locals`.
     """
     _default.critical(
         message,
@@ -1417,6 +1585,8 @@ def critical(  # noqa: PLR0913
         marker=marker,
         tag=tag,
         right_tag=right_tag,
+        exception=exception,
+        show_locals=show_locals,
         **kwargs,
     )
 
