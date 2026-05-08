@@ -46,7 +46,7 @@ Every module must be imported from its submodule. The preferred form for the pre
 The project has two parallel output paths and they are intentionally separate:
 
 1. **`nclutils.pp`** — Rich-based user-facing CLI output (`info`, `success`, `error`, `step()`, etc.). The `Emitter` class owns this, with module-level functions delegating to a shared default. Has its own theme, verbosity gates, and optional file logger.
-2. **stdlib `logging`** — internal diagnostics inside `nclutils.fs` and `nclutils.text_processing`. Each module logs under `nclutils.<module>` and is silent unless the host application attaches a handler.
+2. **stdlib `logging`** — internal diagnostics inside `nclutils.fs` and `nclutils.text`. Each module logs under `nclutils.<module>` and is silent unless the host application attaches a handler.
 
 Do not bridge these. `nclutils.fs` does not call `pp`; `pp` does not call stdlib `logging` for its own output. The project recently migrated off `loguru` (commit 6cafada) — any older guidance referencing `loguru` (including `.cursor/rules/python_preferred_tools.mdc`) is stale.
 
