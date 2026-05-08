@@ -31,6 +31,19 @@ def _raises_with_local() -> None:
     raise RuntimeError(msg)
 
 
+def _raises_with_hidden_local() -> None:
+    """Raise RuntimeError after binding a runtime-built local that must NOT appear without show_locals.
+
+    The marker is assembled from parts so the literal string is absent from the
+    visible source of the raising frame; Rich's traceback shows source lines
+    around the raise, and we want to confirm `show_locals=False` keeps the
+    runtime VALUE out, independent of the source rendering.
+    """
+    hidden = "".join(["hidden", "-", "marker", "-", "abc123"])  # noqa: F841, FLY002 -- runtime assembly keeps the literal out of the source frame Rich displays
+    msg = "boom"
+    raise RuntimeError(msg)
+
+
 class TestExceptionInstance:
     """exception=<BaseException instance> appends a Traceback to the rendered output."""
 
@@ -148,6 +161,62 @@ class TestShowLocals:
         assert "local_marker" in text
         assert "sentinel_value_42" in text
 
+    def test_show_locals_false_excludes_local_variables(
+        self, make_recording_emitter: RecordingEmitterFactory
+    ) -> None:
+        """Verify show_locals=False (the default) does NOT include local variable values."""
+        # Given an emitter and a function that raises after binding a runtime-assembled local
+        e, _, err = make_recording_emitter()
+        try:
+            _raises_with_hidden_local()
+        except RuntimeError as exc:
+            captured = exc
+
+        # When error is called without show_locals (default False)
+        e.error("operation failed", exception=captured)
+
+        # Then the assembled runtime value of the local is absent from the rendered output
+        text = err.export_text()
+        assert "RuntimeError" in text
+        assert "hidden-marker-abc123" not in text
+
+
+class TestExceptionFalseDefault:
+    """exception=False (the default) emits no traceback."""
+
+    def test_exception_false_no_traceback_in_console(
+        self, make_recording_emitter: RecordingEmitterFactory
+    ) -> None:
+        """Verify exception=False produces no traceback in console output."""
+        # Given an emitter wired to recording stderr
+        e, _, err = make_recording_emitter()
+
+        # When error is called with the default exception=False
+        e.error("plain message")
+
+        # Then no traceback header text appears
+        text = err.export_text()
+        assert "plain message" in text
+        assert "Traceback" not in text
+
+    def test_exception_false_no_traceback_in_logfile(
+        self,
+        make_recording_emitter: RecordingEmitterFactory,
+        tmp_path: Path,
+    ) -> None:
+        """Verify exception=False produces no traceback in the logfile."""
+        # Given an emitter with a logfile
+        logfile = tmp_path / "run.log"
+        e, _, _ = make_recording_emitter(logfile=logfile)
+
+        # When error is called with the default exception=False
+        e.error("plain message")
+
+        # Then no traceback markers appear in the logfile
+        contents = logfile.read_text()
+        assert "plain message" in contents
+        assert "Traceback" not in contents
+
 
 class TestExceptionLogfile:
     """Tracebacks are written to the logfile as continuation lines."""
@@ -193,6 +262,33 @@ class TestExceptionLogfile:
         assert traceback_lines
         for line in traceback_lines:
             assert "WARNING" in line
+
+    def test_logfile_preserves_brackets_in_exception_message(
+        self,
+        make_recording_emitter: RecordingEmitterFactory,
+        tmp_path: Path,
+    ) -> None:
+        """Verify the logfile preserves bracket characters in exception messages.
+
+        Plain stdlib traceback strings flow through the logfile path that
+        treats string details as Rich markup. Without escaping, an exception
+        message containing brackets like KeyError: ['missing_key'] would have
+        the bracketed portion silently stripped.
+        """
+        # Given an emitter with a logfile
+        logfile = tmp_path / "run.log"
+        e, _, _ = make_recording_emitter(logfile=logfile)
+
+        # When an exception with brackets in its message is logged
+        try:
+            msg = "['missing_key']"
+            raise KeyError(msg)  # noqa: TRY301 -- inline raise required to populate the traceback
+        except KeyError as exc:
+            e.error("lookup failed", exception=exc)
+
+        # Then the bracketed substring survives in the logfile
+        contents = logfile.read_text()
+        assert "missing_key" in contents
 
 
 class TestExceptionAcrossLevels:
@@ -257,15 +353,28 @@ class TestModuleLevelDelegation:
 
     @pytest.mark.usefixtures("isolated_default")
     @pytest.mark.parametrize(
-        "method",
-        ["info", "success", "warning", "critical", "dryrun"],
+        ("method", "verbosity_needed"),
+        [
+            ("info", False),
+            ("success", False),
+            ("warning", False),
+            ("critical", False),
+            ("dryrun", False),
+            ("debug", True),
+            ("trace", True),
+        ],
     )
     def test_module_level_levels_forward_exception(
-        self, make_recording_emitter: RecordingEmitterFactory, method: str
+        self,
+        make_recording_emitter: RecordingEmitterFactory,
+        method: str,
+        *,
+        verbosity_needed: bool,
     ) -> None:
         """Verify each module-level function forwards exception= to the default emitter."""
-        # Given an isolated default emitter swapped in
-        e, out, err = make_recording_emitter()
+        # Given an isolated default emitter swapped in (TRACE verbosity for debug/trace)
+        verbosity = Verbosity.TRACE if verbosity_needed else Verbosity.INFO
+        e, out, err = make_recording_emitter(verbosity=verbosity)
         set_default(e)
         captured = _capture(ValueError, "boom")
 

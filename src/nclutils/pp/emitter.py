@@ -279,12 +279,18 @@ def _format_exception_for_logfile(exception: BaseException | bool) -> list[str] 
     Returns None when there's nothing to attach (`exception=False` or
     `exception=True` with no active exception). The resulting strings have no
     color codes; the logfile path strips Rich coloring anyway.
+
+    The returned strings are pre-escaped for Rich markup so that any bracket
+    characters in the exception message survive the logfile path's
+    string-as-markup rendering in `_render_details_to_lines`. Without escaping,
+    a message like `KeyError: ['missing_key']` would have the bracketed portion
+    silently stripped by Rich's markup parser.
     """
     exc = _resolve_exception(exception)
     if exc is None:
         return None
     return [
-        line.rstrip("\n")
+        escape(line.rstrip("\n"))
         for chunk in _traceback.format_exception(type(exc), exc, exc.__traceback__)
         for line in chunk.splitlines()
     ]
