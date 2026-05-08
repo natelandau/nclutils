@@ -8,6 +8,7 @@ import pytest
 from rich.console import Console
 from rich.json import JSON
 from rich.pretty import Pretty
+from rich.table import Table
 from rich.text import Text
 
 from nclutils.pp.emitter import Emitter, Level, LogLevel, Theme, Verbosity
@@ -394,7 +395,7 @@ class TestPrettyDetails:
     def test_mixed_details_all_indent_to_same_column(
         self, make_recording_emitter: RecordingEmitterFactory
     ) -> None:
-        """Verify str, dict, and Rich renderable details all indent uniformly."""
+        """Verify str, dict, and Rich renderable details all share the 2-space indent and the tree glyphs."""
         # Given an Emitter at TRACE verbosity wired to a recording stdout
         e, out, _ = make_recording_emitter(verbosity=Verbosity.TRACE)
 
@@ -404,13 +405,18 @@ class TestPrettyDetails:
             details=["plain string", {"k": "v"}, JSON('{"x": 2}')],
         )
 
-        # Then every non-empty content line below the header begins with the
-        # 2-space indent supplied by Padding.indent
-        lines = out.export_text().splitlines()
+        # Then every non-empty content line below the header begins with two
+        # spaces of indent (the 2-col gutter the connector/continuation share)
+        joined = out.export_text()
+        lines = joined.splitlines()
         content_lines = [ln for ln in lines[1:] if ln.strip()]
         assert content_lines, "expected at least one detail line"
         for ln in content_lines:
             assert ln.startswith("  "), f"detail line not indented: {ln!r}"
+
+        # And the first item gets `├─`, the last gets `└─`
+        assert "├─ plain string" in joined
+        assert "└─" in joined
 
 
 class TestCriticalLevel:
@@ -945,3 +951,150 @@ class TestSubMarkup:
 
         # Then the underline styling appears in the rendered output
         assert "underline" in out.export_html(inline_styles=True)
+
+
+class TestDetailTree:
+    """`details` render with `├─` / `└─` / `│` connectors on stdout/stderr."""
+
+    def test_multiple_string_details_use_branch_and_last_glyphs(
+        self, make_recording_emitter: RecordingEmitterFactory
+    ) -> None:
+        """Verify non-final details render with `├─` and the final renders with `└─`."""
+        # Given an Emitter wired to a recording stdout
+        e, out, _ = make_recording_emitter()
+
+        # When info is emitted with three string details
+        e.info("hello", details=["one", "two", "three"])
+
+        # Then the rendered text contains both branch and last connectors
+        text = out.export_text()
+        assert "├─ one" in text
+        assert "├─ two" in text
+        assert "└─ three" in text
+        assert "├─ three" not in text
+
+    def test_single_detail_uses_only_last_glyph(
+        self, make_recording_emitter: RecordingEmitterFactory
+    ) -> None:
+        """Verify a single detail item renders only `└─`, never `├─`."""
+        # Given an Emitter wired to a recording stdout
+        e, out, _ = make_recording_emitter()
+
+        # When success is emitted with one detail
+        e.success("ok", details=["only-item"])
+
+        # Then `└─` appears and `├─` does not
+        text = out.export_text()
+        assert "└─ only-item" in text
+        assert "├─" not in text
+
+    @pytest.mark.parametrize(
+        ("level_method", "stream", "verbosity"),
+        [
+            ("info", "stdout", Verbosity.INFO),
+            ("success", "stdout", Verbosity.INFO),
+            ("dryrun", "stdout", Verbosity.INFO),
+            ("debug", "stdout", Verbosity.DEBUG),
+            ("trace", "stdout", Verbosity.TRACE),
+            ("warning", "stderr", Verbosity.INFO),
+            ("error", "stderr", Verbosity.INFO),
+            ("critical", "stderr", Verbosity.INFO),
+        ],
+    )
+    def test_all_level_methods_render_connectors(
+        self,
+        make_recording_emitter: RecordingEmitterFactory,
+        level_method: str,
+        stream: str,
+        verbosity: Verbosity,
+    ) -> None:
+        """Verify every level method renders details with tree connectors."""
+        # Given an Emitter at the verbosity needed for this level
+        e, out, err = make_recording_emitter(verbosity=verbosity)
+        target = out if stream == "stdout" else err
+
+        # When the level method is invoked with two details
+        getattr(e, level_method)("msg", details=["a", "b"])
+
+        # Then both branch and last connectors appear on the right stream
+        text = target.export_text()
+        assert "├─ a" in text
+        assert "└─ b" in text
+
+    def test_multiline_renderable_gets_continuation_pipe(
+        self, make_recording_emitter: RecordingEmitterFactory
+    ) -> None:
+        """Verify a multi-line renderable in a non-final position gets `│` continuation lines."""
+        # Given an Emitter wired to a recording stdout and a multi-line Table
+        e, out, _ = make_recording_emitter()
+        table = Table(show_header=False, box=None)
+        table.add_row("row-one")
+        table.add_row("row-two")
+
+        # When info is emitted with the table in a non-final position
+        e.info("hdr", details=[table, "tail"])
+
+        # Then a continuation-pipe line appears beneath the table's first row
+        text = out.export_text()
+        pipe_lines = [ln for ln in text.splitlines() if ln.startswith("  │")]
+        assert pipe_lines, "expected at least one continuation-pipe line"
+        assert "├─" in text
+        assert "└─ tail" in text
+
+    def test_multiline_renderable_in_final_position_uses_blank_continuation(
+        self, make_recording_emitter: RecordingEmitterFactory
+    ) -> None:
+        """Verify a multi-line renderable as the final item has plain-space continuation, not `│`."""
+        # Given an Emitter wired to a recording stdout and a multi-line Table
+        e, out, _ = make_recording_emitter()
+        table = Table(show_header=False, box=None)
+        table.add_row("row-one")
+        table.add_row("row-two")
+
+        # When info is emitted with the table as the final detail
+        e.info("hdr", details=["head", table])
+
+        # Then `└─` precedes the table
+        text = out.export_text()
+        assert "├─ head" in text
+        assert "└─" in text
+
+        # And no `│` continuation appears anywhere in the output
+        assert "│" not in text
+
+    def test_markup_true_still_parses_string_details(
+        self, make_recording_emitter: RecordingEmitterFactory
+    ) -> None:
+        """Verify markup=True parses Rich markup inside string details."""
+        # Given an Emitter wired to a recording stdout
+        e, out, _ = make_recording_emitter()
+
+        # When info is emitted with markup=True and bracketed details
+        e.info("hi", details=["[bold]item[/]"], markup=True)
+
+        # Then the brackets are consumed (parsed) rather than rendered as text
+        text = out.export_text()
+        assert "item" in text
+        assert "[bold]" not in text
+        assert "└─ item" in text
+
+    @pytest.mark.parametrize("details", [None, []])
+    def test_no_details_emits_no_extra_lines(
+        self,
+        make_recording_emitter: RecordingEmitterFactory,
+        details: list[str] | None,
+    ) -> None:
+        """Verify None or empty details emit only the header line, no stray connectors."""
+        # Given an Emitter wired to a recording stdout
+        e, out, _ = make_recording_emitter()
+
+        # When info is emitted with no details
+        e.info("just header", details=details)
+
+        # Then no tree glyphs appear and the output is the single header line
+        text = out.export_text()
+        assert "├─" not in text
+        assert "└─" not in text
+        assert "│" not in text
+        non_empty_lines = [ln for ln in text.splitlines() if ln.strip()]
+        assert len(non_empty_lines) == 1
