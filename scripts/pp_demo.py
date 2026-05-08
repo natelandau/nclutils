@@ -57,6 +57,24 @@ def _steps() -> None:
     with pp.step("ephemeral path", ephemeral=True) as s:
         s.sub("disappears on success")
 
+    with pp.step(
+        "compiling sources",
+        success_msg="compiled 42 files in 1.2s",
+    ) as s:
+        s.sub("api.py")
+        s.sub("cli.py")
+
+    try:
+        with pp.step(
+            "uploading artifact",
+            failure_msg="upload aborted (network error)",
+        ) as s:
+            s.sub("packing tarball")
+            msg = "boom"
+            raise RuntimeError(msg)  # noqa: TRY301 -- intentional, exercises failure_msg path
+    except RuntimeError:
+        pass
+
 
 def _details_simple() -> None:
     """Demonstrate details with tree connectors: single, multiple, and markup."""
