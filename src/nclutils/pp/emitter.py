@@ -1090,8 +1090,9 @@ class Emitter:
                             marker=error_marker,
                             markup=markup,
                         )
-                        if error_header is not None:
-                            s.header = error_header
+                        # _build_message_text returns None for non-(str|Text) renderables;
+                        # fall back to the original renderable so the override is not silently dropped.
+                        s.header = error_header if error_header is not None else failure_message
                     raise
                 if not ephemeral:
                     success_header = _build_message_text(
@@ -1100,8 +1101,9 @@ class Emitter:
                         marker=success_marker,
                         markup=markup,
                     )
-                    if success_header is not None:
-                        s.header = success_header
+                    # _build_message_text returns None for non-(str|Text) renderables;
+                    # fall back to the original renderable so the override is not silently dropped.
+                    s.header = success_header if success_header is not None else success_message
         finally:
             self._active_step = False
             if failed_exc is not None:
@@ -1111,7 +1113,8 @@ class Emitter:
                     details=[f"{type(failed_exc).__name__}: {failed_exc}"],
                 )
                 if ephemeral:
-                    self.error(failure_text)
+                    # Pass the original renderable (not the plain-text strip) so styling/markup is preserved.
+                    self.error(failure_message)
             else:
                 self._logsink.emit(
                     level=_LEVEL_TO_LOG_SEVERITY["info"],

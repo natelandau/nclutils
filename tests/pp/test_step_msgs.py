@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
+from rich.padding import Padding
+from rich.text import Text
 
 from nclutils.pp import emitter as pp_emitter
 
@@ -46,6 +48,21 @@ class TestStepSuccessMsg:
         # Then the original message appears in the success line
         text = out.export_text()
         assert "compiling" in text
+
+    def test_success_msg_renderable_replaces_header(
+        self, make_recording_emitter: RecordingEmitterFactory
+    ) -> None:
+        """Verify success_msg accepts an arbitrary Rich renderable and the override is applied."""
+        # Given an emitter
+        e, out, _ = make_recording_emitter()
+
+        # When step() runs to success with a renderable success_msg
+        with e.step("compiling", success_msg=Padding("compiled 42 files", (0, 1))):
+            pass
+
+        # Then the override text appears in the rendered output
+        text = out.export_text()
+        assert "compiled 42 files" in text
 
 
 class TestStepFailureMsg:
@@ -214,6 +231,29 @@ class TestEphemeralStepInteraction:
         text = err.export_text()
         assert "warming caches" in text
 
+    def test_ephemeral_failure_preserves_failure_msg_styling(
+        self,
+        make_recording_emitter: RecordingEmitterFactory,
+    ) -> None:
+        """Verify ephemeral failure preserves Rich markup styling in failure_msg."""
+        # Given an emitter wired to recording stderr
+        e, _, err = make_recording_emitter()
+        err_msg = "boom"
+
+        # When step() raises ephemerally with a styled failure_msg
+        styled = Text("cache priming failed", style="bold red")
+        with (
+            pytest.raises(RuntimeError, match=err_msg),
+            e.step("warming", ephemeral=True, failure_msg=styled),
+        ):
+            raise RuntimeError(err_msg)
+
+        # Then the styled fragment appears in the recorded HTML output with styling preserved
+        html = err.export_html()
+        assert "cache priming failed" in html
+        # The styling marker should be present (red color or bold weight)
+        assert "color: " in html or "font-weight" in html
+
 
 class TestModuleLevelStep:
     """Module-level `step()` forwards override kwargs to the default emitter."""
@@ -257,3 +297,43 @@ class TestModuleLevelStep:
         # Then the override message appears in the rendered output
         text = out.export_text()
         assert "compilation aborted" in text
+
+
+class TestMarkupAppliesToOverrides:
+    """`markup=True` parses Rich markup in success_msg and failure_msg."""
+
+    def test_markup_true_parses_success_msg(
+        self, make_recording_emitter: RecordingEmitterFactory
+    ) -> None:
+        """Verify markup=True parses Rich markup tags in success_msg."""
+        # Given an emitter
+        e, out, _ = make_recording_emitter()
+
+        # When step() runs to success with a markup-containing override and markup=True
+        with e.step("compiling", success_msg="[bold]compiled all[/]", markup=True):
+            pass
+
+        # Then the rendered output contains the message text but not the literal markup tags
+        text = out.export_text()
+        assert "compiled all" in text
+        assert "[bold]" not in text
+
+    def test_markup_true_parses_failure_msg(
+        self, make_recording_emitter: RecordingEmitterFactory
+    ) -> None:
+        """Verify markup=True parses Rich markup tags in failure_msg."""
+        # Given an emitter
+        e, out, _ = make_recording_emitter()
+        err_msg = "boom"
+
+        # When step() raises with a markup-containing override and markup=True
+        with (
+            pytest.raises(RuntimeError, match=err_msg),
+            e.step("compiling", failure_msg="[bold]aborted[/]", markup=True),
+        ):
+            raise RuntimeError(err_msg)
+
+        # Then the rendered output contains the message text but not the literal markup tags
+        text = out.export_text()
+        assert "aborted" in text
+        assert "[bold]" not in text
