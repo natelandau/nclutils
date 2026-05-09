@@ -14,7 +14,7 @@ from rich.progress import Progress, TaskID
 from rich.text import Text
 from rich.tree import Tree
 
-from nclutils.utils import check_python_version, new_timestamp_uid
+from nclutils.utils import new_timestamp_uid
 
 logger = logging.getLogger(__name__)
 
@@ -142,18 +142,13 @@ class _Copier:
 
         return dst
 
-    def copy_directory(self, src: Path, dst: Path, *, keep_backup: bool = True) -> Path:  # noqa: C901
+    def copy_directory(self, src: Path, dst: Path, *, keep_backup: bool = True) -> Path:
         """Copy a directory tree to a new destination using this Copier's shared configuration.
 
-        Validates Python 3.12+, src exists and is a directory, src and dst are not
-        the same and not in a parent/child relationship. If dst exists and
-        keep_backup is True, snapshots dst via self.backup() first.
+        Validates src exists and is a directory, src and dst are not the same and
+        not in a parent/child relationship. If dst exists and keep_backup is True,
+        snapshots dst via self.backup() first.
         """
-        if not check_python_version(3, 12):
-            msg = "Copy directory requires a minimum of Python version 3.12"
-            logger.error(msg)
-            raise ValueError(msg) from None
-
         src = src.expanduser().resolve()
         dst = dst.expanduser().resolve()
 
@@ -209,13 +204,14 @@ class _Copier:
         write itself bumps mtime; this matches the existing `copy_directory`
         behavior.
         """
-        for current_root, _, files in src.walk(follow_symlinks=True):
-            rel = current_root.relative_to(src)
+        for current_root, _, files in os.walk(src, followlinks=True):
+            base = Path(current_root)
+            rel = base.relative_to(src)
             new_parent = dst / rel
             new_parent.mkdir(parents=True, exist_ok=True)
-            shutil.copystat(current_root, new_parent)
+            shutil.copystat(base, new_parent)
             for name in files:
-                _do_copy_file(current_root / name, new_parent / name)
+                _do_copy_file(base / name, new_parent / name)
 
     def _copy_tree_with_progress(self, src: Path, dst: Path, label: str) -> None:
         """Copy a directory tree with a unified Progress bar.
@@ -234,13 +230,14 @@ class _Copier:
             outer = progress.add_task(f"{label} {src.name}", total=total_bytes or None)
             inner = progress.add_task("", total=None, visible=False)
 
-            for current_root, _, files in src.walk(follow_symlinks=True):
-                rel = current_root.relative_to(src)
+            for current_root, _, files in os.walk(src, followlinks=True):
+                base = Path(current_root)
+                rel = base.relative_to(src)
                 new_parent = dst / rel
                 new_parent.mkdir(parents=True, exist_ok=True)
-                shutil.copystat(current_root, new_parent)
+                shutil.copystat(base, new_parent)
                 for name in files:
-                    src_file = current_root / name
+                    src_file = base / name
                     size = src_file.stat().st_size
                     progress.reset(
                         inner, description=f"  └ {rel / name}", total=size or None, visible=True
@@ -291,10 +288,6 @@ class _Copier:
             shutil.rmtree(target)
 
         if src.is_dir():
-            if not check_python_version(3, 12):
-                msg = "Backup of a directory requires a minimum of Python version 3.12"
-                logger.error(msg)
-                raise ValueError(msg) from None
             logger.debug("copy_tree %s %s", src, target)
             if self.with_progress:
                 self._copy_tree_with_progress(src, target, label="Backup")
@@ -432,7 +425,7 @@ def copy_directory(  # noqa: PLR0913
 
     Raises:
         FileNotFoundError: If source directory does not exist or is not a directory.
-        ValueError: If Python version is less than 3.12, or if src/dst have a parent/child relationship and `strict` is True.
+        ValueError: If src/dst have a parent/child relationship and `strict` is True.
         shutil.SameFileError: If src and dst are the same directory and `strict` is True.
     """
     return _Copier(

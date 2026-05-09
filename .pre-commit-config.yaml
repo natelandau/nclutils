@@ -4,6 +4,11 @@ default_install_hook_types: [commit-msg, pre-commit, pre-push]
 default_stages: [pre-commit, manual]
 fail_fast: true
 repos:
+  - repo: "https://github.com/commitizen-tools/commitizen"
+    rev: v4.15.0
+    hooks:
+      - id: commitizen
+
   - repo: "https://github.com/pre-commit/pygrep-hooks"
     rev: v1.10.0
     hooks:
@@ -80,10 +85,9 @@ repos:
         language: system
         types: [shell]
 
-      - id: mypy
-        name: mypy
-        entry: uv run mypy --config-file pyproject.toml src/
-        exclude: "tests/|duties.py"
+      - id: ty (type check)
+        name: ty
+        entry: uv run duty ty
         pass_filenames: false
         language: system
         types: [python]
