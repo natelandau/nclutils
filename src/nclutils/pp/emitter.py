@@ -477,6 +477,102 @@ class _DetailTree:
         return Pretty(item)
 
 
+class _KVBlock:
+    """Render aligned key/value pairs as a column block.
+
+    Keys render dim and are padded to the widest key's width before the
+    separator. Values render in the console's default style. Multi-line
+    string values align continuation lines under the value column. Rich
+    renderables render below the key, indented to the value column.
+    """
+
+    def __init__(
+        self,
+        items: list[tuple[str, Any]],
+        *,
+        indent: int,
+        separator: str,
+        markup: bool,
+    ) -> None:
+        self._items = items
+        self._indent = indent
+        self._separator = separator
+        self._markup = markup
+
+    def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
+        if not self._items:
+            return
+        widest = max(len(k) for k, _ in self._items)
+        prefix = " " * self._indent
+        # Pad the (key + separator) cell so values align in a single column.
+        cell_width = widest + len(self._separator)
+        cont_indent = self._indent + cell_width
+
+        for key, value in self._items:
+            key_part = self._key_text(key, cell_width)
+            if not isinstance(value, (str, Text)) and is_renderable(value):
+                yield from self._render_renderable_row(
+                    console, options, prefix, key_part, value, cont_indent
+                )
+                continue
+            yield from self._render_text_row(prefix, key_part, value, cont_indent)
+
+    def _key_text(self, key: str, cell_width: int) -> Text:
+        # Keys render dim; the separator + alignment padding stay in the
+        # default style so the colon visually anchors to the key text.
+        pad = " " * (cell_width - len(key) - len(self._separator))
+        key_part = Text(key, style="dim")
+        key_part.append(self._separator)
+        key_part.append(pad)
+        return key_part
+
+    def _value_text(self, value: Any) -> Text:
+        if isinstance(value, str):
+            return Text.from_markup(value) if self._markup else Text(escape(value))
+        if isinstance(value, Text):
+            return value
+        return Text(str(value))
+
+    def _render_text_row(
+        self, prefix: str, key_part: Text, value: Any, cont_indent: int
+    ) -> RenderResult:
+        value_text = self._value_text(value)
+        lines = value_text.split("\n", allow_blank=True)
+        first = Text(prefix)
+        first.append_text(key_part)
+        first.append_text(lines[0])
+        yield first
+        for line in lines[1:]:
+            cont = Text(" " * cont_indent)
+            cont.append_text(line)
+            yield cont
+
+    def _render_renderable_row(
+        self,
+        console: Console,
+        options: ConsoleOptions,
+        prefix: str,
+        key_part: Text,
+        value: Any,
+        cont_indent: int,
+    ) -> RenderResult:
+        # Rich renderable: render below the key on its own line(s),
+        # indented to the value column.
+        head = Text(prefix)
+        head.append_text(key_part)
+        yield head
+        sub_options = options.update(width=max(1, options.max_width - cont_indent))
+        for sub_line in console.render_lines(value, sub_options):
+            out_line = Text(" " * cont_indent)
+            for seg in sub_line:
+                if seg.text:
+                    out_line.append(
+                        seg.text,
+                        style=seg.style if seg.style is not None else "",
+                    )
+            yield out_line
+
+
 class Emitter:
     """Configurable console output emitter for CLI scripts.
 
@@ -1133,6 +1229,73 @@ class Emitter:
         self.console.rule(title, align=align, **kwargs)
         self.console.print()
 
+    def kv(
+        self,
+        items: dict[str, Any] | list[tuple[str, Any]],
+        *,
+        indent: int = 2,
+        separator: str = ": ",
+        markup: bool = False,
+    ) -> None:
+        """Render aligned key/value pairs as a section block.
+
+        Useful for status summaries and final-state output. Keys are padded
+        to the widest key's width and joined to the value with `separator`.
+        Suppressed on the console when `quiet=True`, but each pair is still
+        recorded in the logfile so the audit trail stays complete.
+
+        Args:
+            items: dict (insertion order preserved) or list of `(key, value)`
+                tuples. Use the list form when you need duplicate keys or
+                explicit ordering.
+            indent: Leading spaces before each rendered line. Defaults to `2`.
+            separator: String between the padded key and the value. Defaults
+                to `": "`.
+            markup: When True, parses Rich markup in string values. Keys are
+                always escaped (treated as identifiers).
+        """
+        pair_list: list[tuple[str, Any]] = (
+            list(items.items()) if isinstance(items, dict) else list(items)
+        )
+        if not pair_list:
+            return
+
+        widest = max(len(k) for k, _ in pair_list)
+        prefix = " " * indent
+        cell_width = widest + len(separator)
+        cont_prefix = " " * (indent + cell_width)
+        for key, value in pair_list:
+            # Project the value to plain text for the logfile so each visual
+            # line shows up as a discrete INFO record with the same alignment
+            # the user saw on the console.
+            if isinstance(value, str):
+                log_value = Text.from_markup(value).plain if markup else value
+            elif isinstance(value, Text):
+                log_value = value.plain
+            elif is_renderable(value):
+                log_value = _render_renderable_to_plain(value).rstrip("\n")
+            else:
+                log_value = str(value)
+
+            key_cell = (key + separator).ljust(cell_width)
+            value_lines = log_value.splitlines() or [""]
+            first_line = prefix + key_cell + value_lines[0]
+            self._logsink.emit(
+                level=_LEVEL_TO_LOG_SEVERITY["info"],
+                message=first_line,
+                details=None,
+            )
+            for line in value_lines[1:]:
+                self._logsink.emit(
+                    level=_LEVEL_TO_LOG_SEVERITY["info"],
+                    message=cont_prefix + line,
+                    details=None,
+                )
+
+        if self.quiet:
+            return
+        self.console.print(_KVBlock(pair_list, indent=indent, separator=separator, markup=markup))
+
     @contextmanager
     def step(
         self,
@@ -1611,6 +1774,20 @@ def header(
     _default.header(message, align=align, markup=markup, **kwargs)
 
 
+def kv(
+    items: dict[str, Any] | list[tuple[str, Any]],
+    *,
+    indent: int = 2,
+    separator: str = ": ",
+    markup: bool = False,
+) -> None:
+    """Render aligned key/value pairs via the default emitter.
+
+    See `Emitter.kv` for full kwarg semantics.
+    """
+    _default.kv(items, indent=indent, separator=separator, markup=markup)
+
+
 @contextmanager
 def step(
     message: str | RenderableType,
@@ -1651,6 +1828,7 @@ __all__ = [
     "get_default",
     "header",
     "info",
+    "kv",
     "set_default",
     "step",
     "success",

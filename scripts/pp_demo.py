@@ -127,6 +127,30 @@ def _per_call_tags() -> None:
     pp.debug("auto elapsed (default)")
 
 
+def _kv() -> None:
+    """Demonstrate the kv() function with dict, list-of-tuples, and multi-line value."""
+    pp.header("Key/value blocks", align="left")
+    pp.kv(
+        {
+            "Branch": "main",
+            "Commit": "abc1234",
+            "Status": "clean",
+            "Duration": "3.2s",
+        }
+    )
+
+    pp.kv(
+        [
+            ("Step", "init"),
+            ("Step", "build"),
+            ("Step", "deploy"),
+        ]
+    )
+
+    # Multi-line value: continuation lines align under the value column.
+    pp.kv({"Notes": "first line\nsecond line\nthird line"})
+
+
 def _exceptions() -> None:
     """Demonstrate the exception= kwarg with instance, True, and show_locals forms."""
     pp.header("Exceptions", align="left")
@@ -201,6 +225,7 @@ def main() -> None:
     _details_multiline()
     _per_call_overrides()
     _per_call_tags()
+    _kv()
     _exceptions()
     _theme_override()
     _verbosity_matrix()
