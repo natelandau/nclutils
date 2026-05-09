@@ -145,7 +145,7 @@ def run_command(  # noqa: C901, PLR0912, PLR0913, PLR0915
     serr_sink = sys.stderr if stream else None
 
     # proc.stdout and proc.stderr are always set when PIPE is passed to Popen.
-    # Capture into locals so mypy can narrow them inside the drain closures.
+    # Capture into locals so type checkers can narrow them inside the drain closures.
     out_pipe = proc.stdout
     err_pipe = proc.stderr
     if out_pipe is None or err_pipe is None:  # pragma: no cover
@@ -212,8 +212,7 @@ def run_command(  # noqa: C901, PLR0912, PLR0913, PLR0915
 
     if timed_out:
         # timeout is non-None when timed_out is True (TimeoutExpired only fires with timeout)
-        raise ShellCommandTimeoutError(result=result, timeout=timeout)  # type: ignore[arg-type]
-
+        raise ShellCommandTimeoutError(result=result, timeout=timeout)  # ty:ignore[invalid-argument-type]
     if check and proc.returncode not in okay_codes:
         raise ShellCommandFailedError(result=result)
 
@@ -230,7 +229,7 @@ def run_interactive(
 ) -> int:
     """Run a command that needs a real terminal (vim, less, ssh).
 
-    Inherits the parent's stdin/stdout/stderr — no capture, no pipes, no
+    Inherits the parent's stdin/stdout/stderr - no capture, no pipes, no
     streaming layer. Use :func:`run_command` for non-interactive commands
     where you want the captured output.
 

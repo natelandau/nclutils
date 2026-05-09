@@ -78,13 +78,13 @@ def format(ctx: Context) -> None:  # noqa: A001
 
 
 @duty
-def mypy(ctx: Context) -> None:
-    """Check the code with mypy."""
+def ty(ctx: Context) -> None:
+    """Check the code with ty."""
     os.environ["FORCE_COLOR"] = "1"
     ctx.run(
-        tools.mypy("src/", config_file="pyproject.toml"),
-        title=pyprefix("mypy check"),
-        command="mypy --config-file pyproject.toml src/",
+        ["ty", "check", "src/"],
+        title="ty check",
+        command="ty check src/",
     )
 
 
@@ -102,12 +102,12 @@ def typos(ctx: Context) -> None:
 def prek(ctx: Context) -> None:
     """Run prek hooks."""
     ctx.run(
-        "SKIP=mypy,pytest,ruff prek run --all-files",
+        "SKIP=ty,pytest,ruff prek run --all-files",
         title=pyprefix("prek hooks"),
     )
 
 
-@duty(pre=[ruff, mypy, typos, prek], capture=CI)
+@duty(pre=[ruff, ty, typos, prek], capture=CI)
 def lint(ctx: Context) -> None:
     """Run all linting duties."""
 

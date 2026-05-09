@@ -12,8 +12,8 @@ pre-commit install --install-hooks   # one-time hook setup
 
 duty --list                     # discover all tasks
 duty test                       # run pytest with coverage
-duty lint                       # ruff + mypy + typos + pre-commit
-duty ruff | duty format | duty mypy | duty typos   # individual linters
+duty lint                       # ruff + ty + typos + pre-commit
+duty ruff | duty format | duty ty | duty typos   # individual linters
 duty update                     # refresh uv.lock and pre-commit pins
 ```
 

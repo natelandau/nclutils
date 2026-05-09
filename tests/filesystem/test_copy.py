@@ -10,7 +10,6 @@ from pytest_mock import MockerFixture
 from rich.console import Console
 
 from nclutils.fs import copy_directory, copy_file
-from nclutils.utils import check_python_version
 
 
 def test_copy_file_file_not_found(tmp_path: Path) -> None:
@@ -163,10 +162,6 @@ def test_copy_file_with_no_progress(
 
 def test_copy_directory_basic(tmp_path: Path) -> None:
     """Verify copy_directory copies files and structure correctly."""
-    if not check_python_version(3, 12):
-        pytest.skip("Skipping test for Python version < 3.12")
-
-    # Given: Source directory with nested files and subdirectories
     # Given: Source directory with nested files and subdirectories
     src = tmp_path / "src"
     src.mkdir()
@@ -189,9 +184,6 @@ def test_copy_directory_same_destination(
     tmp_path: Path, fs_caplog: pytest.LogCaptureFixture
 ) -> None:
     """Verify copy_directory handles copying to same directory."""
-    if not check_python_version(3, 12):
-        pytest.skip("Skipping test for Python version < 3.12")
-
     # Given: Source directory
     src = tmp_path / "src"
     src.mkdir()
@@ -209,9 +201,6 @@ def test_copy_directory_parent_destination(
     tmp_path: Path, fs_caplog: pytest.LogCaptureFixture
 ) -> None:
     """Verify copy_directory prevents copying to parent directory."""
-    if not check_python_version(3, 12):
-        pytest.skip("Skipping test for Python version < 3.12")
-
     # Given: Nested directory structure
     parent = tmp_path / "parent"
     child = parent / "child"
@@ -229,9 +218,6 @@ def test_copy_directory_parent_destination(
 
 def test_copy_directory_dst_in_src(tmp_path: Path, fs_caplog: pytest.LogCaptureFixture) -> None:
     """Verify copy_directory prevents copying when destination is inside source."""
-    if not check_python_version(3, 12):
-        pytest.skip("Skipping test for Python version < 3.12")
-
     # Given: Source directory with destination as subdirectory
     src = tmp_path / "src"
     dst = src / "dst"
@@ -248,9 +234,6 @@ def test_copy_directory_dst_in_src(tmp_path: Path, fs_caplog: pytest.LogCaptureF
 
 def test_copy_directory_missing_source(tmp_path: Path, fs_caplog: pytest.LogCaptureFixture) -> None:
     """Verify copy_directory raises error when source directory does not exist."""
-    if not check_python_version(3, 12):
-        pytest.skip("Skipping test for Python version < 3.12")
-
     # Given: Non-existent source directory path
     src = tmp_path / "missing"
     dst = tmp_path / "dst"
@@ -265,9 +248,6 @@ def test_copy_directory_missing_source(tmp_path: Path, fs_caplog: pytest.LogCapt
 
 def test_copy_directory_with_progress(tmp_path: Path) -> None:
     """Verify copy_directory displays progress bar when enabled."""
-    if not check_python_version(3, 12):
-        pytest.skip("Skipping test for Python version < 3.12")
-
     # Given: Source directory containing test file
     src = tmp_path / "src"
     src.mkdir()
@@ -284,9 +264,6 @@ def test_copy_directory_with_progress(tmp_path: Path) -> None:
 
 def test_copy_directory_unique_name(tmp_path: Path) -> None:
     """Verify copy_directory generates unique name when destination exists."""
-    if not check_python_version(3, 12):
-        pytest.skip("Skipping test for Python version < 3.12")
-
     # Given: Source and existing destination directories
     src = tmp_path / "src"
     dst = tmp_path / "dst"
@@ -310,21 +287,8 @@ def test_copy_directory_unique_name(tmp_path: Path) -> None:
             assert (d / "test.txt").read_text() == "old"
 
 
-def test_copy_directory_python_version(mocker: MockerFixture, tmp_path: Path) -> None:
-    """Verify copy_directory requires Python 3.12 or higher."""
-    # Given: Python version below 3.12
-    mocker.patch("nclutils.fs.filesystem.check_python_version", autospec=True, return_value=False)
-
-    # When/Then: Copying directory raises version error
-    with pytest.raises(ValueError, match=r"requires a minimum of Python version 3\.12"):
-        copy_directory("src", "dst")
-
-
 def test_copy_directory_preserves_directory_mode(tmp_path: Path) -> None:
     """Verify copy_directory propagates directory permissions from the source tree."""
-    if not check_python_version(3, 12):
-        pytest.skip("Skipping test for Python version < 3.12")
-
     # Given: A source tree where a subdirectory has a non-default mode
     src = tmp_path / "src"
     sub = src / "sub"
@@ -356,7 +320,6 @@ def test_copy_file_uses_provided_console(tmp_path: Path) -> None:
     assert "Copy test.txt" in buffer.getvalue()
 
 
-@pytest.mark.skipif(not check_python_version(3, 12), reason="Requires Python 3.12+")
 def test_copy_directory_unified_progress_no_backup(tmp_path: Path) -> None:
     """Verify copy_directory shows a single Copy phase when dst does not exist."""
     # Given: A source directory with a couple of files, no pre-existing dst
@@ -381,7 +344,6 @@ def test_copy_directory_unified_progress_no_backup(tmp_path: Path) -> None:
     assert "100%" in output
 
 
-@pytest.mark.skipif(not check_python_version(3, 12), reason="Requires Python 3.12+")
 def test_copy_directory_unified_progress_with_backup(tmp_path: Path) -> None:
     """Verify copy_directory shows Backup then Copy when dst exists."""
     # Given: An existing dst directory and a fresh src
@@ -418,7 +380,6 @@ def test_copy_file_same_file_strict_raises(tmp_path: Path) -> None:
         copy_file(f, f, strict=True)
 
 
-@pytest.mark.skipif(not check_python_version(3, 12), reason="Requires Python 3.12+")
 def test_copy_directory_same_dir_strict_raises(tmp_path: Path) -> None:
     """Verify copy_directory raises shutil.SameFileError when strict=True and src == dst."""
     # Given: A directory
@@ -430,7 +391,6 @@ def test_copy_directory_same_dir_strict_raises(tmp_path: Path) -> None:
         copy_directory(d, d, strict=True)
 
 
-@pytest.mark.skipif(not check_python_version(3, 12), reason="Requires Python 3.12+")
 def test_copy_directory_parent_child_strict_raises(tmp_path: Path) -> None:
     """Verify copy_directory raises ValueError when strict=True and src/dst are nested."""
     # Given: src and dst in a parent-child relationship
@@ -443,7 +403,6 @@ def test_copy_directory_parent_child_strict_raises(tmp_path: Path) -> None:
         copy_directory(src, dst, strict=True)
 
 
-@pytest.mark.skipif(not check_python_version(3, 12), reason="Requires Python 3.12+")
 def test_copy_directory_progress_with_symlinked_subdir(tmp_path: Path) -> None:
     """Verify unified progress reaches 100% for trees containing a symlinked directory."""
     # Given: A tree with a symlink pointing to a directory containing a file

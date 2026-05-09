@@ -45,9 +45,6 @@ copy_file(src, dst, with_progress=True, console=pp.console())
 ```
 
 > [!NOTE]
-> Both `copy_directory` and `backup_path` (when given a directory) require Python 3.12+ because they use `Path.walk()`. Calling either on an older interpreter raises `ValueError`. File backups (`backup_path` on a single file) work on Python 3.10+.
-
-> [!NOTE]
 > `copy_directory` and the directory variant of `backup_path` both follow symlinks: a symlink to a directory inside the source tree is materialized as a real directory in the destination, with the symlink target's contents copied recursively. This matches `shutil.copytree(symlinks=False)` (the default).
 
 > [!NOTE]
@@ -192,7 +189,7 @@ This is independent of `nclutils.pp`. It covers internal operations like "starti
 - `backup_path(src, backup_suffix="", *, with_progress=False, transient=True, console=None, strict=False)`. Snapshot a file or directory with a timestamped suffix, preserving the source's permission bits. Raises `FileNotFoundError` if `strict=True` and source is missing.
 - `clean_directory(directory, *, strict=False)`. Recursively empty a directory in place. Raises `NotADirectoryError` if `strict=True` and target is not a directory.
 - `copy_file(src, dst, *, with_progress=False, transient=True, keep_backup=True, console=None, strict=False)`. Copy a file with optional progress and destination backup. Raises `IsADirectoryError` if `src` is a directory; raises `shutil.SameFileError` if `strict=True` and src equals dst.
-- `copy_directory(src, dst, *, with_progress=False, transient=True, keep_backup=True, console=None, strict=False)`. Recursively copy a directory, preserving directory permission bits. Requires Python 3.12+. Raises `shutil.SameFileError` or `ValueError` if `strict=True` and src/dst are the same or nested.
+- `copy_directory(src, dst, *, with_progress=False, transient=True, keep_backup=True, console=None, strict=False)`. Recursively copy a directory, preserving directory permission bits. Raises `shutil.SameFileError` or `ValueError` if `strict=True` and src/dst are the same or nested.
 - `directory_tree(directory, *, show_hidden=False)`. Build a `rich.tree.Tree` view of a directory.
 - `find_files(path, globs=None, *, ignore_dotfiles=False)`. List files in a directory matching globs. Duplicate matches across overlapping globs are deduped.
 - `find_subdirectories(directory, depth=1, filter_regex="", *, ignore_dotfiles=False, leaf_dirs_only=False)`. Search subdirectories with depth and regex filtering. `depth` must be >= 1.
