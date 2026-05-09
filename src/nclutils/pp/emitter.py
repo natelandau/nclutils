@@ -540,8 +540,7 @@ class _KVBlock:
         lines = value_text.split("\n", allow_blank=True)
         first = Text(prefix)
         first.append_text(key_part)
-        if lines:
-            first.append_text(lines[0])
+        first.append_text(lines[0])
         yield first
         for line in lines[1:]:
             cont = Text(" " * cont_indent)

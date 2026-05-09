@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 from rich.table import Table
+from rich.text import Text
 
 from nclutils import pp
 from nclutils.pp.emitter import set_default
@@ -132,18 +133,25 @@ class TestKvLogfile:
         make_recording_emitter: RecordingEmitterFactory,
         tmp_path: Path,
     ) -> None:
-        """Verify the logfile contains one INFO record per kv pair."""
+        """Verify the logfile contains one INFO record per kv pair with aligned values."""
         # Given an emitter with a logfile
         logfile = tmp_path / "run.log"
         e, _, _ = make_recording_emitter(logfile=logfile)
 
-        # When kv is called
-        e.kv({"Branch": "main", "Commit": "abc1234"})
+        # When kv is called with mismatched-width keys so the alignment math is exercised
+        e.kv({"A": "short", "LongerKey": "longer_value"})
 
-        # Then both pairs are recorded with column alignment
+        # Then both pairs are recorded and the value column lines up across rows.
+        # cell_width = len("LongerKey") + len(": ") == 11, so the short key is padded
+        # with 9 spaces between "A:" and its value.
         contents = logfile.read_text()
-        assert "Branch: main" in contents
-        assert "Commit: abc1234" in contents
+        assert "A:         short" in contents
+        assert "LongerKey: longer_value" in contents
+
+        # And the value column begins at the same string offset on each line.
+        a_line = next(line for line in contents.splitlines() if "A:" in line)
+        long_line = next(line for line in contents.splitlines() if "LongerKey:" in line)
+        assert a_line.index("short") == long_line.index("longer_value")
 
     def test_logfile_records_under_quiet(
         self,
@@ -251,6 +259,42 @@ class TestKvMarkup:
         # Then the literal key text appears verbatim
         text = out.export_text()
         assert "[bold]key[/]" in text
+
+
+class TestKvWithTextValue:
+    """`Text` instances pass through as values with their styling preserved."""
+
+    def test_text_value_renders_in_console(
+        self, make_recording_emitter: RecordingEmitterFactory
+    ) -> None:
+        """Verify a rich.text.Text value renders its content in console output."""
+        # Given an emitter wired to a recording stdout console
+        e, out, _ = make_recording_emitter()
+
+        # When kv is called with a Text value
+        e.kv({"Status": Text("ok", style="bold green")})
+
+        # Then the plain content appears in the rendered output
+        text = out.export_text()
+        assert "Status:" in text
+        assert "ok" in text
+
+    def test_text_value_recorded_in_logfile(
+        self,
+        make_recording_emitter: RecordingEmitterFactory,
+        tmp_path: Path,
+    ) -> None:
+        """Verify a rich.text.Text value is recorded as plain text in the logfile."""
+        # Given an emitter with a logfile
+        logfile = tmp_path / "run.log"
+        e, _, _ = make_recording_emitter(logfile=logfile)
+
+        # When kv is called with a Text value
+        e.kv({"Status": Text("ok", style="bold green")})
+
+        # Then the plain content appears in the logfile
+        contents = logfile.read_text()
+        assert "Status: ok" in contents
 
 
 class TestModuleLevelKv:

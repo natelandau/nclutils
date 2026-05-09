@@ -332,17 +332,18 @@ Console rendering and file rendering are independent. The console ignores `logle
 
 ### What gets logged
 
-| Emission                      | Logged at                         | Notes                                                                         |
-| ----------------------------- | --------------------------------- | ----------------------------------------------------------------------------- |
-| `info` / `success` / `dryrun` | `INFO` (20)                       | `success`/`dryrun` aren't real severities. `dryrun` keeps `[dry-run]` inline. |
-| `debug`                       | `DEBUG` (10)                      | `[+s.fffs]` elapsed tag inlined into message.                                 |
-| `trace`                       | `TRACE` (5)                       | Custom level registered with stdlib `logging` at import.                      |
-| `warning`                     | `WARNING` (30)                    |                                                                               |
-| `error`                       | `ERROR` (40)                      |                                                                               |
-| `critical`                    | `CRITICAL` (50)                   | Severity-only and does not raise.                                             |
-| `step()` lifecycle            | `INFO` start, `INFO`/`ERROR` exit | `ephemeral=True` does not suppress file output.                               |
-| `Step.sub()`                  | `INFO`                            | Indented continuation, written immediately.                                   |
-| `header()`                    | (not logged)                      | Console-only structural sugar.                                                |
+| Emission                      | Logged at                         | Notes                                                                                                  |
+| ----------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `info` / `success` / `dryrun` | `INFO` (20)                       | `success`/`dryrun` aren't real severities. `dryrun` keeps `[dry-run]` inline.                          |
+| `debug`                       | `DEBUG` (10)                      | `[+s.fffs]` elapsed tag inlined into message.                                                          |
+| `trace`                       | `TRACE` (5)                       | Custom level registered with stdlib `logging` at import.                                               |
+| `warning`                     | `WARNING` (30)                    |                                                                                                        |
+| `error`                       | `ERROR` (40)                      |                                                                                                        |
+| `critical`                    | `CRITICAL` (50)                   | Severity-only and does not raise.                                                                      |
+| `step()` lifecycle            | `INFO` start, `INFO`/`ERROR` exit | `ephemeral=True` does not suppress file output.                                                        |
+| `Step.sub()`                  | `INFO`                            | Indented continuation, written immediately.                                                            |
+| `kv()`                        | `INFO` (20)                       | One INFO record per pair; one per visual line for multi-line values. Recorded even under `quiet=True`. |
+| `header()`                    | (not logged)                      | Console-only structural sugar.                                                                         |
 
 Filtering with `loglevel=pp.LogLevel.WARNING` drops every `info` / `success` / `dryrun` / `debug` / `trace` emission and its detail continuations as a unit. `LogLevel` is severity-shaped, not emission-shaped, so there's no way to "log only successes."
 
