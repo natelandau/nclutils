@@ -125,6 +125,53 @@ class TestUserOverridesWinInAscii:
         assert ">> done" in text
 
 
+class TestAsciiStepHeader:
+    """Step success/failure header markers fall back to ASCII on ASCII consoles."""
+
+    def test_ascii_step_success_header_uses_ascii_marker(self) -> None:
+        """Verify the success header marker substitutes to ASCII on an ascii-encoding console."""
+        # Given an ASCII-encoding emitter
+        e, out, _ = _make_ascii_emitter()
+
+        # When step() runs to success
+        with e.step("compiling"):
+            pass
+
+        # Then the success line uses the ASCII success marker, not the unicode one
+        text = out.export_text()
+        assert "✓" not in text
+        assert "+ compiling" in text
+
+    def test_ascii_step_failure_header_uses_ascii_marker(self) -> None:
+        """Verify the failure header marker substitutes to ASCII on an ascii-encoding console."""
+        # Given an ASCII-encoding emitter
+        e, out, _ = _make_ascii_emitter()
+
+        # When step() raises (non-ephemeral)
+        err_msg = "boom"
+        with pytest.raises(RuntimeError, match=err_msg), e.step("compiling"):
+            raise RuntimeError(err_msg)
+
+        # Then the failure line uses the ASCII error marker, not the unicode one
+        text = out.export_text()
+        assert "✗" not in text
+        assert "x compiling" in text
+
+    def test_user_step_marker_override_kept_on_ascii_console(self) -> None:
+        """Verify a Theme-set success marker is preserved verbatim on ASCII consoles."""
+        # Given an ASCII-encoding emitter with a user-set success marker
+        e, out, _ = _make_ascii_emitter()
+        e.configure(theme=Theme(success=Level(marker=">> ")))
+
+        # When step() runs to success
+        with e.step("done"):
+            pass
+
+        # Then the user marker appears (no substitution)
+        text = out.export_text()
+        assert ">> done" in text
+
+
 class TestUtfConsoleUnchanged:
     """UTF-8 consoles continue to render unicode connectors and markers."""
 

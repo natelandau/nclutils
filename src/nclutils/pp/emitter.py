@@ -426,6 +426,36 @@ class Step:
         )
         self._subs: list[Text] = []
         self._logsink: _LogSink | None = logsink
+        # Completion components are recorded by `set_completion` so the header
+        # can be rebuilt at render time with ASCII marker substitution applied
+        # (the console isn't in scope when step() decides success/failure).
+        # Tuple shape: (level_name, message, style, marker, markup).
+        self._completion: tuple[str, str | RenderableType, str, str, bool] | None = None
+
+    def set_completion(
+        self,
+        level_name: str,
+        message: str | RenderableType,
+        *,
+        style: str,
+        marker: str,
+        markup: bool,
+    ) -> None:
+        """Record completion state so __rich_console__ rebuilds the header with ASCII fallback.
+
+        Storing the components instead of a pre-built Text lets `__rich_console__`
+        substitute the default unicode marker for its ASCII equivalent when the
+        target console can't encode the unicode glyph.
+
+        Args:
+            level_name: The completion level key (e.g. "success", "error").
+                Used to look up the ASCII fallback marker.
+            message: The completion header message.
+            style: Fully-resolved Rich style string for the header.
+            marker: Leading glyph shown before the message.
+            markup: When True, parses Rich markup in `message` instead of escaping.
+        """
+        self._completion = (level_name, message, style, marker, markup)
 
     def sub(self, text: str | Text, *, markup: bool = False) -> None:
         """Append a sub-item rendered beneath the active step's spinner.
@@ -455,8 +485,24 @@ class Step:
             )
 
     def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
-        """Yield header then sub-items. Live drives this on every refresh tick."""
-        yield self.header
+        """Yield header (or spinner) then sub-items. Live drives this on every refresh tick."""
+        # Build the completion header here (rather than in step()) so the
+        # console encoding is in scope and ASCII substitution can run.
+        if self._completion is not None:
+            level_name, msg, style, marker, markup = self._completion
+            if (
+                _ascii_required(console)
+                and marker == _DEFAULT_MARKERS[level_name]
+                and _DEFAULT_MARKERS[level_name] != ""
+            ):
+                marker = _ASCII_MARKERS[level_name]
+            header = _build_message_text(msg, style=style, marker=marker, markup=markup)
+            # _build_message_text returns None for non-(str|Text) renderables;
+            # fall back to the raw renderable so styling is not silently dropped.
+            yield header if header is not None else msg
+        else:
+            yield self.header
+
         if _ascii_required(console):
             # ASCII fallback: simple `- ` prefix on every sub-item, no tree connectors.
             for sub_text in self._subs:
@@ -1442,26 +1488,24 @@ class Emitter:
                 except BaseException as exc:
                     failed_exc = exc
                     if not ephemeral:
-                        error_header = _build_message_text(
+                        # Defer header construction to Step.__rich_console__ so
+                        # ASCII marker substitution sees the live console encoding.
+                        s.set_completion(
+                            "error",
                             failure_message,
                             style=error_style,
                             marker=error_marker,
                             markup=markup,
                         )
-                        # _build_message_text returns None for non-(str|Text) renderables;
-                        # fall back to the original renderable so the override is not silently dropped.
-                        s.header = error_header if error_header is not None else failure_message
                     raise
                 if not ephemeral:
-                    success_header = _build_message_text(
+                    s.set_completion(
+                        "success",
                         success_message,
                         style=success_style,
                         marker=success_marker,
                         markup=markup,
                     )
-                    # _build_message_text returns None for non-(str|Text) renderables;
-                    # fall back to the original renderable so the override is not silently dropped.
-                    s.header = success_header if success_header is not None else success_message
         finally:
             self._active_step = False
             if failed_exc is not None:
