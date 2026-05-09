@@ -1,3 +1,22 @@
+## v3.1.0 (2026-05-08)
+
+### Feat
+
+- **pp**: auto ASCII fallback for non-utf-8 consoles (#39)
+- **pp**: add kv() for aligned key/value blocks (#38)
+- **pp**: add exception kwarg to level methods (#37)
+- **pp**: add success_msg and failure_msg to step() (#36)
+- **pp**: add tag and right_tag kwargs to level methods (#35)
+
+### Fix
+
+- **pp**: render level details with tree connectors (#33)
+
+### Refactor
+
+- **pp**: dedupe log-prep and ASCII paths
+- rename namespaces to ask/text/net (#34)
+
 ## v3.0.1 (2026-05-06)
 
 ### Fix
