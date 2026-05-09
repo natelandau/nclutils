@@ -12,8 +12,18 @@ maintainers can spot visual regressions after changes to the module.
 
 from __future__ import annotations
 
+from rich.console import Console
+
 from nclutils import pp
 from nclutils.pp import Emitter, Level, Theme, Verbosity
+
+
+class _AsciiConsole(Console):
+    """Console subclass that reports `ascii` encoding so the demo triggers fallbacks."""
+
+    @property
+    def encoding(self) -> str:  # type: ignore[override]
+        return "ascii"
 
 
 def _levels() -> None:
@@ -215,6 +225,35 @@ def _verbosity_matrix() -> None:
     e_quiet.error("errors always appear")
 
 
+def _ascii_fallback() -> None:
+    """Demonstrate ASCII fallback by routing output to an ascii-encoding emitter."""
+    pp.header("ASCII fallback", align="left")
+
+    out = _AsciiConsole(record=True, force_terminal=True, width=80, color_system="truecolor")
+    err = _AsciiConsole(record=True, force_terminal=True, width=80, color_system="truecolor")
+    e = Emitter(console=out, err_console=err, verbosity=Verbosity.TRACE)
+
+    e.success("operation done", details=["build #1742", "rollout 100%", "duration: 3.2s"])
+    e.error("upload failed", details=["403 Forbidden"])
+    e.critical("system on fire")
+    e.warning("retry triggered")
+    e.debug("debug line")
+    e.trace("trace line")
+    e.dryrun("would push image")
+
+    with e.step("compiling sources") as s:
+        s.sub("api.py")
+        s.sub("cli.py")
+
+    # User-supplied marker override should pass through unchanged on ASCII consoles.
+    e.configure(theme=Theme(success=Level(marker=">> ")))
+    e.success("user marker preserved on ascii console")
+
+    # Replay the captured output through the real consoles so it's visible in the demo.
+    pp.console().print(out.export_text(clear=True), end="")
+    pp.err_console().print(err.export_text(clear=True), end="")
+
+
 def main() -> None:
     """Run every demo section in order."""
     pp.configure(verbosity=Verbosity.TRACE)
@@ -229,6 +268,7 @@ def main() -> None:
     _exceptions()
     _theme_override()
     _verbosity_matrix()
+    _ascii_fallback()
 
 
 if __name__ == "__main__":
