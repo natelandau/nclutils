@@ -133,6 +133,13 @@ _ASCII_MARKERS: dict[str, str] = {
 }
 
 
+# Memoize encode-probe results keyed on `console.encoding`. The probe runs
+# inside the Live spinner refresh loop (~12.5 Hz), so without this cache a
+# 10s step would re-encode the glyph string ~125 times.
+_ASCII_REQUIRED_CACHE: dict[str, bool] = {}
+_ASCII_PROBE_GLYPHS = "├─└─│✓✗‼›·"  # noqa: RUF001
+
+
 def _ascii_required(console: Console) -> bool:
     """Return True when the console's encoding can't produce our default unicode glyphs.
 
@@ -141,11 +148,37 @@ def _ascii_required(console: Console) -> bool:
     display them safely; in that case callers should fall back to ASCII
     rendering for both connectors and default markers.
     """
+    encoding = console.encoding
+    cached = _ASCII_REQUIRED_CACHE.get(encoding)
+    if cached is not None:
+        return cached
     try:
-        "├─└─│✓✗‼›·".encode(console.encoding, errors="strict")  # noqa: RUF001
+        _ASCII_PROBE_GLYPHS.encode(encoding, errors="strict")
+        result = False
     except (UnicodeEncodeError, LookupError):
-        return True
-    return False
+        result = True
+    _ASCII_REQUIRED_CACHE[encoding] = result
+    return result
+
+
+def _ascii_substitute_marker(console: Console, marker: str, level_name: str | None = None) -> str:
+    """Swap the default unicode marker for its ASCII fallback when the console can't encode it.
+
+    A user-supplied override marker won't equal any default and passes through
+    untouched. When `level_name` is known, the substitution is an O(1) lookup;
+    otherwise the helper scans `_DEFAULT_MARKERS` to recover the level.
+    """
+    if not _ascii_required(console):
+        return marker
+    if level_name is not None:
+        default = _DEFAULT_MARKERS[level_name]
+        if marker == default and default:
+            return _ASCII_MARKERS[level_name]
+        return marker
+    for name, default in _DEFAULT_MARKERS.items():
+        if marker == default and default:
+            return _ASCII_MARKERS[name]
+    return marker
 
 
 _LEVEL_NAMES: tuple[str, ...] = tuple(_DEFAULT_STYLES)
@@ -373,15 +406,7 @@ def _print_level(  # noqa: PLR0913
             any Rich markup characters in the tag.
         **kwargs: Additional keyword arguments to pass to the console.print method.
     """
-    # ASCII fallback: substitute the default unicode marker only when the console
-    # can't encode it AND the marker is the built-in default (not a user override).
-    if _ascii_required(target):
-        for level_name, default in _DEFAULT_MARKERS.items():
-            # `default != ""` skips info's empty default so the loop is a true no-op
-            # for info; user-supplied overrides won't equal any default and pass through.
-            if marker == default and default != "":
-                marker = _ASCII_MARKERS[level_name]
-                break
+    marker = _ascii_substitute_marker(target, marker)
     tag_part = f"[dim]{tag}[/] " if tag else ""
     body = _build_message_text(
         message, style=style, marker=marker, tag_part=tag_part, markup=markup
@@ -408,6 +433,22 @@ def _print_level(  # noqa: PLR0913
         )
 
 
+@dataclass(frozen=True, slots=True)
+class _StepCompletion:
+    """Completion state recorded by `step()` and rendered by `Step.__rich_console__`.
+
+    Stored instead of a pre-built header `Text` so the render path can apply
+    ASCII marker substitution against the live console encoding (which isn't
+    in scope when `step()` decides success/failure).
+    """
+
+    level_name: str
+    message: str | RenderableType
+    style: str
+    marker: str
+    markup: bool
+
+
 class Step:
     """Live-updating display for a step's spinner header and streamed sub-items."""
 
@@ -426,36 +467,16 @@ class Step:
         )
         self._subs: list[Text] = []
         self._logsink: _LogSink | None = logsink
-        # Completion components are recorded by `set_completion` so the header
-        # can be rebuilt at render time with ASCII marker substitution applied
-        # (the console isn't in scope when step() decides success/failure).
-        # Tuple shape: (level_name, message, style, marker, markup).
-        self._completion: tuple[str, str | RenderableType, str, str, bool] | None = None
+        self._completion: _StepCompletion | None = None
 
-    def set_completion(
-        self,
-        level_name: str,
-        message: str | RenderableType,
-        *,
-        style: str,
-        marker: str,
-        markup: bool,
-    ) -> None:
+    def set_completion(self, completion: _StepCompletion) -> None:
         """Record completion state so __rich_console__ rebuilds the header with ASCII fallback.
 
         Storing the components instead of a pre-built Text lets `__rich_console__`
         substitute the default unicode marker for its ASCII equivalent when the
         target console can't encode the unicode glyph.
-
-        Args:
-            level_name: The completion level key (e.g. "success", "error").
-                Used to look up the ASCII fallback marker.
-            message: The completion header message.
-            style: Fully-resolved Rich style string for the header.
-            marker: Leading glyph shown before the message.
-            markup: When True, parses Rich markup in `message` instead of escaping.
         """
-        self._completion = (level_name, message, style, marker, markup)
+        self._completion = completion
 
     def sub(self, text: str | Text, *, markup: bool = False) -> None:
         """Append a sub-item rendered beneath the active step's spinner.
@@ -486,24 +507,20 @@ class Step:
 
     def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
         """Yield header (or spinner) then sub-items. Live drives this on every refresh tick."""
+        ascii_mode = _ascii_required(console)
         # Build the completion header here (rather than in step()) so the
         # console encoding is in scope and ASCII substitution can run.
         if self._completion is not None:
-            level_name, msg, style, marker, markup = self._completion
-            if (
-                _ascii_required(console)
-                and marker == _DEFAULT_MARKERS[level_name]
-                and _DEFAULT_MARKERS[level_name] != ""
-            ):
-                marker = _ASCII_MARKERS[level_name]
-            header = _build_message_text(msg, style=style, marker=marker, markup=markup)
+            c = self._completion
+            marker = _ascii_substitute_marker(console, c.marker, c.level_name)
+            header = _build_message_text(c.message, style=c.style, marker=marker, markup=c.markup)
             # _build_message_text returns None for non-(str|Text) renderables;
             # fall back to the raw renderable so styling is not silently dropped.
-            yield header if header is not None else msg
+            yield header if header is not None else c.message
         else:
             yield self.header
 
-        if _ascii_required(console):
+        if ascii_mode:
             # ASCII fallback: simple `- ` prefix on every sub-item, no tree connectors.
             for sub_text in self._subs:
                 line = Text("  - ")
@@ -824,6 +841,33 @@ class Emitter:
             self._log_t0 = time.monotonic()
         return f"\\[+{time.monotonic() - self._log_t0:.3f}s]"
 
+    def _emit_log_record(
+        self,
+        *,
+        level_name: str,
+        log_body: str,
+        tag: str | None,
+        details: list[Any] | None,
+        exception: BaseException | bool,
+    ) -> None:
+        """Build the (tagged message, details + traceback) pair and forward to the logsink.
+
+        Centralizes the log-side prep that every level method shares: applying
+        the caller's `tag` to the body, copying `details` so the traceback
+        append doesn't mutate the caller's list, and folding the formatted
+        traceback in as continuation lines.
+        """
+        log_message = _apply_tag_to_logmsg(tag, log_body)
+        log_details = list(details) if details else []
+        tb_lines = _format_exception_for_logfile(exception)
+        if tb_lines:
+            log_details.extend(tb_lines)
+        self._logsink.emit(
+            level=_LEVEL_TO_LOG_SEVERITY[level_name],
+            message=log_message,
+            details=log_details or None,
+        )
+
     def info(  # noqa: PLR0913
         self,
         message: str | RenderableType,
@@ -875,15 +919,12 @@ class Emitter:
         the parent record at the same severity. `show_locals=True` flows
         through to Rich's Traceback for verbose dumps.
         """
-        log_message = _apply_tag_to_logmsg(tag, _message_to_log_text(message, markup=markup))
-        log_details = list(details) if details else []
-        tb_lines = _format_exception_for_logfile(exception)
-        if tb_lines:
-            log_details.extend(tb_lines)
-        self._logsink.emit(
-            level=_LEVEL_TO_LOG_SEVERITY["info"],
-            message=log_message,
-            details=log_details or None,
+        self._emit_log_record(
+            level_name="info",
+            log_body=_message_to_log_text(message, markup=markup),
+            tag=tag,
+            details=details,
+            exception=exception,
         )
         if self.quiet:
             return
@@ -928,15 +969,12 @@ class Emitter:
         See `Emitter.info` for `message`/`markup`/`style`/`detail_style`/`marker`,
         `tag`/`right_tag`, and `exception`/`show_locals` semantics.
         """
-        log_message = _apply_tag_to_logmsg(tag, _message_to_log_text(message, markup=markup))
-        log_details = list(details) if details else []
-        tb_lines = _format_exception_for_logfile(exception)
-        if tb_lines:
-            log_details.extend(tb_lines)
-        self._logsink.emit(
-            level=_LEVEL_TO_LOG_SEVERITY["success"],
-            message=log_message,
-            details=log_details or None,
+        self._emit_log_record(
+            level_name="success",
+            log_body=_message_to_log_text(message, markup=markup),
+            tag=tag,
+            details=details,
+            exception=exception,
         )
         if self.quiet:
             return
@@ -986,18 +1024,12 @@ class Emitter:
         `tag`/`right_tag`, and `exception`/`show_locals` semantics.
         """
         elapsed = self._elapsed_tag()
-        log_message = _apply_tag_to_logmsg(
-            tag,
-            f"{_message_to_log_text(message, markup=markup)}  {elapsed}",
-        )
-        log_details = list(details) if details else []
-        tb_lines = _format_exception_for_logfile(exception)
-        if tb_lines:
-            log_details.extend(tb_lines)
-        self._logsink.emit(
-            level=_LEVEL_TO_LOG_SEVERITY["debug"],
-            message=log_message,
-            details=log_details or None,
+        self._emit_log_record(
+            level_name="debug",
+            log_body=f"{_message_to_log_text(message, markup=markup)}  {elapsed}",
+            tag=tag,
+            details=details,
+            exception=exception,
         )
         if self.verbosity < Verbosity.DEBUG:
             return
@@ -1043,18 +1075,12 @@ class Emitter:
         `Emitter.debug` for the right-aligned elapsed tag.
         """
         elapsed = self._elapsed_tag()
-        log_message = _apply_tag_to_logmsg(
-            tag,
-            f"{_message_to_log_text(message, markup=markup)}  {elapsed}",
-        )
-        log_details = list(details) if details else []
-        tb_lines = _format_exception_for_logfile(exception)
-        if tb_lines:
-            log_details.extend(tb_lines)
-        self._logsink.emit(
-            level=_LEVEL_TO_LOG_SEVERITY["trace"],
-            message=log_message,
-            details=log_details or None,
+        self._emit_log_record(
+            level_name="trace",
+            log_body=f"{_message_to_log_text(message, markup=markup)}  {elapsed}",
+            tag=tag,
+            details=details,
+            exception=exception,
         )
         if self.verbosity < Verbosity.TRACE:
             return
@@ -1101,19 +1127,15 @@ class Emitter:
         See `Emitter.info` for `message`/`markup`/`style`/`detail_style`/`marker`,
         `tag`/`right_tag`, and `exception`/`show_locals` semantics.
         """
-        # Include [dry-run] inline in the file message for grep-ability, and
-        # prepend any caller-supplied tag so audit grep finds the same labels
-        # the operator saw on the console.
-        log_body = f"[dry-run] {_message_to_log_text(message, markup=markup)}"
-        log_body = _apply_tag_to_logmsg(tag, log_body)
-        log_details = list(details) if details else []
-        tb_lines = _format_exception_for_logfile(exception)
-        if tb_lines:
-            log_details.extend(tb_lines)
-        self._logsink.emit(
-            level=_LEVEL_TO_LOG_SEVERITY["dryrun"],
-            message=log_body,
-            details=log_details or None,
+        # Include [dry-run] inline in the file message for grep-ability; the
+        # helper then prepends any caller-supplied tag so audit grep finds the
+        # same labels the operator saw on the console.
+        self._emit_log_record(
+            level_name="dryrun",
+            log_body=f"[dry-run] {_message_to_log_text(message, markup=markup)}",
+            tag=tag,
+            details=details,
+            exception=exception,
         )
         style, detail_style, marker = self._resolve_with_overrides(
             "dryrun", style=style, detail_style=detail_style, marker=marker
@@ -1154,15 +1176,12 @@ class Emitter:
         See `Emitter.info` for `message`/`markup`/`style`/`detail_style`/`marker`,
         `tag`/`right_tag`, and `exception`/`show_locals` semantics.
         """
-        log_message = _apply_tag_to_logmsg(tag, _message_to_log_text(message, markup=markup))
-        log_details = list(details) if details else []
-        tb_lines = _format_exception_for_logfile(exception)
-        if tb_lines:
-            log_details.extend(tb_lines)
-        self._logsink.emit(
-            level=_LEVEL_TO_LOG_SEVERITY["warning"],
-            message=log_message,
-            details=log_details or None,
+        self._emit_log_record(
+            level_name="warning",
+            log_body=_message_to_log_text(message, markup=markup),
+            tag=tag,
+            details=details,
+            exception=exception,
         )
         style, detail_style, marker = self._resolve_with_overrides(
             "warning", style=style, detail_style=detail_style, marker=marker
@@ -1206,15 +1225,12 @@ class Emitter:
         inside an `except` block to attach the active traceback alongside the
         message.
         """
-        log_message = _apply_tag_to_logmsg(tag, _message_to_log_text(message, markup=markup))
-        log_details = list(details) if details else []
-        tb_lines = _format_exception_for_logfile(exception)
-        if tb_lines:
-            log_details.extend(tb_lines)
-        self._logsink.emit(
-            level=_LEVEL_TO_LOG_SEVERITY["error"],
-            message=log_message,
-            details=log_details or None,
+        self._emit_log_record(
+            level_name="error",
+            log_body=_message_to_log_text(message, markup=markup),
+            tag=tag,
+            details=details,
+            exception=exception,
         )
         style, detail_style, marker = self._resolve_with_overrides(
             "error", style=style, detail_style=detail_style, marker=marker
@@ -1259,15 +1275,12 @@ class Emitter:
         See `Emitter.info` for `message`/`markup`/`style`/`detail_style`/`marker`,
         `tag`/`right_tag`, and `exception`/`show_locals` semantics.
         """
-        log_message = _apply_tag_to_logmsg(tag, _message_to_log_text(message, markup=markup))
-        log_details = list(details) if details else []
-        tb_lines = _format_exception_for_logfile(exception)
-        if tb_lines:
-            log_details.extend(tb_lines)
-        self._logsink.emit(
-            level=_LEVEL_TO_LOG_SEVERITY["critical"],
-            message=log_message,
-            details=log_details or None,
+        self._emit_log_record(
+            level_name="critical",
+            log_body=_message_to_log_text(message, markup=markup),
+            tag=tag,
+            details=details,
+            exception=exception,
         )
         style, detail_style, marker = self._resolve_with_overrides(
             "critical", style=style, detail_style=detail_style, marker=marker
@@ -1372,12 +1385,8 @@ class Emitter:
             # Project the value to plain text for the logfile so each visual
             # line shows up as a discrete INFO record with the same alignment
             # the user saw on the console.
-            if isinstance(value, str):
-                log_value = Text.from_markup(value).plain if markup else value
-            elif isinstance(value, Text):
-                log_value = value.plain
-            elif is_renderable(value):
-                log_value = _render_renderable_to_plain(value).rstrip("\n")
+            if isinstance(value, (str, Text)) or is_renderable(value):
+                log_value = _message_to_log_text(value, markup=markup)
             else:
                 log_value = str(value)
 
@@ -1491,20 +1500,24 @@ class Emitter:
                         # Defer header construction to Step.__rich_console__ so
                         # ASCII marker substitution sees the live console encoding.
                         s.set_completion(
-                            "error",
-                            failure_message,
-                            style=error_style,
-                            marker=error_marker,
-                            markup=markup,
+                            _StepCompletion(
+                                level_name="error",
+                                message=failure_message,
+                                style=error_style,
+                                marker=error_marker,
+                                markup=markup,
+                            )
                         )
                     raise
                 if not ephemeral:
                     s.set_completion(
-                        "success",
-                        success_message,
-                        style=success_style,
-                        marker=success_marker,
-                        markup=markup,
+                        _StepCompletion(
+                            level_name="success",
+                            message=success_message,
+                            style=success_style,
+                            marker=success_marker,
+                            markup=markup,
+                        )
                     )
         finally:
             self._active_step = False
