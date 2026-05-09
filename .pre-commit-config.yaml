@@ -85,7 +85,7 @@ repos:
         language: system
         types: [shell]
 
-      - id: ty (type check)
+      - id: ty
         name: ty
         entry: uv run duty ty
         pass_filenames: false
