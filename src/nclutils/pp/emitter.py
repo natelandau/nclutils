@@ -121,6 +121,33 @@ _DEFAULT_MARKERS: dict[str, str] = {
     "dryrun": "~ ",
 }
 
+_ASCII_MARKERS: dict[str, str] = {
+    "info": "",
+    "success": "+ ",
+    "warning": "! ",
+    "error": "x ",
+    "critical": "!! ",
+    "debug": "> ",
+    "trace": ". ",
+    "dryrun": "~ ",
+}
+
+
+def _ascii_required(console: Console) -> bool:
+    """Return True when the console's encoding can't produce our default unicode glyphs.
+
+    Probes by attempting to encode the connector and marker glyphs together.
+    Any `UnicodeEncodeError` or `LookupError` indicates the console can't
+    display them safely; in that case callers should fall back to ASCII
+    rendering for both connectors and default markers.
+    """
+    try:
+        "├─└─│✓✗‼›·".encode(console.encoding, errors="strict")  # noqa: RUF001
+    except (UnicodeEncodeError, LookupError):
+        return True
+    return False
+
+
 _LEVEL_NAMES: tuple[str, ...] = tuple(_DEFAULT_STYLES)
 
 _LEVEL_TO_LOG_SEVERITY: dict[str, int] = {
@@ -346,6 +373,15 @@ def _print_level(  # noqa: PLR0913
             any Rich markup characters in the tag.
         **kwargs: Additional keyword arguments to pass to the console.print method.
     """
+    # ASCII fallback: substitute the default unicode marker only when the console
+    # can't encode it AND the marker is the built-in default (not a user override).
+    if _ascii_required(target):
+        for level_name, default in _DEFAULT_MARKERS.items():
+            # `default != ""` skips info's empty default so the loop is a true no-op
+            # for info; user-supplied overrides won't equal any default and pass through.
+            if marker == default and default != "":
+                marker = _ASCII_MARKERS[level_name]
+                break
     tag_part = f"[dim]{tag}[/] " if tag else ""
     body = _build_message_text(
         message, style=style, marker=marker, tag_part=tag_part, markup=markup
@@ -390,6 +426,36 @@ class Step:
         )
         self._subs: list[Text] = []
         self._logsink: _LogSink | None = logsink
+        # Completion components are recorded by `set_completion` so the header
+        # can be rebuilt at render time with ASCII marker substitution applied
+        # (the console isn't in scope when step() decides success/failure).
+        # Tuple shape: (level_name, message, style, marker, markup).
+        self._completion: tuple[str, str | RenderableType, str, str, bool] | None = None
+
+    def set_completion(
+        self,
+        level_name: str,
+        message: str | RenderableType,
+        *,
+        style: str,
+        marker: str,
+        markup: bool,
+    ) -> None:
+        """Record completion state so __rich_console__ rebuilds the header with ASCII fallback.
+
+        Storing the components instead of a pre-built Text lets `__rich_console__`
+        substitute the default unicode marker for its ASCII equivalent when the
+        target console can't encode the unicode glyph.
+
+        Args:
+            level_name: The completion level key (e.g. "success", "error").
+                Used to look up the ASCII fallback marker.
+            message: The completion header message.
+            style: Fully-resolved Rich style string for the header.
+            marker: Leading glyph shown before the message.
+            markup: When True, parses Rich markup in `message` instead of escaping.
+        """
+        self._completion = (level_name, message, style, marker, markup)
 
     def sub(self, text: str | Text, *, markup: bool = False) -> None:
         """Append a sub-item rendered beneath the active step's spinner.
@@ -419,8 +485,31 @@ class Step:
             )
 
     def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
-        """Yield header then sub-items. Live drives this on every refresh tick."""
-        yield self.header
+        """Yield header (or spinner) then sub-items. Live drives this on every refresh tick."""
+        # Build the completion header here (rather than in step()) so the
+        # console encoding is in scope and ASCII substitution can run.
+        if self._completion is not None:
+            level_name, msg, style, marker, markup = self._completion
+            if (
+                _ascii_required(console)
+                and marker == _DEFAULT_MARKERS[level_name]
+                and _DEFAULT_MARKERS[level_name] != ""
+            ):
+                marker = _ASCII_MARKERS[level_name]
+            header = _build_message_text(msg, style=style, marker=marker, markup=markup)
+            # _build_message_text returns None for non-(str|Text) renderables;
+            # fall back to the raw renderable so styling is not silently dropped.
+            yield header if header is not None else msg
+        else:
+            yield self.header
+
+        if _ascii_required(console):
+            # ASCII fallback: simple `- ` prefix on every sub-item, no tree connectors.
+            for sub_text in self._subs:
+                line = Text("  - ")
+                line.append_text(sub_text)
+                yield line
+            return
         # Connectors are derived at render time so the last item always shows
         # `└─` after each refresh tick - no need to mutate prior items on add.
         last = len(self._subs) - 1
@@ -450,6 +539,21 @@ class _DetailTree:
         self._markup = markup
 
     def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
+        if _ascii_required(console):
+            # ASCII fallback: simple `- ` prefix on every line, no tree connectors.
+            # 4 = "  - " width on the first line; continuation lines use the same indent.
+            sub_options = options.update(width=max(1, options.max_width - 4))
+            for item in self._items:
+                rendered = self._wrap(item)
+                for line_idx, segments in enumerate(console.render_lines(rendered, sub_options)):
+                    line = Text("  ")
+                    line.append("- " if line_idx == 0 else "  ")
+                    for seg in segments:
+                        if seg.text:
+                            line.append(seg.text, style=seg.style if seg.style is not None else "")
+                    yield line
+            return
+
         last = len(self._items) - 1
         # 5 = 2 leading spaces + 2-cell glyph (├─/└─/│ ) + 1 trailing space
         sub_options = options.update(width=max(1, options.max_width - 5))
@@ -1384,26 +1488,24 @@ class Emitter:
                 except BaseException as exc:
                     failed_exc = exc
                     if not ephemeral:
-                        error_header = _build_message_text(
+                        # Defer header construction to Step.__rich_console__ so
+                        # ASCII marker substitution sees the live console encoding.
+                        s.set_completion(
+                            "error",
                             failure_message,
                             style=error_style,
                             marker=error_marker,
                             markup=markup,
                         )
-                        # _build_message_text returns None for non-(str|Text) renderables;
-                        # fall back to the original renderable so the override is not silently dropped.
-                        s.header = error_header if error_header is not None else failure_message
                     raise
                 if not ephemeral:
-                    success_header = _build_message_text(
+                    s.set_completion(
+                        "success",
                         success_message,
                         style=success_style,
                         marker=success_marker,
                         markup=markup,
                     )
-                    # _build_message_text returns None for non-(str|Text) renderables;
-                    # fall back to the original renderable so the override is not silently dropped.
-                    s.header = success_header if success_header is not None else success_message
         finally:
             self._active_step = False
             if failed_exc is not None:

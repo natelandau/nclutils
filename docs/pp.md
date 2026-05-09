@@ -386,6 +386,30 @@ To fully reset, build a fresh emitter: `pp.set_default(pp.Emitter())`.
 
 The horizontal rule under `pp.header()` and the `[dry-run]` tag are not customizable. The `├─`/`└─` connector glyphs beneath `pp.step()` and `details` lists share the `sub.pipe` Rich theme entry on the underlying console (defaulting to `bright_black`); the glyph characters themselves are fixed, and the `pp.Theme` dataclass does not expose a field to retune their style. To override it, build a custom `Console(theme=...)` and pass it via `pp.Emitter(console=...)`.
 
+### ASCII fallback
+
+When the console's encoding can't produce the default unicode glyphs (e.g. `LANG=C`, `PYTHONIOENCODING=ascii`, or a Windows host whose code page rejects box-drawing characters), `pp` automatically falls back to an ASCII-only rendering. Detection is automatic, there is no flag to set:
+
+- Detail tree connectors (`├─`, `└─`, `│`) collapse to a simple `- ` prefix on every line, with continuation lines aligned under the value column.
+- `pp.step()` sub-items render with the same `- ` prefix instead of tree connectors.
+- Default level markers fall back per the table below.
+
+| Level    | Unicode | ASCII    |
+| -------- | ------- | -------- |
+| info     | (none)  | (none)   |
+| success  | `✓`     | `+`      |
+| warning  | `!`     | `!`      |
+| error    | `✗`     | `x`      |
+| critical | `‼`     | `!!`     |
+| debug    | `›`     | `>`      |
+| trace    | `·`     | `.`      |
+| dryrun   | `~`     | `~`      |
+
+User-supplied `pp.Theme(level=pp.Level(marker=...))` markers are always respected verbatim, even on ASCII consoles. The fallback only triggers when a level still has its built-in default marker.
+
+> [!NOTE]
+> Detection probes `console.encoding` at render time and chooses the rendering path per call. To force one path or the other, build your own `Console` with the desired encoding and pass it via `pp.configure(console=...)` or `pp.Emitter(console=...)`.
+
 ## Reaching the underlying consoles
 
 When you need to render a Rich object (`Table`, `Syntax`, `Panel`, …) on the same stream the level functions write to, use the `pp.console()` and `pp.err_console()` accessors:
