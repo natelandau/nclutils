@@ -65,6 +65,11 @@ class TestAllLocalBranches:
         assert isinstance(result, frozenset)
         assert {"main", "feat", "local-only"} <= result
 
+    def test_returns_empty_frozenset_outside_repo(self, tmp_path: Path) -> None:
+        """Verify all_local_branches returns an empty frozenset outside any repo."""
+        # Given/When/Then
+        assert all_local_branches(tmp_path) == frozenset()
+
 
 class TestTrackingBranch:
     """Tests for tracking_branch."""
@@ -86,6 +91,11 @@ class TestTrackingBranch:
         result = tracking_branch("feat", cwd=repo_with_branches)
         # Then
         assert result == ("origin", "feat")
+
+    def test_returns_none_for_missing_branch(self, repo: Path) -> None:
+        """Verify tracking_branch returns None for a branch that does not exist."""
+        # Given/When/Then: a branch name that doesn't exist
+        assert tracking_branch("does-not-exist", cwd=repo) is None
 
 
 class TestAheadBehind:

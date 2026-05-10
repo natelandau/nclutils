@@ -49,8 +49,14 @@ def branch_exists(branch: str, cwd: Path | str | None = None) -> bool:
 
 
 def all_local_branches(cwd: Path | str | None = None) -> frozenset[str]:
-    """Return the set of local branch names."""
-    result = run_git("branch", "--list", "--format=%(refname:short)", cwd=cwd)
+    """Return the set of local branch names.
+
+    Returns an empty frozenset if cwd is not inside a repo (matching the
+    "absent → empty" pattern used by other branch primitives).
+    """
+    result = run_git("branch", "--list", "--format=%(refname:short)", cwd=cwd, check=False)
+    if result.returncode != 0:
+        return frozenset()
     return frozenset(line.strip() for line in result.stdout.splitlines() if line.strip())
 
 
