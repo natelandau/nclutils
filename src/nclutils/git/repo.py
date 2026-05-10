@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+from dataclasses import dataclass
 from pathlib import Path
 
 from nclutils.sh import ShellCommandError, which
@@ -85,3 +87,149 @@ def is_rebase_in_progress(cwd: Path | str | None = None) -> bool:
         raise NotARepoError(msg)
     git_dir = Path(git_dir_result.stdout.strip())
     return (git_dir / "rebase-merge").exists() or (git_dir / "rebase-apply").exists()
+
+
+@dataclass(frozen=True, slots=True)
+class RepoState:
+    """Snapshot of a repo's state.
+
+    Includes branch, divergence, file counts, and stash count.
+    """
+
+    root: Path
+    branch: str | None
+    upstream: str | None
+    ahead: int
+    behind: int
+    is_dirty: bool
+    staged: int
+    modified: int
+    untracked: int
+    unmerged: int
+    stash_count: int
+    rebase_in_progress: bool
+
+
+_BRANCH_HEAD_RE = re.compile(r"^# branch\.head (\S.*)$")
+_BRANCH_UPSTREAM_RE = re.compile(r"^# branch\.upstream (\S+)$")
+_BRANCH_AB_RE = re.compile(r"^# branch\.ab \+(\d+) -(\d+)$")
+_STASH_BRANCH_RE = re.compile(r"^stash@\{\d+\}: (?:WIP )?[oO]n (\S+):")
+_PORCELAIN_V2_XY_LEN = 2
+
+
+def _classify_porcelain_v2_entry(line: str) -> str | None:  # noqa: PLR0911
+    """Return one of 'staged', 'modified', 'unmerged', 'untracked', or None.
+
+    Porcelain v2 lines:
+      '1 XY ...'   ordinary changed entry; X is staged, Y is worktree
+      '2 XY ...'   renamed/copied; same XY semantics
+      'u XY ...'   unmerged
+      '? path'     untracked
+      '! path'     ignored (skip)
+    """
+    if line.startswith("? "):
+        return "untracked"
+    if line.startswith("u "):
+        return "unmerged"
+    if not line.startswith(("1 ", "2 ")):
+        return None
+    # XY is the second whitespace-delimited field (after the leading "1" or "2")
+    parts = line.split(" ", 2)
+    if len(parts) < _PORCELAIN_V2_XY_LEN:
+        return None
+    xy = parts[1]
+    if len(xy) < _PORCELAIN_V2_XY_LEN:
+        return None
+    x, y = xy[0], xy[1]
+    # Staged when index differs from HEAD (X is not '.').
+    # Modified when worktree differs from index (Y is not '.').
+    # An entry can be both. Classification picks staged first to match
+    # what callers usually want for "staged count".
+    if x != ".":
+        return "staged"
+    if y != ".":
+        return "modified"
+    return None
+
+
+def _stash_count_for_branch(branch: str | None, cwd: Path | str | None) -> int:
+    """Return the count of stash entries created on ``branch``."""
+    if branch is None:
+        return 0
+    result = run_git("stash", "list", cwd=cwd)
+    count = 0
+    for line in result.stdout.splitlines():
+        match = _STASH_BRANCH_RE.match(line)
+        if match and match.group(1) == branch:
+            count += 1
+    return count
+
+
+def get_repo_state(cwd: Path | str | None = None) -> RepoState:
+    """Snapshot a repo's state in two subprocess calls.
+
+    Replaces 6+ separate primitive calls (current_branch, is_dirty,
+    ahead_behind, stash list, status --porcelain, rebase-in-progress).
+
+    Issues:
+      1. ``git status --branch --porcelain=v2`` for branch, upstream,
+         ahead/behind, and file counts.
+      2. ``git stash list`` for stash_count filtered to the current branch.
+
+    Raises:
+        NotARepoError: cwd is not inside a repo.
+    """
+    root = repo_root(cwd)  # raises NotARepoError if not a repo
+
+    status = run_git("status", "--branch", "--porcelain=v2", cwd=cwd)
+
+    branch: str | None = None
+    upstream: str | None = None
+    ahead = 0
+    behind = 0
+    staged = modified = untracked = unmerged = 0
+
+    for line in status.stdout.splitlines():
+        head_match = _BRANCH_HEAD_RE.match(line)
+        if head_match:
+            value = head_match.group(1)
+            if value != "(detached)":
+                branch = value
+            continue
+        ups_match = _BRANCH_UPSTREAM_RE.match(line)
+        if ups_match:
+            upstream = ups_match.group(1)
+            continue
+        ab_match = _BRANCH_AB_RE.match(line)
+        if ab_match:
+            ahead = int(ab_match.group(1))
+            behind = int(ab_match.group(2))
+            continue
+        kind = _classify_porcelain_v2_entry(line)
+        if kind == "staged":
+            staged += 1
+        elif kind == "modified":
+            modified += 1
+        elif kind == "unmerged":
+            unmerged += 1
+        elif kind == "untracked":
+            untracked += 1
+
+    is_dirty_now = bool(staged or modified or untracked or unmerged)
+    stash_count = _stash_count_for_branch(branch, cwd)
+    rebase = is_rebase_in_progress(cwd)
+
+    return RepoState(
+        root=root,
+        branch=branch,
+        upstream=upstream,
+        ahead=ahead,
+        behind=behind,
+        is_dirty=is_dirty_now,
+        staged=staged,
+        modified=modified,
+        untracked=untracked,
+        unmerged=unmerged,
+        stash_count=stash_count,
+        rebase_in_progress=rebase,
+    )

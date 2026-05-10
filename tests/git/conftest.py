@@ -193,3 +193,10 @@ def repo_with_gone_branch(repo_with_remote: Path) -> Path:
     _git("fetch", "--prune", "origin", cwd=repo_with_remote)
     _git("checkout", "main", cwd=repo_with_remote)
     return repo_with_remote
+
+
+@pytest.fixture
+def repo_with_stash(dirty_repo: Path) -> Path:
+    """Repo with one stash entry on the current branch."""
+    _git("stash", "push", "-u", "-m", "test stash", cwd=dirty_repo)
+    return dirty_repo

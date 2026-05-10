@@ -11,6 +11,8 @@ from .branch import (
     tracking_branch,
 )
 from .repo import (
+    RepoState,
+    get_repo_state,
     is_dirty,
     is_git_installed,
     is_git_repo,
@@ -22,11 +24,13 @@ from .runner import NotARepoError, run_git
 
 __all__ = [
     "NotARepoError",
+    "RepoState",
     "ahead_behind",
     "all_local_branches",
     "branch_exists",
     "current_branch",
     "default_branch",
+    "get_repo_state",
     "gone_branches",
     "is_dirty",
     "is_git_installed",
