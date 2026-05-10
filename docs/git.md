@@ -13,7 +13,7 @@ if state.behind > 0 and not state.is_dirty:
 
 ## When to use this module
 
-You probably already use the `git` binary or a library like `GitPython`. This module is aimed at scripts that need a handful of common operations without the weight of a full git library:
+This module is aimed at scripts that need a handful of common operations without the weight of a full git library:
 
 - Checking repo state (current branch, dirty, ahead/behind, stash count) in a way that's easy to act on.
 - Running everyday workflows (fetch then rebase, stash around a risky operation, clean up merged branches) as a single call.
@@ -96,10 +96,10 @@ if state.rebase_in_progress:
 
 `Remote` is a frozen dataclass with three fields:
 
-| Field     | Type          | Description                                                                                                                                                                                                                                                                                                       |
-| --------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`    | `str`         | Short remote name (e.g., `"origin"`).                                                                                                                                                                                                                                                                             |
-| `url`     | `str`         | Configured fetch URL (e.g., `"git@github.com:org/repo.git"`).                                                                                                                                                                                                                                                     |
+| Field     | Type          | Description                                                                                                                                                                                                                                                                                       |
+| --------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`    | `str`         | Short remote name (e.g., `"origin"`).                                                                                                                                                                                                                                                             |
+| `url`     | `str`         | Configured fetch URL (e.g., `"git@github.com:org/repo.git"`).                                                                                                                                                                                                                                     |
 | `web_url` | `str \| None` | Best-effort browser URL inferred from `url`: an `https://<host>/<owner>/<repo>` rewrite that works for hosts following the common forge layout (GitHub, GitLab, Bitbucket, Gitea, Forgejo, Codeberg, sourcehut). `None` for local paths, `file://` URLs, or anything without a recognizable host. |
 
 `get_repo_state` issues a small number of subprocess calls under the hood: `rev-parse --show-toplevel`, `status --branch --porcelain=v2`, `stash list`, `rev-parse --absolute-git-dir`, plus `git remote` and `git remote get-url` for `primary_remote` (the last one runs only when at least one remote is configured). It still beats assembling those primitive calls by hand because callers don't have to parse the porcelain output themselves. Raises `NotARepoError` outside a repo.
@@ -181,7 +181,7 @@ match result.action:
             print(f"  conflict: {path}")
 ```
 
-`sync_branch` is more opinionated than `git pull`, not more flexible. It refuses detached HEAD, requires an upstream, never merges (only fast-forwards or rebases), auto-stashes by default, and gives you a structured result. In exchange, you lose the merge strategy.
+`sync_branch` is opinionated. It refuses detached HEAD, requires an upstream, never merges (only fast-forwards or rebases), auto-stashes by default, and gives you a structured result. In exchange, you lose the merge strategy.
 
 The sequence:
 
@@ -191,13 +191,13 @@ The sequence:
 4. `fetch()` the upstream's remote.
 5. Compute ahead/behind via `ahead_behind(current, upstream_ref)`. If behind is `0`, return `action="up_to_date"`.
 6. If the tree is dirty:
-   - `stash=True` (default): wrap the pull in `stashed()`.
-   - `stash=False`: raise `ShellCommandFailedError` before touching anything.
+    - `stash=True` (default): wrap the pull in `stashed()`.
+    - `stash=False`: raise `ShellCommandFailedError` before touching anything.
 7. If ahead is `0`, try `git pull --ff-only`. On success, return `action="fast_forwarded"`.
 8. Otherwise (or if `--ff-only` failed), run `git pull --rebase` when `allow_rebase=True`. On success, return `action="rebased"`. With `allow_rebase=False` and ff-only unavailable, raise `ShellCommandFailedError`.
 9. On rebase conflict:
-   - `on_conflict="abort"` (default): run `git rebase --abort`, restore the stash, return `action="aborted"` with `conflicts` populated.
-   - `on_conflict="leave"`: leave the rebase paused with the stash unpopped and raise `ShellCommandFailedError`.
+    - `on_conflict="abort"` (default): run `git rebase --abort`, restore the stash, return `action="aborted"` with `conflicts` populated.
+    - `on_conflict="leave"`: leave the rebase paused with the stash unpopped and raise `ShellCommandFailedError`.
 
 Inputs:
 
