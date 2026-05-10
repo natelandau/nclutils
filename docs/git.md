@@ -127,7 +127,7 @@ The sequence:
 3. `fetch()` the upstream's remote.
 4. Compute ahead/behind. If behind is zero, return `action="up_to_date"`.
 5. If the tree is dirty and `stash=True`, wrap the pull in `stashed()`. If `stash=False`, raise `ShellCommandFailedError`.
-6. If `allow_rebase=True` and ahead is zero, try `git pull --ff-only`. Otherwise (or if fast-forward fails), `git pull --rebase`.
+6. If ahead is zero, try `git pull --ff-only`. If that fails (or ahead is nonzero), run `git pull --rebase` when `allow_rebase=True`. If neither path is available, raise `ShellCommandFailedError`.
 7. On rebase conflict, behavior depends on `on_conflict`:
    - `"abort"` (default): run `git rebase --abort`, restore the stash, return `action="aborted"` with `conflicts` populated.
    - `"leave"`: leave the rebase paused with the stash unpopped and raise `ShellCommandFailedError`.
@@ -256,7 +256,7 @@ Every git helper either returns a value or raises one of three exception types:
 
 | Exception                                | When raised                                                                                                       |
 | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `NotARepoError`                          | Operation requires a repo, but `cwd` (or the process cwd) is not inside one. Raised by `repo_root`, `is_dirty`, `is_rebase_in_progress`, `get_repo_state`, `fetch`, `stashed`, `sync_branch`. |
+| `NotARepoError`                          | Operation requires a repo, but `cwd` (or the process cwd) is not inside one. Raised by `repo_root`, `is_dirty`, `is_rebase_in_progress`, `get_repo_state`, `fetch`, `stashed`. |
 | `ValueError`                             | Caller asked for an operation that is not well-defined: detached HEAD where a branch was needed, missing upstream, missing default branch.     |
 | `nclutils.sh.ShellCommandError` and subclasses | Any subprocess failure: `git` not on PATH, non-zero exit, timeout exceeded.                                       |
 
