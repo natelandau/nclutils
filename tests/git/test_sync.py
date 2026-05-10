@@ -8,6 +8,7 @@ import pytest
 from nclutils.git import (
     NotARepoError,
     fetch,
+    stashed,
 )
 from nclutils.sh import ShellCommandFailedError
 
@@ -60,3 +61,56 @@ class TestFetch:
         """Verify fetch(all_remotes=True) calls git fetch --all without raising."""
         # Given/When/Then
         fetch(repo_with_remote, all_remotes=True)
+
+
+class TestStashed:
+    """Tests for the stashed context manager."""
+
+    def test_clean_tree_no_op(self, repo: Path) -> None:
+        """Verify stashed yields False on a clean tree and does nothing."""
+        # Given/When
+        with stashed(repo) as did_stash:
+            # Then: yielded False; tree still clean inside the block
+            assert did_stash is False
+            result = subprocess.run(
+                ["git", "status", "--porcelain"],  # noqa: S607
+                cwd=repo,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            assert result.stdout == ""
+
+    def test_dirty_tree_stash_and_pop(self, dirty_repo: Path) -> None:
+        """Verify stashed stashes on enter and pops on normal exit."""
+        # Given: a dirty tree
+        # When: inside the block
+        with stashed(dirty_repo) as did_stash:
+            assert did_stash is True
+            # Inside: tree is clean
+            result = subprocess.run(
+                ["git", "status", "--porcelain"],  # noqa: S607
+                cwd=dirty_repo,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            assert result.stdout == ""
+
+        # Then (after exit): the untracked file is back
+        assert (dirty_repo / "untracked.txt").exists()
+
+    def test_pops_even_when_block_raises(self, dirty_repo: Path) -> None:
+        """Verify stashed pops the stash even when the with-block raises."""
+
+        class BoomError(RuntimeError):
+            pass
+
+        # Given: a dirty tree
+        # When/Then: in-block exception propagates, but pop still happens
+        msg = "inside"
+        with pytest.raises(BoomError), stashed(dirty_repo):
+            raise BoomError(msg)
+
+        # The stash was popped regardless: untracked file is back
+        assert (dirty_repo / "untracked.txt").exists()

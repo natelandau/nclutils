@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from nclutils.sh import CompletedCommand, ShellCommandFailedError
 
 from .branch import current_branch, tracking_branch
-from .repo import primary_remote, repo_root
+from .repo import is_dirty, primary_remote, repo_root
 from .runner import run_git
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 
 def fetch(
@@ -68,3 +73,43 @@ def fetch(
 
     args.append(target)
     run_git(*args, cwd=cwd)
+
+
+@contextmanager
+def stashed(
+    cwd: Path | str | None = None,
+    *,
+    message: str | None = None,
+    include_untracked: bool = True,
+) -> Iterator[bool]:
+    """Context manager: stash on enter (if dirty), pop on exit.
+
+    Yields True if a stash was created, False if the tree was clean (no-op).
+
+    On exit (whether the block returned normally or raised), if a stash was
+    created, pops it unconditionally. If the pop conflicts, leaves the
+    stash on the stack and raises ShellCommandFailedError. If the with-block
+    also raised, that exception is suppressed in favor of the pop failure
+    (the stash is the more recoverable artifact).
+
+    Raises:
+        NotARepoError: cwd is not a git repo.
+        ShellCommandFailedError: stash push or pop failed.
+    """
+    if not is_dirty(cwd):
+        yield False
+        return
+
+    stash_args: list[str] = ["stash", "push"]
+    if include_untracked:
+        stash_args.append("-u")
+    if message is not None:
+        stash_args.extend(["-m", message])
+    run_git(*stash_args, cwd=cwd)
+
+    try:
+        yield True
+    finally:
+        # Pop unconditionally. If pop raises, it supersedes any in-block
+        # exception (the stash is the more recoverable artifact).
+        run_git("stash", "pop", cwd=cwd)
