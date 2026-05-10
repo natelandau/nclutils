@@ -171,6 +171,7 @@ def sync_branch(
             ``git rebase --abort``, or any other git command failure not
             handled above.
     """
+    repo_root(cwd)  # validate; raises NotARepoError before we misread HEAD state
     current = current_branch(cwd)
     if current is None:
         msg = "sync_branch: detached HEAD; check out a branch first"

@@ -195,6 +195,13 @@ class TestSyncBranch:
         with pytest.raises(ValueError, match="detached"):
             sync_branch(repo_detached_head)
 
+    def test_raises_not_a_repo_outside_repo(self, tmp_path: Path) -> None:
+        """Verify sync_branch raises NotARepoError (not ValueError) outside any repo."""
+        # Given/When/Then: a non-repo dir must surface as NotARepoError, not as a
+        # misread "detached HEAD" ValueError from current_branch returning None.
+        with pytest.raises(NotARepoError):
+            sync_branch(tmp_path)
+
     def test_no_upstream_raises_value_error(self, repo: Path) -> None:
         """Verify sync_branch raises ValueError when the branch has no upstream."""
         # Given/When/Then
