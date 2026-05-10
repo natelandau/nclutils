@@ -6,6 +6,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlparse
 
 from nclutils.sh import ShellCommandError, which
 
@@ -16,6 +17,8 @@ _BRANCH_UPSTREAM_RE = re.compile(r"^# branch\.upstream (\S+)$")
 _BRANCH_AB_RE = re.compile(r"^# branch\.ab \+(\d+) -(\d+)$")
 _STASH_BRANCH_RE = re.compile(r"^stash@\{\d+\}: (?:WIP )?[oO]n (\S+):")
 _PORCELAIN_V2_XY_LEN = 2
+_SCP_REMOTE_RE = re.compile(r"^[\w.-]+@([\w.-]+):(.+)$")
+_REMOTE_URL_SCHEMES = frozenset({"http", "https", "ssh", "git"})
 
 
 def _cwd_for_message(cwd: Path | str | None) -> Path:
@@ -59,11 +62,43 @@ class Remote:
     """A configured git remote.
 
     ``name`` is the short remote name (e.g., ``"origin"``).
-    ``url`` is the configured fetch URL.
+    ``url`` is the configured fetch URL (the same value ``git remote get-url``
+    prints).
+    ``web_url`` is a best-effort browser URL inferred from ``url``: an
+    ``https://<host>/<owner>/<repo>`` rewrite that works for hosts that
+    follow the common forge layout (GitHub, GitLab, Bitbucket, Gitea,
+    Forgejo, Codeberg, sourcehut, and similar). It is ``None`` when no
+    sensible inference is possible (e.g., local paths, ``file://`` URLs).
     """
 
     name: str
     url: str
+    web_url: str | None
+
+
+def _infer_web_url(url: str) -> str | None:
+    """Infer a ``https://<host>/<path>`` browser URL from a git remote URL.
+
+    Handles SCP-like (``git@host:owner/repo``), ``ssh://``, ``git://``,
+    ``http://``, and ``https://`` forms. Strips a trailing ``.git``,
+    drops any user and port, and rewrites the scheme to ``https``.
+    Returns ``None`` for local paths, ``file://`` URLs, or anything
+    without a recognizable host.
+    """
+    cleaned = url.rstrip("/")
+    cleaned = cleaned.removesuffix(".git")
+
+    scp_match = _SCP_REMOTE_RE.match(cleaned)
+    if scp_match:
+        host, path = scp_match.groups()
+        path = path.lstrip("/")
+        return f"https://{host}/{path}" if path else None
+
+    parsed = urlparse(cleaned)
+    if parsed.scheme not in _REMOTE_URL_SCHEMES or not parsed.hostname:
+        return None
+    path = parsed.path.lstrip("/")
+    return f"https://{parsed.hostname}/{path}" if path else None
 
 
 def primary_remote(cwd: Path | str | None = None) -> Remote | None:
@@ -80,7 +115,8 @@ def primary_remote(cwd: Path | str | None = None) -> Remote | None:
     url_result = run_git("remote", "get-url", name, cwd=cwd, check=False)
     if url_result.returncode != 0:
         return None
-    return Remote(name=name, url=url_result.stdout.strip())
+    url = url_result.stdout.strip()
+    return Remote(name=name, url=url, web_url=_infer_web_url(url))
 
 
 def is_dirty(cwd: Path | str | None = None) -> bool:

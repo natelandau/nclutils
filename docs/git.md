@@ -71,12 +71,15 @@ if state.rebase_in_progress:
 | `stash_count`        | `int`         | Stash entries created on the current branch (filtered from `git stash list`).                 |
 | `rebase_in_progress` | `bool`        | `True` if `.git/rebase-merge/` or `.git/rebase-apply/` exists.                                |
 
-`Remote` is a frozen dataclass with two fields:
+`Remote` is a frozen dataclass:
 
-| Field  | Type  | Description                                                            |
-| ------ | ----- | ---------------------------------------------------------------------- |
-| `name` | `str` | Short remote name (e.g., `"origin"`).                                  |
-| `url`  | `str` | Configured fetch URL (e.g., `"git@github.com:org/repo.git"`).          |
+| Field     | Type           | Description                                                                                                                       |
+| --------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `name`    | `str`          | Short remote name (e.g., `"origin"`).                                                                                             |
+| `url`     | `str`          | Configured fetch URL (e.g., `"git@github.com:org/repo.git"`).                                                                     |
+| `web_url` | `str \| None`  | Best-effort browser URL inferred from `url` (e.g., `"https://github.com/org/repo"`); `None` when no inference is possible.        |
+
+`web_url` is computed from `url` by a generic rewrite: SCP-like syntax (`git@host:path`), `ssh://`, `git://`, `http://`, and `https://` URLs all collapse to `https://<host>/<path-without-.git>`, with any user and port stripped. This matches the web layout used by GitHub, GitLab, Bitbucket, Gitea, Forgejo, Codeberg, sourcehut, and similar forges. For local paths, `file://` URLs, or hosts that don't follow the `<host>/<owner>/<repo>` pattern, `web_url` is `None`.
 
 `get_repo_state` issues a small number of subprocess calls under the hood: `rev-parse --show-toplevel`, `status --branch --porcelain=v2`, `stash list`, `rev-parse --absolute-git-dir`, plus `git remote` and `git remote get-url` to populate `primary_remote` (the last one runs only when at least one remote is configured). It still beats assembling those primitive calls by hand because callers don't have to parse the porcelain output themselves. Raises `NotARepoError` outside a repo.
 

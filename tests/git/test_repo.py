@@ -13,6 +13,7 @@ from nclutils.git import (
     primary_remote,
     repo_root,
 )
+from nclutils.git.repo import _infer_web_url
 
 
 class TestIsGitInstalled:
@@ -85,6 +86,83 @@ class TestPrimaryRemote:
         """Verify primary_remote returns None when no remote is configured."""
         # Given/When/Then
         assert primary_remote(repo) is None
+
+    def test_web_url_none_for_local_path_remote(self, repo_with_remote: Path) -> None:
+        """Verify web_url is None when the remote is a local filesystem path."""
+        # Given: the test fixture configures origin as a local bare repo path
+        # When
+        result = primary_remote(repo_with_remote)
+        # Then
+        assert result is not None
+        assert result.web_url is None
+
+
+class TestInferWebUrl:
+    """Tests for _infer_web_url."""
+
+    @pytest.mark.parametrize(
+        ("git_url", "expected"),
+        [
+            # SCP-like syntax (the most common case)
+            (
+                "git@github.com:natelandau/nclutils.git",
+                "https://github.com/natelandau/nclutils",
+            ),
+            (
+                "git@gitlab.com:group/subgroup/project.git",
+                "https://gitlab.com/group/subgroup/project",
+            ),
+            # ssh:// with port
+            (
+                "ssh://git@gitea.natelandau.org:2222/natelandau/usrbin.git",
+                "https://gitea.natelandau.org/natelandau/usrbin",
+            ),
+            # ssh:// without port
+            (
+                "ssh://git@codeberg.org/foo/bar.git",
+                "https://codeberg.org/foo/bar",
+            ),
+            # https:// already; just strip .git
+            (
+                "https://github.com/foo/bar.git",
+                "https://github.com/foo/bar",
+            ),
+            # http:// gets upgraded to https
+            (
+                "http://git.example.com/foo/bar.git",
+                "https://git.example.com/foo/bar",
+            ),
+            # git:// protocol
+            (
+                "git://github.com/foo/bar.git",
+                "https://github.com/foo/bar",
+            ),
+            # Trailing slash and no .git suffix
+            (
+                "https://github.com/foo/bar/",
+                "https://github.com/foo/bar",
+            ),
+        ],
+    )
+    def test_infers_web_url(self, git_url: str, expected: str) -> None:
+        """Verify _infer_web_url rewrites common git URLs to https browser URLs."""
+        # Given/When/Then
+        assert _infer_web_url(git_url) == expected
+
+    @pytest.mark.parametrize(
+        "git_url",
+        [
+            "/srv/git/foo.git",
+            "file:///srv/git/foo.git",
+            "C:/repos/foo.git",
+            "",
+            "not-a-url",
+        ],
+    )
+    def test_returns_none_for_uninferable(self, git_url: str) -> None:
+        """Verify _infer_web_url returns None for local paths and unrecognized inputs."""
+        # Given/When/Then
+        assert _infer_web_url(git_url) is None
 
 
 class TestIsDirty:
