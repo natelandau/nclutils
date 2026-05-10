@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from nclutils.sh import CompletedCommand, ShellCommandFailedError
 
-from .branch import current_branch, tracking_branch
+from .branch import ahead_behind, current_branch, tracking_branch
 from .repo import is_dirty, primary_remote, repo_root
 from .runner import run_git
 
@@ -113,3 +114,192 @@ def stashed(
         # Pop unconditionally. If pop raises, it supersedes any in-block
         # exception (the stash is the more recoverable artifact).
         run_git("stash", "pop", cwd=cwd)
+
+
+@dataclass(frozen=True, slots=True)
+class SyncResult:
+    """Outcome of a sync_branch call."""
+
+    action: Literal["up_to_date", "fast_forwarded", "rebased", "aborted"]
+    ahead_before: int
+    behind_before: int
+    conflicts: tuple[Path, ...] = ()
+    stashed: bool = False
+
+
+def _conflict_paths(cwd: Path | str | None) -> tuple[Path, ...]:
+    """Return paths of files with merge conflicts."""
+    result = run_git("diff", "--name-only", "--diff-filter=U", cwd=cwd, check=False)
+    if result.returncode != 0:
+        return ()
+    return tuple(Path(line.strip()) for line in result.stdout.splitlines() if line.strip())
+
+
+def _resolved_cwd(cwd: Path | str | None) -> Path | None:
+    """Resolve cwd to an absolute Path or None (matches CompletedCommand invariant)."""
+    if cwd is None:
+        return None
+    return Path(cwd).expanduser().resolve()
+
+
+def _raise_failed(argv: tuple[str, ...], stderr: str, cwd: Path | str | None) -> None:
+    """Raise ShellCommandFailedError with a synthetic CompletedCommand."""
+    result = CompletedCommand(
+        argv=argv,
+        returncode=1,
+        stdout="",
+        stderr=stderr,
+        duration=0.0,
+        cwd=_resolved_cwd(cwd),
+    )
+    raise ShellCommandFailedError(result=result)
+
+
+def sync_branch(
+    cwd: Path | str | None = None,
+    *,
+    branch: str | None = None,
+    stash: bool = True,
+    allow_rebase: bool = True,
+    on_conflict: Literal["abort", "leave"] = "abort",
+) -> SyncResult:
+    """Fetch and pull (rebase) ``branch`` from its upstream.
+
+    Sequence:
+      1. Resolve branch (default: ``current_branch``). If ``branch=None`` and
+         ``current_branch()`` is None (detached HEAD), raise ``ValueError``.
+      2. Resolve upstream via ``tracking_branch(branch)``. If None, raise
+         ``ValueError``.
+      3. ``fetch()`` the upstream's remote.
+      4. Compute ahead/behind counts via ``ahead_behind()``.
+      5. If behind == 0: return ``action='up_to_date'``.
+      6. If dirty and ``stash=True``: stash via the ``stashed`` context manager.
+         If dirty and ``stash=False``: raise ``ShellCommandFailedError`` before
+         any rebase attempt.
+      7. If ``allow_rebase=True`` and ahead == 0: ``git pull --ff-only``.
+         Otherwise (or if ``--ff-only`` fails): ``git pull --rebase``.
+      8. On rebase conflict:
+         - ``on_conflict='abort'``: ``git rebase --abort``, restore stash,
+           return ``action='aborted'`` with conflicts populated.
+         - ``on_conflict='leave'``: leave the rebase paused and stash unpopped;
+           raise ``ShellCommandFailedError``.
+
+    Raises:
+        NotARepoError: cwd is not a git repo.
+        ValueError: detached HEAD with ``branch=None``, or branch has no
+            upstream.
+        ShellCommandFailedError: dirty tree with ``stash=False``, unrecoverable
+            rebase conflict (``on_conflict='leave'``), failed
+            ``git rebase --abort``, or any other git command failure not
+            handled above.
+    """
+    target = branch if branch is not None else current_branch(cwd)
+    if target is None:
+        msg = "sync_branch: detached HEAD; pass an explicit branch="
+        raise ValueError(msg)
+
+    upstream = tracking_branch(target, cwd)
+    if upstream is None:
+        msg = f"sync_branch: branch {target!r} has no upstream configured"
+        raise ValueError(msg)
+    remote, remote_branch = upstream
+    upstream_ref = f"{remote}/{remote_branch}"
+
+    fetch(cwd, remote=remote)
+
+    ahead_before, behind_before = ahead_behind(target, upstream_ref, cwd=cwd)
+    if behind_before == 0:
+        return SyncResult(
+            action="up_to_date",
+            ahead_before=ahead_before,
+            behind_before=behind_before,
+        )
+
+    if is_dirty(cwd):
+        if not stash:
+            _raise_failed(
+                argv=("git", "pull"),
+                stderr=(
+                    "sync_branch: working tree has uncommitted changes "
+                    "and stash=False; refusing to overwrite"
+                ),
+                cwd=cwd,
+            )
+        with stashed(cwd) as did_stash:
+            return _do_pull(
+                cwd=cwd,
+                ahead_before=ahead_before,
+                behind_before=behind_before,
+                allow_rebase=allow_rebase,
+                on_conflict=on_conflict,
+                stashed_flag=did_stash,
+            )
+    return _do_pull(
+        cwd=cwd,
+        ahead_before=ahead_before,
+        behind_before=behind_before,
+        allow_rebase=allow_rebase,
+        on_conflict=on_conflict,
+        stashed_flag=False,
+    )
+
+
+def _do_pull(
+    *,
+    cwd: Path | str | None,
+    ahead_before: int,
+    behind_before: int,
+    allow_rebase: bool,
+    on_conflict: Literal["abort", "leave"],
+    stashed_flag: bool,
+) -> SyncResult:
+    """Perform the actual pull and shape a SyncResult."""
+    # Try fast-forward first when ahead == 0; falls back to rebase otherwise.
+    if ahead_before == 0:
+        ff_result = run_git("pull", "--ff-only", cwd=cwd, check=False)
+        if ff_result.returncode == 0:
+            return SyncResult(
+                action="fast_forwarded",
+                ahead_before=ahead_before,
+                behind_before=behind_before,
+                stashed=stashed_flag,
+            )
+
+    if not allow_rebase:
+        # Caller refused rebase but ff-only failed (or wasn't tried).
+        result = CompletedCommand(
+            argv=("git", "pull"),
+            returncode=1,
+            stdout="",
+            stderr="sync_branch: fast-forward not possible and allow_rebase=False",
+            duration=0.0,
+            cwd=_resolved_cwd(cwd),
+        )
+        raise ShellCommandFailedError(result=result)
+
+    rebase_result = run_git("pull", "--rebase", cwd=cwd, check=False)
+    if rebase_result.returncode == 0:
+        return SyncResult(
+            action="rebased",
+            ahead_before=ahead_before,
+            behind_before=behind_before,
+            stashed=stashed_flag,
+        )
+
+    # Rebase failed (almost always a conflict).
+    conflicts = _conflict_paths(cwd)
+    if on_conflict == "leave":
+        raise ShellCommandFailedError(result=rebase_result)
+
+    # on_conflict == 'abort': roll back the rebase.
+    abort_result = run_git("rebase", "--abort", cwd=cwd, check=False)
+    if abort_result.returncode != 0:
+        # Surface the original failure if abort itself broke.
+        raise ShellCommandFailedError(result=rebase_result)
+    return SyncResult(
+        action="aborted",
+        ahead_before=ahead_before,
+        behind_before=behind_before,
+        conflicts=conflicts,
+        stashed=stashed_flag,
+    )

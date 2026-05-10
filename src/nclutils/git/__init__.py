@@ -21,11 +21,12 @@ from .repo import (
     repo_root,
 )
 from .runner import NotARepoError, run_git
-from .sync import fetch, stashed
+from .sync import SyncResult, fetch, stashed, sync_branch
 
 __all__ = [
     "NotARepoError",
     "RepoState",
+    "SyncResult",
     "ahead_behind",
     "all_local_branches",
     "branch_exists",
@@ -43,5 +44,6 @@ __all__ = [
     "repo_root",
     "run_git",
     "stashed",
+    "sync_branch",
     "tracking_branch",
 ]

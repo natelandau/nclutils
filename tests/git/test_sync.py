@@ -1,5 +1,6 @@
 """Tests for nclutils.git.sync (fetch, stashed, sync_branch)."""
 
+import os
 import subprocess
 from pathlib import Path
 
@@ -7,8 +8,10 @@ import pytest
 
 from nclutils.git import (
     NotARepoError,
+    SyncResult,
     fetch,
     stashed,
+    sync_branch,
 )
 from nclutils.sh import ShellCommandFailedError
 
@@ -114,3 +117,120 @@ class TestStashed:
 
         # The stash was popped regardless: untracked file is back
         assert (dirty_repo / "untracked.txt").exists()
+
+
+class TestSyncBranch:
+    """Tests for sync_branch."""
+
+    def test_up_to_date(self, repo_with_remote: Path) -> None:
+        """Verify sync_branch returns 'up_to_date' when behind == 0."""
+        # Given: a repo at parity with origin
+        # When
+        result = sync_branch(repo_with_remote)
+        # Then
+        assert isinstance(result, SyncResult)
+        assert result.action == "up_to_date"
+        assert result.ahead_before == 0
+        assert result.behind_before == 0
+        assert result.stashed is False
+
+    def test_fast_forward(self, repo_with_remote: Path, tmp_path: Path) -> None:
+        """Verify sync_branch fast-forwards when only behind."""
+        # Given: a sibling clone advances origin/main
+        sibling = tmp_path / "ff_sibling"
+        subprocess.run(  # noqa: S603 -- argv is a list; git lookup via PATH is intentional in tests
+            ["git", "clone", str(tmp_path / "remote.git"), str(sibling)],  # noqa: S607
+            check=True,
+            capture_output=True,
+        )
+        env = {
+            **os.environ,
+            "GIT_AUTHOR_NAME": "Test",
+            "GIT_AUTHOR_EMAIL": "test@example.com",
+            "GIT_COMMITTER_NAME": "Test",
+            "GIT_COMMITTER_EMAIL": "test@example.com",
+        }
+        (sibling / "ff.txt").write_text("ff\n")
+        subprocess.run(["git", "add", "ff.txt"], cwd=sibling, env=env, check=True)  # noqa: S607
+        subprocess.run(
+            ["git", "-c", "commit.gpgsign=false", "commit", "-m", "ff"],  # noqa: S607
+            cwd=sibling,
+            env=env,
+            check=True,
+        )
+        subprocess.run(
+            ["git", "push", "origin", "main"],  # noqa: S607
+            cwd=sibling,
+            env=env,
+            check=True,
+        )
+
+        # When
+        result = sync_branch(repo_with_remote)
+
+        # Then
+        assert result.action == "fast_forwarded"
+        assert result.behind_before == 1
+        assert result.ahead_before == 0
+
+    def test_dirty_with_stash_round_trip(self, repo_with_remote: Path) -> None:
+        """Verify sync_branch with stash=True restores dirty state after a no-op sync."""
+        # Given: a dirty tree (no remote changes, so up-to-date)
+        (repo_with_remote / "x.txt").write_text("x\n")
+
+        # When
+        result = sync_branch(repo_with_remote, stash=True)
+
+        # Then: untracked file is preserved
+        assert result.action == "up_to_date"
+        assert (repo_with_remote / "x.txt").exists()
+
+    def test_dirty_with_stash_false_raises(self, repo_with_remote: Path) -> None:
+        """Verify sync_branch with stash=False raises if there are changes to lose."""
+        # Given: dirty tree + a behind-only state, forced via a sibling push.
+        env = {
+            **os.environ,
+            "GIT_AUTHOR_NAME": "Test",
+            "GIT_AUTHOR_EMAIL": "test@example.com",
+            "GIT_COMMITTER_NAME": "Test",
+            "GIT_COMMITTER_EMAIL": "test@example.com",
+        }
+        sibling = repo_with_remote.parent / "stash_false_sibling"
+        subprocess.run(  # noqa: S603 -- argv is a list; git lookup via PATH is intentional in tests
+            ["git", "clone", str(repo_with_remote.parent / "remote.git"), str(sibling)],  # noqa: S607
+            check=True,
+            capture_output=True,
+        )
+        (sibling / "y.txt").write_text("y\n")
+        subprocess.run(["git", "add", "y.txt"], cwd=sibling, env=env, check=True)  # noqa: S607
+        subprocess.run(
+            ["git", "-c", "commit.gpgsign=false", "commit", "-m", "y"],  # noqa: S607
+            cwd=sibling,
+            env=env,
+            check=True,
+        )
+        subprocess.run(
+            ["git", "push", "origin", "main"],  # noqa: S607
+            cwd=sibling,
+            env=env,
+            check=True,
+        )
+
+        # Make local tree dirty
+        (repo_with_remote / "dirty.txt").write_text("dirty\n")
+
+        # When/Then
+        with pytest.raises(ShellCommandFailedError):
+            sync_branch(repo_with_remote, stash=False)
+
+    def test_detached_head_raises_value_error(self, repo_detached_head: Path) -> None:
+        """Verify sync_branch raises ValueError on detached HEAD with branch=None."""
+        # Given/When/Then
+        with pytest.raises(ValueError, match="detached"):
+            sync_branch(repo_detached_head)
+
+    def test_no_upstream_raises_value_error(self, repo: Path) -> None:
+        """Verify sync_branch raises ValueError when the branch has no upstream."""
+        # Given/When/Then
+        with pytest.raises(ValueError, match="upstream"):
+            sync_branch(repo)
