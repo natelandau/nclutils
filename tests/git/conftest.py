@@ -36,6 +36,19 @@ def _git_env() -> dict[str, str]:
     }
 
 
+def _init_repo(cwd: Path, *extra: str) -> None:
+    """Initialize a non-bare repo and set per-repo user.name/email.
+
+    Per-repo identity makes the test repo self-contained: the code under test
+    can run rebase/merge/commit operations on it without depending on the
+    runner's global git config or on inherited GIT_AUTHOR_* env vars (the
+    autouse _scrub_git_env fixture strips those).
+    """
+    _git("init", "-b", "main", *extra, cwd=cwd)
+    _git("config", "user.name", "Test", cwd=cwd)
+    _git("config", "user.email", "test@example.com", cwd=cwd)
+
+
 def _git(*args: str, cwd: Path) -> None:
     """Run a git command with deterministic identity and signing off."""
     cfg = [
@@ -92,7 +105,7 @@ def advance_origin(*, remote_dir: Path, sibling_dir: Path, filename: str) -> Non
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
     """Empty repo with one commit on main."""
-    _git("init", "-b", "main", cwd=tmp_path)
+    _init_repo(tmp_path)
     (tmp_path / "README.md").write_text("# test\n")
     _git("add", "README.md", cwd=tmp_path)
     _git("commit", "-m", "initial", cwd=tmp_path)
@@ -115,7 +128,7 @@ def repo_with_remote(tmp_path: Path) -> Path:
 
     work = tmp_path / "work"
     work.mkdir()
-    _git("init", "-b", "main", cwd=work)
+    _init_repo(work)
     (work / "README.md").write_text("# test\n")
     _git("add", "README.md", cwd=work)
     _git("commit", "-m", "initial", cwd=work)
