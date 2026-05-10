@@ -82,3 +82,47 @@ class TestGetRepoState:
         # Given/When/Then
         with pytest.raises(NotARepoError):
             get_repo_state(tmp_path)
+
+    def test_stash_count_filters_by_branch(self, repo: Path) -> None:
+        """Verify stash_count only counts stashes created on the current branch."""
+        # Given: a stash created on a different branch
+        (repo / "x.txt").write_text("x\n")
+        subprocess.run(
+            ["git", "checkout", "-b", "other"],  # noqa: S607
+            cwd=repo,
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "stash", "push", "-u", "-m", "on other"],  # noqa: S607
+            cwd=repo,
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "checkout", "main"],  # noqa: S607
+            cwd=repo,
+            check=True,
+            capture_output=True,
+        )
+
+        # When
+        state = get_repo_state(repo)
+
+        # Then: stash exists, but not on this branch, so count is 0
+        assert state.stash_count == 0
+
+    def test_detached_head(self, repo_detached_head: Path) -> None:
+        """Verify get_repo_state reports branch=None on detached HEAD."""
+        # Given/When
+        state = get_repo_state(repo_detached_head)
+        # Then
+        assert state.branch is None
+        assert state.stash_count == 0
+
+    def test_rebase_in_progress(self, repo_in_rebase: Path) -> None:
+        """Verify get_repo_state reports rebase_in_progress=True during a paused rebase."""
+        # Given/When
+        state = get_repo_state(repo_in_rebase)
+        # Then
+        assert state.rebase_in_progress is True

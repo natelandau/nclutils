@@ -10,6 +10,12 @@ from nclutils.sh import ShellCommandError, which
 
 from .runner import NotARepoError, run_git
 
+_BRANCH_HEAD_RE = re.compile(r"^# branch\.head (\S.*)$")
+_BRANCH_UPSTREAM_RE = re.compile(r"^# branch\.upstream (\S+)$")
+_BRANCH_AB_RE = re.compile(r"^# branch\.ab \+(\d+) -(\d+)$")
+_STASH_BRANCH_RE = re.compile(r"^stash@\{\d+\}: (?:WIP )?[oO]n (\S+):")
+_PORCELAIN_V2_XY_LEN = 2
+
 
 def _cwd_for_message(cwd: Path | str | None) -> Path:
     """Return the cwd as a Path for use in error messages (unresolved is fine)."""
@@ -110,13 +116,6 @@ class RepoState:
     rebase_in_progress: bool
 
 
-_BRANCH_HEAD_RE = re.compile(r"^# branch\.head (\S.*)$")
-_BRANCH_UPSTREAM_RE = re.compile(r"^# branch\.upstream (\S+)$")
-_BRANCH_AB_RE = re.compile(r"^# branch\.ab \+(\d+) -(\d+)$")
-_STASH_BRANCH_RE = re.compile(r"^stash@\{\d+\}: (?:WIP )?[oO]n (\S+):")
-_PORCELAIN_V2_XY_LEN = 2
-
-
 def _classify_porcelain_v2_entry(line: str) -> str | None:  # noqa: PLR0911
     """Return one of 'staged', 'modified', 'unmerged', 'untracked', or None.
 
@@ -135,7 +134,7 @@ def _classify_porcelain_v2_entry(line: str) -> str | None:  # noqa: PLR0911
         return None
     # XY is the second whitespace-delimited field (after the leading "1" or "2")
     parts = line.split(" ", 2)
-    if len(parts) < _PORCELAIN_V2_XY_LEN:
+    if len(parts) < 2:  # noqa: PLR2004 -- minimum field count for malformed-line guard
         return None
     xy = parts[1]
     if len(xy) < _PORCELAIN_V2_XY_LEN:
@@ -166,20 +165,28 @@ def _stash_count_for_branch(branch: str | None, cwd: Path | str | None) -> int:
 
 
 def get_repo_state(cwd: Path | str | None = None) -> RepoState:
-    """Snapshot a repo's state in two subprocess calls.
+    """Snapshot a repo's state in one git status pass.
 
     Replaces 6+ separate primitive calls (current_branch, is_dirty,
     ahead_behind, stash list, status --porcelain, rebase-in-progress).
 
-    Issues:
-      1. ``git status --branch --porcelain=v2`` for branch, upstream,
+    Issues four subprocess calls under the hood:
+      1. ``git rev-parse --show-toplevel`` (via ``repo_root``) for the
+         root path and to surface ``NotARepoError`` cleanly.
+      2. ``git status --branch --porcelain=v2`` for branch, upstream,
          ahead/behind, and file counts.
-      2. ``git stash list`` for stash_count filtered to the current branch.
+      3. ``git stash list`` filtered to the current branch.
+      4. ``git rev-parse --absolute-git-dir`` (via ``is_rebase_in_progress``).
+
+    The composite still wins because callers no longer assemble six
+    separate primitive calls and parse status output themselves.
 
     Raises:
         NotARepoError: cwd is not inside a repo.
     """
-    root = repo_root(cwd)  # raises NotARepoError if not a repo
+    # Call repo_root first so non-repo cwd surfaces as NotARepoError
+    # rather than a ShellCommandFailedError from the status call below.
+    root = repo_root(cwd)
 
     status = run_git("status", "--branch", "--porcelain=v2", cwd=cwd)
 
