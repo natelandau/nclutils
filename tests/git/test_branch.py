@@ -155,13 +155,13 @@ class TestGoneBranches:
     def test_detects_gone_branch(self, repo_with_gone_branch: Path) -> None:
         """Verify gone_branches lists a branch whose upstream was deleted."""
         # Given/When
-        result = gone_branches(repo_with_gone_branch)
+        result = gone_branches(cwd=repo_with_gone_branch)
         # Then
         assert "gone-feat" in result
 
     def test_excludes_normal_branches(self, repo_with_remote: Path) -> None:
-        """Verify gone_branches omits branches with intact upstreams."""
+        """Verify gone_branches returns an empty frozenset when no upstreams are gone."""
         # Given/When
-        result = gone_branches(repo_with_remote)
-        # Then
-        assert "main" not in result
+        result = gone_branches(cwd=repo_with_remote)
+        # Then: an intact upstream produces no entries at all
+        assert result == frozenset()

@@ -113,8 +113,19 @@ def merged_branches(
 ) -> frozenset[str]:
     """Return local branches merged into ``target``.
 
-    ``target=None`` defers to :func:`default_branch`. Raises ValueError
-    if ``target`` is None and no default branch can be resolved.
+    The result includes ``target`` itself (every branch is "merged" with
+    itself). Callers performing cleanup operations should exclude the
+    target before iterating. See :func:`prunable_branches` for a wrapper
+    that does this automatically.
+
+    ``target=None`` defers to :func:`default_branch` (with the implicit
+    default ``remote="origin"``). Raises ``ValueError`` if ``target`` is
+    None and no default branch can be resolved.
+
+    Raises:
+        ValueError: target=None and default_branch() returns None.
+        nclutils.sh.ShellCommandFailedError: target is a non-existent ref
+            (e.g., a typo).
     """
     if target is None:
         target = default_branch(cwd)
