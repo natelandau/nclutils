@@ -105,8 +105,8 @@ class TestInferWebUrl:
         [
             # SCP-like syntax (the most common case)
             (
-                "git@github.com:natelandau/nclutils.git",
-                "https://github.com/natelandau/nclutils",
+                "git@github.com:acme/widget.git",
+                "https://github.com/acme/widget",
             ),
             (
                 "git@gitlab.com:group/subgroup/project.git",
@@ -114,8 +114,8 @@ class TestInferWebUrl:
             ),
             # ssh:// with port
             (
-                "ssh://git@gitea.natelandau.org:2222/natelandau/usrbin.git",
-                "https://gitea.natelandau.org/natelandau/usrbin",
+                "ssh://git@gitea.example.com:2222/acme/widget.git",
+                "https://gitea.example.com/acme/widget",
             ),
             # ssh:// without port
             (
