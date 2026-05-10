@@ -6,6 +6,8 @@ from .branch import (
     branch_exists,
     current_branch,
     default_branch,
+    gone_branches,
+    merged_branches,
     tracking_branch,
 )
 from .repo import (
@@ -25,10 +27,12 @@ __all__ = [
     "branch_exists",
     "current_branch",
     "default_branch",
+    "gone_branches",
     "is_dirty",
     "is_git_installed",
     "is_git_repo",
     "is_rebase_in_progress",
+    "merged_branches",
     "primary_remote",
     "repo_root",
     "run_git",

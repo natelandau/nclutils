@@ -2,12 +2,16 @@
 
 from pathlib import Path
 
+import pytest
+
 from nclutils.git import (
     ahead_behind,
     all_local_branches,
     branch_exists,
     current_branch,
     default_branch,
+    gone_branches,
+    merged_branches,
     tracking_branch,
 )
 
@@ -112,3 +116,52 @@ class TestAheadBehind:
         result = ahead_behind("main", "origin/main", cwd=repo_diverged)
         # Then: 2 ahead, 1 behind
         assert result == (2, 1)
+
+
+class TestMergedBranches:
+    """Tests for merged_branches."""
+
+    def test_includes_merged_branch(self, repo_with_merged_branch: Path) -> None:
+        """Verify merged_branches lists a branch merged into main."""
+        # Given/When
+        result = merged_branches("main", cwd=repo_with_merged_branch)
+        # Then
+        assert "merged-feat" in result
+
+    def test_excludes_unmerged_branch(self, repo_with_branches: Path) -> None:
+        """Verify merged_branches omits an unmerged feature branch."""
+        # Given/When
+        result = merged_branches("main", cwd=repo_with_branches)
+        # Then
+        assert "feat" not in result
+
+    def test_target_none_uses_default_branch(self, repo_with_merged_branch: Path) -> None:
+        """Verify target=None defers to default_branch when origin/HEAD is set."""
+        # Given/When
+        result = merged_branches(cwd=repo_with_merged_branch)
+        # Then
+        assert "merged-feat" in result
+
+    def test_target_none_raises_without_default(self, repo: Path) -> None:
+        """Verify target=None raises ValueError when default_branch returns None."""
+        # Given/When/Then
+        with pytest.raises(ValueError, match="default branch"):
+            merged_branches(cwd=repo)
+
+
+class TestGoneBranches:
+    """Tests for gone_branches."""
+
+    def test_detects_gone_branch(self, repo_with_gone_branch: Path) -> None:
+        """Verify gone_branches lists a branch whose upstream was deleted."""
+        # Given/When
+        result = gone_branches(repo_with_gone_branch)
+        # Then
+        assert "gone-feat" in result
+
+    def test_excludes_normal_branches(self, repo_with_remote: Path) -> None:
+        """Verify gone_branches omits branches with intact upstreams."""
+        # Given/When
+        result = gone_branches(repo_with_remote)
+        # Then
+        assert "main" not in result

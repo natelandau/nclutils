@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING
 
 from .runner import run_git
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+_GONE_RE = re.compile(r"^[*+ ]?\s*(\S+)\s+\S+\s+\[[^\]]+:\s*gone\b")
 
 
 def current_branch(cwd: Path | str | None = None) -> str | None:
@@ -102,3 +105,36 @@ def ahead_behind(
     if len(parts) != 2:  # noqa: PLR2004
         return (0, 0)
     return (int(parts[0]), int(parts[1]))
+
+
+def merged_branches(
+    target: str | None = None,
+    cwd: Path | str | None = None,
+) -> frozenset[str]:
+    """Return local branches merged into ``target``.
+
+    ``target=None`` defers to :func:`default_branch`. Raises ValueError
+    if ``target`` is None and no default branch can be resolved.
+    """
+    if target is None:
+        target = default_branch(cwd)
+    if target is None:
+        msg = "merged_branches: target=None and default branch could not be resolved"
+        raise ValueError(msg)
+
+    result = run_git("branch", "--list", "--merged", target, "--format=%(refname:short)", cwd=cwd)
+    return frozenset(line.strip() for line in result.stdout.splitlines() if line.strip())
+
+
+def gone_branches(cwd: Path | str | None = None) -> frozenset[str]:
+    """Return branches whose upstream tracking ref has been deleted.
+
+    Parses ``git branch -vv`` for the ``[<upstream>: gone]`` marker.
+    """
+    result = run_git("branch", "-vv", "--no-color", cwd=cwd)
+    out: set[str] = set()
+    for line in result.stdout.splitlines():
+        match = _GONE_RE.match(line)
+        if match:
+            out.add(match.group(1))
+    return frozenset(out)

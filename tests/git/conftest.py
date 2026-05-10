@@ -163,3 +163,33 @@ def repo_diverged(repo_with_remote: Path) -> Path:
 
     _git("fetch", "origin", cwd=repo_with_remote)
     return repo_with_remote
+
+
+@pytest.fixture
+def repo_with_merged_branch(repo_with_remote: Path) -> Path:
+    """Repo with a feature branch merged into main."""
+    _git("checkout", "-b", "merged-feat", cwd=repo_with_remote)
+    (repo_with_remote / "m.txt").write_text("m\n")
+    _git("add", "m.txt", cwd=repo_with_remote)
+    _git("commit", "-m", "merged change", cwd=repo_with_remote)
+    _git("checkout", "main", cwd=repo_with_remote)
+    _git("merge", "--no-ff", "merged-feat", "-m", "merge feat", cwd=repo_with_remote)
+    return repo_with_remote
+
+
+@pytest.fixture
+def repo_with_gone_branch(repo_with_remote: Path) -> Path:
+    """Repo with a branch whose upstream tracking ref was deleted."""
+    # Create gone-feat tracking origin/gone-feat
+    _git("checkout", "-b", "gone-feat", cwd=repo_with_remote)
+    (repo_with_remote / "g.txt").write_text("g\n")
+    _git("add", "g.txt", cwd=repo_with_remote)
+    _git("commit", "-m", "g", cwd=repo_with_remote)
+    _git("push", "-u", "origin", "gone-feat", cwd=repo_with_remote)
+
+    # Delete it from the remote
+    _git("push", "origin", "--delete", "gone-feat", cwd=repo_with_remote)
+    # Prune the local tracking ref so [gone] is reported
+    _git("fetch", "--prune", "origin", cwd=repo_with_remote)
+    _git("checkout", "main", cwd=repo_with_remote)
+    return repo_with_remote
