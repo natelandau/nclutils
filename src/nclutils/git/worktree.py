@@ -4,8 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from .runner import run_git
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,7 +24,12 @@ class Worktree:
     is_locked: bool
 
 
-def list_worktrees(cwd: Path | str | None = None) -> list[Worktree]:
+def list_worktrees(
+    cwd: Path | str | None = None,
+    *,
+    stream: bool = False,
+    env: Mapping[str, str] | None = None,
+) -> list[Worktree]:
     """Return the registered worktrees.
 
     Parses ``git worktree list --porcelain``. Each worktree block looks like:
@@ -34,11 +43,14 @@ def list_worktrees(cwd: Path | str | None = None) -> list[Worktree]:
 
     Args:
         cwd: Working directory; ``None`` inherits the process cwd.
+        stream: Forwarded to :func:`run_git` (rarely useful here, but kept
+            for consistency with other helpers).
+        env: Forwarded to :func:`run_git`.
 
     Returns:
         List of :class:`Worktree` records, one per registered worktree.
     """
-    result = run_git("worktree", "list", "--porcelain", cwd=cwd)
+    result = run_git("worktree", "list", "--porcelain", cwd=cwd, stream=stream, env=env)
     return _parse_worktree_porcelain(result.stdout)
 
 
@@ -92,13 +104,15 @@ def _parse_worktree_porcelain(text: str) -> list[Worktree]:
     return out
 
 
-def create_worktree(
+def create_worktree(  # noqa: PLR0913
     path: Path | str,
     branch: str,
     *,
     cwd: Path | str | None = None,
     new_branch: bool = False,
     start_point: str | None = None,
+    stream: bool = False,
+    env: Mapping[str, str] | None = None,
 ) -> None:
     """Create a worktree at ``path`` checked out to ``branch``.
 
@@ -115,6 +129,8 @@ def create_worktree(
             worktree (passes ``-b`` to ``git worktree add``).
         start_point: Optional commit/ref to base ``branch`` on. Requires
             ``new_branch=True``.
+        stream: Forwarded to :func:`run_git`.
+        env: Forwarded to :func:`run_git`.
 
     Raises:
         ValueError: ``start_point`` is set without ``new_branch=True``.
@@ -129,7 +145,7 @@ def create_worktree(
             args.append(start_point)
     else:
         args.extend([str(path), branch])
-    run_git(*args, cwd=cwd)
+    run_git(*args, cwd=cwd, stream=stream, env=env)
 
 
 def remove_worktree(
@@ -137,6 +153,8 @@ def remove_worktree(
     *,
     cwd: Path | str | None = None,
     force: bool = False,
+    stream: bool = False,
+    env: Mapping[str, str] | None = None,
 ) -> None:
     """Remove the worktree at ``path``.
 
@@ -148,21 +166,25 @@ def remove_worktree(
         cwd: Working directory of the source repo; ``None`` inherits the
             process cwd.
         force: When ``True``, pass ``--force`` to ``git worktree remove``.
+        stream: Forwarded to :func:`run_git`.
+        env: Forwarded to :func:`run_git`.
     """
     args: list[str] = ["worktree", "remove"]
     if force:
         args.append("--force")
     args.append(str(path))
-    run_git(*args, cwd=cwd)
+    run_git(*args, cwd=cwd, stream=stream, env=env)
 
 
-def add_worktree(
+def add_worktree(  # noqa: PLR0913
     path: Path | str,
     branch: str,
     *,
     cwd: Path | str | None = None,
     new_branch: bool = False,
     start_point: str | None = None,
+    stream: bool = False,
+    env: Mapping[str, str] | None = None,
 ) -> Worktree:
     """Create a worktree and return its :class:`Worktree` record.
 
@@ -179,6 +201,8 @@ def add_worktree(
             worktree (passes ``-b`` to ``git worktree add``).
         start_point: Optional commit/ref to base ``branch`` on. Requires
             ``new_branch=True``.
+        stream: Forwarded to every internal :func:`run_git` call.
+        env: Forwarded to every internal :func:`run_git` call.
 
     Returns:
         The :class:`Worktree` record for the newly created worktree.
@@ -195,9 +219,11 @@ def add_worktree(
         cwd=cwd,
         new_branch=new_branch,
         start_point=start_point,
+        stream=stream,
+        env=env,
     )
     resolved_path = Path(path).expanduser().resolve()
-    for wt in list_worktrees(cwd):
+    for wt in list_worktrees(cwd, stream=stream, env=env):
         if wt.path.resolve() == resolved_path:
             return wt
     msg = f"add_worktree: created worktree at {resolved_path} not found in listing"

@@ -14,16 +14,18 @@ from .repo import is_dirty, primary_remote, repo_root
 from .runner import run_git
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Iterator, Mapping
 
 
-def fetch(
+def fetch(  # noqa: PLR0913
     cwd: Path | str | None = None,
     *,
     remote: str | None = None,
     prune: bool = True,
     all_remotes: bool = False,
     tags: bool = True,
+    stream: bool = False,
+    env: Mapping[str, str] | None = None,
 ) -> None:
     """Fetch from a remote with sensible defaults.
 
@@ -32,12 +34,16 @@ def fetch(
     and ``all_remotes`` is False, defaults to the upstream's remote of the
     current branch, falling back to ``primary_remote()``.
 
+    Pass ``stream=True`` to tee fetch progress to the terminal in real time.
+    Pass ``env=`` (typically ``{**os.environ, "GIT_SSH_COMMAND": "..."}``)
+    to set environment variables for the fetch.
+
     Raises:
         NotARepoError: cwd is not inside a repo.
         ShellCommandFailedError: no remote could be resolved, or fetch
             itself failed.
     """
-    repo_root(cwd)  # validate; raises NotARepoError if not a repo
+    repo_root(cwd, stream=stream, env=env)  # validate; raises NotARepoError if not a repo
 
     args: list[str] = ["fetch"]
     if prune:
@@ -47,16 +53,21 @@ def fetch(
 
     if all_remotes:
         args.append("--all")
-        run_git(*args, cwd=cwd)
+        run_git(*args, cwd=cwd, stream=stream, env=env)
         return
 
     target = remote
     if target is None:
-        upstream = tracking_branch(current_branch(cwd), cwd)
+        upstream = tracking_branch(
+            current_branch(cwd, stream=stream, env=env),
+            cwd,
+            stream=stream,
+            env=env,
+        )
         if upstream is not None:
             target = upstream[0]
     if target is None:
-        primary = primary_remote(cwd)
+        primary = primary_remote(cwd, stream=stream, env=env)
         if primary is not None:
             target = primary.name
     if target is None:
@@ -64,7 +75,7 @@ def fetch(
         raise ShellCommandFailedError(msg=msg)
 
     args.append(target)
-    run_git(*args, cwd=cwd)
+    run_git(*args, cwd=cwd, stream=stream, env=env)
 
 
 @contextmanager
@@ -73,6 +84,8 @@ def stashed(
     *,
     message: str | None = None,
     include_untracked: bool = True,
+    stream: bool = False,
+    env: Mapping[str, str] | None = None,
 ) -> Iterator[bool]:
     """Context manager: stash on enter (if dirty), pop on exit.
 
@@ -88,7 +101,7 @@ def stashed(
         NotARepoError: cwd is not a git repo.
         ShellCommandFailedError: stash push or pop failed.
     """
-    if not is_dirty(cwd):
+    if not is_dirty(cwd, stream=stream, env=env):
         yield False
         return
 
@@ -97,14 +110,14 @@ def stashed(
         stash_args.append("-u")
     if message is not None:
         stash_args.extend(["-m", message])
-    run_git(*stash_args, cwd=cwd)
+    run_git(*stash_args, cwd=cwd, stream=stream, env=env)
 
     try:
         yield True
     finally:
         # Pop unconditionally. If pop raises, it supersedes any in-block
         # exception (the stash is the more recoverable artifact).
-        run_git("stash", "pop", cwd=cwd)
+        run_git("stash", "pop", cwd=cwd, stream=stream, env=env)
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,21 +131,36 @@ class SyncResult:
     stashed: bool = False
 
 
-def _conflict_paths(cwd: Path | str | None) -> tuple[Path, ...]:
+def _conflict_paths(
+    cwd: Path | str | None,
+    *,
+    stream: bool,
+    env: Mapping[str, str] | None,
+) -> tuple[Path, ...]:
     """Return paths of files with merge conflicts."""
-    result = run_git("diff", "--name-only", "--diff-filter=U", cwd=cwd, check=False)
+    result = run_git(
+        "diff",
+        "--name-only",
+        "--diff-filter=U",
+        cwd=cwd,
+        check=False,
+        stream=stream,
+        env=env,
+    )
     if result.returncode != 0:
         return ()
     return tuple(Path(line.strip()) for line in result.stdout.splitlines() if line.strip())
 
 
-def sync_branch(
+def sync_branch(  # noqa: PLR0913
     cwd: Path | str | None = None,
     *,
     branch: str | None = None,
     stash: bool = True,
     allow_rebase: bool = True,
     on_conflict: Literal["abort", "leave"] = "abort",
+    stream: bool = False,
+    env: Mapping[str, str] | None = None,
 ) -> SyncResult:
     """Fetch and pull (rebase) the current branch from its upstream.
 
@@ -171,8 +199,8 @@ def sync_branch(
             ``git rebase --abort``, or any other git command failure not
             handled above.
     """
-    repo_root(cwd)  # validate; raises NotARepoError before we misread HEAD state
-    current = current_branch(cwd)
+    repo_root(cwd, stream=stream, env=env)  # raises NotARepoError before we misread HEAD state
+    current = current_branch(cwd, stream=stream, env=env)
     if current is None:
         msg = "sync_branch: detached HEAD; check out a branch first"
         raise ValueError(msg)
@@ -183,16 +211,22 @@ def sync_branch(
         )
         raise ValueError(msg)
 
-    upstream = tracking_branch(current, cwd)
+    upstream = tracking_branch(current, cwd, stream=stream, env=env)
     if upstream is None:
         msg = f"sync_branch: branch {current!r} has no upstream configured"
         raise ValueError(msg)
     remote, remote_branch = upstream
     upstream_ref = f"{remote}/{remote_branch}"
 
-    fetch(cwd, remote=remote)
+    fetch(cwd, remote=remote, stream=stream, env=env)
 
-    ahead_before, behind_before = ahead_behind(current, upstream_ref, cwd=cwd)
+    ahead_before, behind_before = ahead_behind(
+        current,
+        upstream_ref,
+        cwd=cwd,
+        stream=stream,
+        env=env,
+    )
     if behind_before == 0:
         return SyncResult(
             action="up_to_date",
@@ -200,7 +234,7 @@ def sync_branch(
             behind_before=behind_before,
         )
 
-    dirty = is_dirty(cwd)
+    dirty = is_dirty(cwd, stream=stream, env=env)
     if dirty and not stash:
         msg = (
             "sync_branch: working tree has uncommitted changes "
@@ -208,7 +242,9 @@ def sync_branch(
         )
         raise ShellCommandFailedError(msg=msg)
 
-    cm = stashed(cwd) if dirty else nullcontext(False)  # noqa: FBT003 -- yielded value, not a flag
+    cm = (
+        stashed(cwd, stream=stream, env=env) if dirty else nullcontext(False)  # noqa: FBT003 -- yielded value, not a flag
+    )
     with cm as did_stash:
         return _do_pull(
             cwd=cwd,
@@ -217,10 +253,12 @@ def sync_branch(
             allow_rebase=allow_rebase,
             on_conflict=on_conflict,
             stashed_flag=did_stash,
+            stream=stream,
+            env=env,
         )
 
 
-def _do_pull(
+def _do_pull(  # noqa: PLR0913
     *,
     cwd: Path | str | None,
     ahead_before: int,
@@ -228,10 +266,19 @@ def _do_pull(
     allow_rebase: bool,
     on_conflict: Literal["abort", "leave"],
     stashed_flag: bool,
+    stream: bool,
+    env: Mapping[str, str] | None,
 ) -> SyncResult:
     """Perform the actual pull and shape a SyncResult."""
     if ahead_before == 0:
-        ff_result = run_git("pull", "--ff-only", cwd=cwd, check=False)
+        ff_result = run_git(
+            "pull",
+            "--ff-only",
+            cwd=cwd,
+            check=False,
+            stream=stream,
+            env=env,
+        )
         if ff_result.returncode == 0:
             return SyncResult(
                 action="fast_forwarded",
@@ -245,7 +292,14 @@ def _do_pull(
         msg = "sync_branch: fast-forward not possible and allow_rebase=False"
         raise ShellCommandFailedError(msg=msg)
 
-    rebase_result = run_git("pull", "--rebase", cwd=cwd, check=False)
+    rebase_result = run_git(
+        "pull",
+        "--rebase",
+        cwd=cwd,
+        check=False,
+        stream=stream,
+        env=env,
+    )
     if rebase_result.returncode == 0:
         return SyncResult(
             action="rebased",
@@ -255,12 +309,19 @@ def _do_pull(
         )
 
     # Rebase failed (almost always a conflict).
-    conflicts = _conflict_paths(cwd)
+    conflicts = _conflict_paths(cwd, stream=stream, env=env)
     if on_conflict == "leave":
         raise ShellCommandFailedError(result=rebase_result)
 
     # on_conflict == 'abort': roll back the rebase.
-    abort_result = run_git("rebase", "--abort", cwd=cwd, check=False)
+    abort_result = run_git(
+        "rebase",
+        "--abort",
+        cwd=cwd,
+        check=False,
+        stream=stream,
+        env=env,
+    )
     if abort_result.returncode != 0:
         # Surface the original failure if abort itself broke.
         raise ShellCommandFailedError(result=rebase_result)

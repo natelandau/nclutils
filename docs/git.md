@@ -35,6 +35,13 @@ Every helper that touches a repo accepts `cwd=` as a `Path` or `str`. The defaul
 
 Outside a repo, helpers either return a "no" answer (`is_git_repo`, `all_local_branches`) or raise `NotARepoError` (`repo_root`, `is_dirty`, `get_repo_state`, `fetch`, `stashed`, and anything that calls them). The exception name is intentional: `git` itself returns a generic "not a git repository" error, and `NotARepoError` lifts that into a class you can catch.
 
+Every helper that calls `git` accepts two pass-through keyword arguments that forward to `nclutils.sh.run_command`:
+
+- `stream=True` tees the underlying git output to the terminal in real time (useful for `fetch`, `sync_branch`, `add_worktree`, anything that takes a while).
+- `env=` sets the child's environment (typical use: `{**os.environ, "GIT_SSH_COMMAND": "ssh -i ~/.ssh/deploy_key"}`).
+
+Other `run_command` options (`check`, `okay_codes`, `timeout`, `input`, `exclude_regex`) are not exposed because they would change the helper's success/failure semantics. Use `run_git` directly when you need them.
+
 ## Composites
 
 Composites wrap multi-step workflows behind a single call. Reach for these first; drop down to primitives only when no composite fits.

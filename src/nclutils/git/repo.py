@@ -5,12 +5,15 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 from urllib.parse import urlparse
 
 from nclutils.sh import ShellCommandError, which
 
 from .runner import NotARepoError, run_git
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 _BRANCH_HEAD_RE = re.compile(r"^# branch\.head (\S.*)$")
 _BRANCH_UPSTREAM_RE = re.compile(r"^# branch\.upstream (\S+)$")
@@ -36,22 +39,46 @@ def is_git_installed() -> bool:
     return which("git") is not None
 
 
-def is_git_repo(cwd: Path | str | None = None) -> bool:
+def is_git_repo(
+    cwd: Path | str | None = None,
+    *,
+    stream: bool = False,
+    env: Mapping[str, str] | None = None,
+) -> bool:
     """Return True if cwd is inside a git working tree."""
     try:
-        result = run_git("rev-parse", "--is-inside-work-tree", cwd=cwd, check=False)
+        result = run_git(
+            "rev-parse",
+            "--is-inside-work-tree",
+            cwd=cwd,
+            check=False,
+            stream=stream,
+            env=env,
+        )
     except ShellCommandError:
         return False
     return result.returncode == 0 and result.stdout.strip() == "true"
 
 
-def repo_root(cwd: Path | str | None = None) -> Path:
+def repo_root(
+    cwd: Path | str | None = None,
+    *,
+    stream: bool = False,
+    env: Mapping[str, str] | None = None,
+) -> Path:
     """Return the absolute path to the repo's working tree root.
 
     Raises:
         NotARepoError: cwd is not inside a git repo.
     """
-    result = run_git("rev-parse", "--show-toplevel", cwd=cwd, check=False)
+    result = run_git(
+        "rev-parse",
+        "--show-toplevel",
+        cwd=cwd,
+        check=False,
+        stream=stream,
+        env=env,
+    )
     if result.returncode != 0:
         raise _not_a_repo_error(cwd)
     return Path(result.stdout.strip())
@@ -101,37 +128,67 @@ def _infer_web_url(url: str) -> str | None:
     return f"https://{parsed.hostname}/{path}" if path else None
 
 
-def primary_remote(cwd: Path | str | None = None) -> Remote | None:
+def primary_remote(
+    cwd: Path | str | None = None,
+    *,
+    stream: bool = False,
+    env: Mapping[str, str] | None = None,
+) -> Remote | None:
     """Return the first configured remote, or None.
 
     "First" means the first line returned by ``git remote`` (alphabetical
     by default). Most repos have only one remote, so this is usually
     ``origin``.
     """
-    listing = run_git("remote", cwd=cwd, check=False)
+    listing = run_git("remote", cwd=cwd, check=False, stream=stream, env=env)
     if listing.returncode != 0 or not listing.stdout.strip():
         return None
     name = listing.stdout.splitlines()[0].strip()
-    url_result = run_git("remote", "get-url", name, cwd=cwd, check=False)
+    url_result = run_git(
+        "remote",
+        "get-url",
+        name,
+        cwd=cwd,
+        check=False,
+        stream=stream,
+        env=env,
+    )
     if url_result.returncode != 0:
         return None
     url = url_result.stdout.strip()
     return Remote(name=name, url=url, web_url=_infer_web_url(url))
 
 
-def is_dirty(cwd: Path | str | None = None) -> bool:
+def is_dirty(
+    cwd: Path | str | None = None,
+    *,
+    stream: bool = False,
+    env: Mapping[str, str] | None = None,
+) -> bool:
     """Return True if the working tree has uncommitted changes or untracked files.
 
     Raises:
         NotARepoError: cwd is not inside a git repo.
     """
-    result = run_git("status", "--porcelain", cwd=cwd, check=False)
+    result = run_git(
+        "status",
+        "--porcelain",
+        cwd=cwd,
+        check=False,
+        stream=stream,
+        env=env,
+    )
     if result.returncode != 0:
         raise _not_a_repo_error(cwd)
     return bool(result.stdout.strip())
 
 
-def is_rebase_in_progress(cwd: Path | str | None = None) -> bool:
+def is_rebase_in_progress(
+    cwd: Path | str | None = None,
+    *,
+    stream: bool = False,
+    env: Mapping[str, str] | None = None,
+) -> bool:
     """Return True if either rebase-merge/ or rebase-apply/ exists in .git/.
 
     Interactive rebases use rebase-merge/; non-interactive use rebase-apply/.
@@ -141,7 +198,14 @@ def is_rebase_in_progress(cwd: Path | str | None = None) -> bool:
         NotARepoError: cwd is not inside a git repo.
     """
     # --absolute-git-dir gives us a usable Path without manual cwd resolution.
-    git_dir_result = run_git("rev-parse", "--absolute-git-dir", cwd=cwd, check=False)
+    git_dir_result = run_git(
+        "rev-parse",
+        "--absolute-git-dir",
+        cwd=cwd,
+        check=False,
+        stream=stream,
+        env=env,
+    )
     if git_dir_result.returncode != 0:
         raise _not_a_repo_error(cwd)
     git_dir = Path(git_dir_result.stdout.strip())
@@ -204,11 +268,17 @@ def _classify_porcelain_v2_entry(  # noqa: PLR0911
     return None
 
 
-def _stash_count_for_branch(branch: str | None, cwd: Path | str | None) -> int:
+def _stash_count_for_branch(
+    branch: str | None,
+    cwd: Path | str | None,
+    *,
+    stream: bool,
+    env: Mapping[str, str] | None,
+) -> int:
     """Return the count of stash entries created on ``branch``."""
     if branch is None:
         return 0
-    result = run_git("stash", "list", cwd=cwd)
+    result = run_git("stash", "list", cwd=cwd, stream=stream, env=env)
     count = 0
     for line in result.stdout.splitlines():
         match = _STASH_BRANCH_RE.match(line)
@@ -217,7 +287,12 @@ def _stash_count_for_branch(branch: str | None, cwd: Path | str | None) -> int:
     return count
 
 
-def get_repo_state(cwd: Path | str | None = None) -> RepoState:
+def get_repo_state(
+    cwd: Path | str | None = None,
+    *,
+    stream: bool = False,
+    env: Mapping[str, str] | None = None,
+) -> RepoState:
     """Snapshot a repo's state in one git status pass.
 
     Replaces 6+ separate primitive calls (current_branch, is_dirty,
@@ -242,9 +317,16 @@ def get_repo_state(cwd: Path | str | None = None) -> RepoState:
     """
     # Call repo_root first so non-repo cwd surfaces as NotARepoError
     # rather than a ShellCommandFailedError from the status call below.
-    root = repo_root(cwd)
+    root = repo_root(cwd, stream=stream, env=env)
 
-    status = run_git("status", "--branch", "--porcelain=v2", cwd=cwd)
+    status = run_git(
+        "status",
+        "--branch",
+        "--porcelain=v2",
+        cwd=cwd,
+        stream=stream,
+        env=env,
+    )
 
     branch: str | None = None
     upstream: str | None = None
@@ -279,9 +361,9 @@ def get_repo_state(cwd: Path | str | None = None) -> RepoState:
             untracked += 1
 
     is_dirty_now = bool(staged or modified or untracked or unmerged)
-    stash_count = _stash_count_for_branch(branch, cwd)
-    rebase = is_rebase_in_progress(cwd)
-    primary = primary_remote(cwd)
+    stash_count = _stash_count_for_branch(branch, cwd, stream=stream, env=env)
+    rebase = is_rebase_in_progress(cwd, stream=stream, env=env)
+    primary = primary_remote(cwd, stream=stream, env=env)
 
     return RepoState(
         root=root,
