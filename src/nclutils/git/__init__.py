@@ -21,6 +21,7 @@ from .repo import (
     repo_root,
 )
 from .runner import NotARepoError, run_git
+from .sync import fetch
 
 __all__ = [
     "NotARepoError",
@@ -30,6 +31,7 @@ __all__ = [
     "branch_exists",
     "current_branch",
     "default_branch",
+    "fetch",
     "get_repo_state",
     "gone_branches",
     "is_dirty",
