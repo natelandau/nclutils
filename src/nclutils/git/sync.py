@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, NoReturn
+from typing import TYPE_CHECKING, Literal
 
-from nclutils.sh import CompletedCommand, ShellCommandFailedError
+from nclutils.sh import ShellCommandFailedError
 
 from .branch import ahead_behind, current_branch, tracking_branch
 from .repo import is_dirty, primary_remote, repo_root
@@ -15,26 +15,6 @@ from .runner import run_git
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
-
-
-def _resolved_cwd(cwd: Path | str | None) -> Path | None:
-    """Resolve cwd to an absolute Path or None (matches CompletedCommand invariant)."""
-    if cwd is None:
-        return None
-    return Path(cwd).expanduser().resolve()
-
-
-def _raise_failed(argv: tuple[str, ...], stderr: str, cwd: Path | str | None) -> NoReturn:
-    """Raise ShellCommandFailedError with a synthetic CompletedCommand."""
-    result = CompletedCommand(
-        argv=argv,
-        returncode=1,
-        stdout="",
-        stderr=stderr,
-        duration=0.0,
-        cwd=_resolved_cwd(cwd),
-    )
-    raise ShellCommandFailedError(result=result)
 
 
 def fetch(
@@ -80,11 +60,8 @@ def fetch(
         if primary is not None:
             target = primary[0]
     if target is None:
-        _raise_failed(
-            argv=("git", *args),
-            stderr="fetch: no remote configured and no remote argument given",
-            cwd=cwd,
-        )
+        msg = "fetch: no remote configured and no remote argument given"
+        raise ShellCommandFailedError(msg=msg)
 
     args.append(target)
     run_git(*args, cwd=cwd)
@@ -204,18 +181,17 @@ def sync_branch(
             f"branch {current!r}; sync_branch operates on the current branch"
         )
         raise ValueError(msg)
-    target = current
 
-    upstream = tracking_branch(target, cwd)
+    upstream = tracking_branch(current, cwd)
     if upstream is None:
-        msg = f"sync_branch: branch {target!r} has no upstream configured"
+        msg = f"sync_branch: branch {current!r} has no upstream configured"
         raise ValueError(msg)
     remote, remote_branch = upstream
     upstream_ref = f"{remote}/{remote_branch}"
 
     fetch(cwd, remote=remote)
 
-    ahead_before, behind_before = ahead_behind(target, upstream_ref, cwd=cwd)
+    ahead_before, behind_before = ahead_behind(current, upstream_ref, cwd=cwd)
     if behind_before == 0:
         return SyncResult(
             action="up_to_date",
@@ -223,33 +199,24 @@ def sync_branch(
             behind_before=behind_before,
         )
 
-    if is_dirty(cwd):
-        if not stash:
-            _raise_failed(
-                argv=("git", "pull"),
-                stderr=(
-                    "sync_branch: working tree has uncommitted changes "
-                    "and stash=False; refusing to overwrite"
-                ),
-                cwd=cwd,
-            )
-        with stashed(cwd) as did_stash:
-            return _do_pull(
-                cwd=cwd,
-                ahead_before=ahead_before,
-                behind_before=behind_before,
-                allow_rebase=allow_rebase,
-                on_conflict=on_conflict,
-                stashed_flag=did_stash,
-            )
-    return _do_pull(
-        cwd=cwd,
-        ahead_before=ahead_before,
-        behind_before=behind_before,
-        allow_rebase=allow_rebase,
-        on_conflict=on_conflict,
-        stashed_flag=False,
-    )
+    dirty = is_dirty(cwd)
+    if dirty and not stash:
+        msg = (
+            "sync_branch: working tree has uncommitted changes "
+            "and stash=False; refusing to overwrite"
+        )
+        raise ShellCommandFailedError(msg=msg)
+
+    cm = stashed(cwd) if dirty else nullcontext(False)  # noqa: FBT003 -- yielded value, not a flag
+    with cm as did_stash:
+        return _do_pull(
+            cwd=cwd,
+            ahead_before=ahead_before,
+            behind_before=behind_before,
+            allow_rebase=allow_rebase,
+            on_conflict=on_conflict,
+            stashed_flag=did_stash,
+        )
 
 
 def _do_pull(
@@ -274,11 +241,8 @@ def _do_pull(
 
     if not allow_rebase:
         # Caller refused rebase but ff-only failed (or wasn't tried).
-        _raise_failed(
-            argv=("git", "pull"),
-            stderr="sync_branch: fast-forward not possible and allow_rebase=False",
-            cwd=cwd,
-        )
+        msg = "sync_branch: fast-forward not possible and allow_rebase=False"
+        raise ShellCommandFailedError(msg=msg)
 
     rebase_result = run_git("pull", "--rebase", cwd=cwd, check=False)
     if rebase_result.returncode == 0:

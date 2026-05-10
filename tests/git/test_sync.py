@@ -1,6 +1,5 @@
 """Tests for nclutils.git.sync (fetch, stashed, sync_branch)."""
 
-import os
 import subprocess
 from pathlib import Path
 
@@ -15,49 +14,7 @@ from nclutils.git import (
 )
 from nclutils.sh import ShellCommandFailedError
 
-
-def _advance_origin(
-    *,
-    remote_dir: Path,
-    sibling_dir: Path,
-    filename: str,
-) -> None:
-    """Push one new commit to ``origin/main`` from a fresh sibling clone.
-
-    Used by sync tests to manufacture a behind-only state on the test repo
-    without disturbing its working tree.
-    """
-    env = {
-        **os.environ,
-        "GIT_AUTHOR_NAME": "Test",
-        "GIT_AUTHOR_EMAIL": "test@example.com",
-        "GIT_COMMITTER_NAME": "Test",
-        "GIT_COMMITTER_EMAIL": "test@example.com",
-    }
-    subprocess.run(  # noqa: S603 -- argv is a list; git lookup via PATH is intentional in tests
-        ["git", "clone", str(remote_dir), str(sibling_dir)],  # noqa: S607
-        check=True,
-        capture_output=True,
-    )
-    (sibling_dir / filename).write_text(f"{filename}\n")
-    subprocess.run(  # noqa: S603 -- argv is a list; git lookup via PATH is intentional in tests
-        ["git", "add", filename],  # noqa: S607
-        cwd=sibling_dir,
-        env=env,
-        check=True,
-    )
-    subprocess.run(  # noqa: S603 -- argv is a list; git lookup via PATH is intentional in tests
-        ["git", "-c", "commit.gpgsign=false", "commit", "-m", filename],  # noqa: S607
-        cwd=sibling_dir,
-        env=env,
-        check=True,
-    )
-    subprocess.run(
-        ["git", "push", "origin", "main"],  # noqa: S607
-        cwd=sibling_dir,
-        env=env,
-        check=True,
-    )
+from .conftest import advance_origin
 
 
 class TestFetch:
@@ -83,7 +40,7 @@ class TestFetch:
 
         # Then: the local tracking ref for gone-feat should not exist
         result = subprocess.run(
-            ["git", "rev-parse", "--verify", "--quiet", "refs/remotes/origin/gone-feat"],  # noqa: S607
+            ["git", "rev-parse", "--verify", "--quiet", "refs/remotes/origin/gone-feat"],
             cwd=repo_with_gone_branch,
             capture_output=True,
             text=True,
@@ -120,7 +77,7 @@ class TestStashed:
             # Then: yielded False; tree still clean inside the block
             assert did_stash is False
             result = subprocess.run(
-                ["git", "status", "--porcelain"],  # noqa: S607
+                ["git", "status", "--porcelain"],
                 cwd=repo,
                 capture_output=True,
                 text=True,
@@ -136,7 +93,7 @@ class TestStashed:
             assert did_stash is True
             # Inside: tree is clean
             result = subprocess.run(
-                ["git", "status", "--porcelain"],  # noqa: S607
+                ["git", "status", "--porcelain"],
                 cwd=dirty_repo,
                 capture_output=True,
                 text=True,
@@ -181,7 +138,7 @@ class TestSyncBranch:
     def test_fast_forward(self, repo_with_remote: Path, tmp_path: Path) -> None:
         """Verify sync_branch fast-forwards when only behind."""
         # Given: a sibling clone advances origin/main
-        _advance_origin(
+        advance_origin(
             remote_dir=tmp_path / "remote.git",
             sibling_dir=tmp_path / "ff_sibling",
             filename="ff.txt",
@@ -198,7 +155,7 @@ class TestSyncBranch:
     def test_dirty_with_stash_round_trip(self, repo_with_remote: Path, tmp_path: Path) -> None:
         """Verify dirty tree is stashed, sync runs, then dirty state restored."""
         # Given: dirty tree + behind state via sibling push
-        _advance_origin(
+        advance_origin(
             remote_dir=tmp_path / "remote.git",
             sibling_dir=tmp_path / "stash_round_sibling",
             filename="z.txt",
@@ -219,7 +176,7 @@ class TestSyncBranch:
     def test_dirty_with_stash_false_raises(self, repo_with_remote: Path) -> None:
         """Verify sync_branch with stash=False raises if there are changes to lose."""
         # Given: dirty tree + a behind-only state, forced via a sibling push.
-        _advance_origin(
+        advance_origin(
             remote_dir=repo_with_remote.parent / "remote.git",
             sibling_dir=repo_with_remote.parent / "stash_false_sibling",
             filename="y.txt",

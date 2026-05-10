@@ -103,8 +103,8 @@ def create_worktree(
     """Create a worktree at ``path`` checked out to ``branch``.
 
     With ``new_branch=True``, also creates the branch (passes ``-b``).
-    ``start_point`` is the commit/ref to start the new branch from
-    (only meaningful when ``new_branch=True``).
+    ``start_point`` is the commit/ref to start the new branch from and
+    requires ``new_branch=True``.
 
     Args:
         path: Filesystem path where the new worktree will be created.
@@ -113,9 +113,15 @@ def create_worktree(
             process cwd.
         new_branch: When ``True``, create ``branch`` as part of adding the
             worktree (passes ``-b`` to ``git worktree add``).
-        start_point: Optional commit/ref to base ``branch`` on. Only honored
-            when ``new_branch=True``.
+        start_point: Optional commit/ref to base ``branch`` on. Requires
+            ``new_branch=True``.
+
+    Raises:
+        ValueError: ``start_point`` is set without ``new_branch=True``.
     """
+    if start_point is not None and not new_branch:
+        msg = "create_worktree: start_point requires new_branch=True"
+        raise ValueError(msg)
     args: list[str] = ["worktree", "add"]
     if new_branch:
         args.extend(["-b", branch, str(path)])
@@ -171,13 +177,14 @@ def add_worktree(
             process cwd.
         new_branch: When ``True``, create ``branch`` as part of adding the
             worktree (passes ``-b`` to ``git worktree add``).
-        start_point: Optional commit/ref to base ``branch`` on. Only honored
-            when ``new_branch=True``.
+        start_point: Optional commit/ref to base ``branch`` on. Requires
+            ``new_branch=True``.
 
     Returns:
         The :class:`Worktree` record for the newly created worktree.
 
     Raises:
+        ValueError: ``start_point`` is set without ``new_branch=True``.
         RuntimeError: the worktree was created but does not appear in the
             subsequent listing. Should not happen in practice; guards
             against silent bugs.

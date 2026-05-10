@@ -17,14 +17,14 @@ class TestPrunableBranches:
     def test_includes_merged(self, repo_with_merged_branch: Path) -> None:
         """Verify prunable_branches lists a merged branch when merged=True."""
         # Given/When
-        result = prunable_branches(repo_with_merged_branch, merged=True, gone=False, empty=False)
+        result = prunable_branches(repo_with_merged_branch, merged=True, gone=False)
         # Then
         assert "merged-feat" in result
 
     def test_includes_gone(self, repo_with_gone_branch: Path) -> None:
         """Verify prunable_branches lists a gone branch when gone=True."""
         # Given/When
-        result = prunable_branches(repo_with_gone_branch, merged=False, gone=True, empty=False)
+        result = prunable_branches(repo_with_gone_branch, merged=False, gone=True)
         # Then
         assert "gone-feat" in result
 
@@ -43,7 +43,6 @@ class TestPrunableBranches:
             repo_with_merged_branch,
             merged=True,
             gone=False,
-            empty=False,
             exclude=("main", "master", "develop", "merged-feat"),
         )
         # Then

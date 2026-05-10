@@ -25,15 +25,19 @@ def _scrub_git_env(monkeypatch: pytest.MonkeyPatch) -> None:
             monkeypatch.delenv(key, raising=False)
 
 
-def _git(*args: str, cwd: Path) -> None:
-    """Run a git command with deterministic identity and signing off."""
-    env = {
+def _git_env() -> dict[str, str]:
+    """Return os.environ extended with deterministic GIT_AUTHOR/COMMITTER identity."""
+    return {
         **os.environ,
         "GIT_AUTHOR_NAME": "Test",
         "GIT_AUTHOR_EMAIL": "test@example.com",
         "GIT_COMMITTER_NAME": "Test",
         "GIT_COMMITTER_EMAIL": "test@example.com",
     }
+
+
+def _git(*args: str, cwd: Path) -> None:
+    """Run a git command with deterministic identity and signing off."""
     cfg = [
         "-c",
         "commit.gpgsign=false",
@@ -42,13 +46,46 @@ def _git(*args: str, cwd: Path) -> None:
         "-c",
         "init.defaultBranch=main",
     ]
-    subprocess.run(  # noqa: S603 -- argv is a list; git lookup via PATH is intentional in tests
-        ["git", *cfg, *args],  # noqa: S607 -- relying on PATH for git is intentional in tests
+    subprocess.run(
+        ["git", *cfg, *args],
         cwd=cwd,
-        env=env,
+        env=_git_env(),
         check=True,
         capture_output=True,
         text=True,
+    )
+
+
+def advance_origin(*, remote_dir: Path, sibling_dir: Path, filename: str) -> None:
+    """Push one new commit to ``origin/main`` from a fresh sibling clone.
+
+    Used by sync tests to manufacture a behind-only state on the test repo
+    without disturbing its working tree.
+    """
+    env = _git_env()
+    subprocess.run(
+        ["git", "clone", str(remote_dir), str(sibling_dir)],
+        check=True,
+        capture_output=True,
+    )
+    (sibling_dir / filename).write_text(f"{filename}\n")
+    subprocess.run(
+        ["git", "add", filename],
+        cwd=sibling_dir,
+        env=env,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "-c", "commit.gpgsign=false", "commit", "-m", filename],
+        cwd=sibling_dir,
+        env=env,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "push", "origin", "main"],
+        cwd=sibling_dir,
+        env=env,
+        check=True,
     )
 
 
@@ -104,17 +141,10 @@ def repo_in_rebase(repo: Path) -> Path:
 
     # Trigger a rebase that will conflict; do not abort. Run via subprocess
     # directly because _git() uses check=True and rebase will exit non-zero.
-    env = {
-        **os.environ,
-        "GIT_AUTHOR_NAME": "Test",
-        "GIT_AUTHOR_EMAIL": "test@example.com",
-        "GIT_COMMITTER_NAME": "Test",
-        "GIT_COMMITTER_EMAIL": "test@example.com",
-    }
     proc = subprocess.run(
-        ["git", "-c", "commit.gpgsign=false", "rebase", "main"],  # noqa: S607 -- relying on PATH for git is intentional in tests
+        ["git", "-c", "commit.gpgsign=false", "rebase", "main"],
         cwd=repo,
-        env=env,
+        env=_git_env(),
         capture_output=True,
         text=True,
         check=False,
@@ -141,7 +171,7 @@ def repo_with_branches(repo_with_remote: Path) -> Path:
 def repo_detached_head(repo: Path) -> Path:
     """Repo checked out at a commit (detached HEAD)."""
     head = subprocess.run(
-        ["git", "rev-parse", "HEAD"],  # noqa: S607 -- relying on PATH for git is intentional in tests
+        ["git", "rev-parse", "HEAD"],
         cwd=repo,
         capture_output=True,
         text=True,

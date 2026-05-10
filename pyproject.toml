@@ -121,6 +121,8 @@
             "PLR2004",
             "PLR6301",
             "S101",
+            "S603",  # subprocess call with untrusted input (argv is built from literals in tests)
+            "S607",  # starting process with partial path (relying on PATH for git is intentional in tests)
             "SLF001",  # Access a private attribute
         ], "duties.py" = ["ANN001", "FBT001", "FBT002"], "src/nclutils/pp/emitter.py" = [
             "ANN401", # Dynamically typed expressions (typing.Any) are disallowed in `**kwargs`

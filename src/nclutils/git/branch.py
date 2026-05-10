@@ -39,9 +39,10 @@ def default_branch(
         return None
     target = result.stdout.strip()
     prefix = f"refs/remotes/{remote}/"
-    if not target.startswith(prefix):
+    name = target.removeprefix(prefix)
+    if name == target or not name:
         return None
-    return target[len(prefix) :] or None
+    return name
 
 
 def branch_exists(branch: str, cwd: Path | str | None = None) -> bool:
@@ -157,16 +158,15 @@ def prunable_branches(
     *,
     merged: bool = True,
     gone: bool = True,
-    empty: bool = True,
     target: str | None = None,
     exclude: tuple[str, ...] = ("main", "master", "develop"),
 ) -> list[str]:
     """Return local branches safe to delete.
 
     Combines:
-      - branches merged into ``target`` (or, equivalently, with zero
-        commits ahead of ``target``) when ``merged`` or ``empty`` is True.
-        ``target`` defaults to ``default_branch()``.
+      - branches merged into ``target`` (equivalently, branches with zero
+        commits ahead of ``target``) when ``merged`` is True. ``target``
+        defaults to ``default_branch()``.
       - branches whose upstream is gone, when ``gone`` is True.
 
     Always excludes the current branch and any name in ``exclude``.
@@ -174,17 +174,14 @@ def prunable_branches(
     Raises:
         ValueError: target=None and default_branch() returns None.
     """
-    if (merged or empty) and target is None:
+    if merged and target is None:
         target = default_branch(cwd)
-    if (merged or empty) and target is None:
+    if merged and target is None:
         msg = "prunable_branches: no target and default branch could not be resolved"
         raise ValueError(msg)
 
     candidates: set[str] = set()
-    if (merged or empty) and target is not None:
-        # merged_branches(target) returns the same set as branches with
-        # ahead_behind(branch, target)[0] == 0. The two flags are
-        # semantically equivalent and resolved with one subprocess call.
+    if merged and target is not None:
         candidates |= set(merged_branches(target, cwd=cwd))
     if gone:
         candidates |= set(gone_branches(cwd=cwd))

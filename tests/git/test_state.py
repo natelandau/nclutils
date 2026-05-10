@@ -54,7 +54,7 @@ class TestGetRepoState:
         """Verify get_repo_state reports staged changes."""
         # Given: stage a new file
         (repo / "new.txt").write_text("new\n")
-        subprocess.run(["git", "add", "new.txt"], cwd=repo, check=True)  # noqa: S607 -- relying on PATH for git is intentional in tests
+        subprocess.run(["git", "add", "new.txt"], cwd=repo, check=True)
         # When
         state = get_repo_state(repo)
         # Then
@@ -88,19 +88,19 @@ class TestGetRepoState:
         # Given: a stash created on a different branch
         (repo / "x.txt").write_text("x\n")
         subprocess.run(
-            ["git", "checkout", "-b", "other"],  # noqa: S607
+            ["git", "checkout", "-b", "other"],
             cwd=repo,
             check=True,
             capture_output=True,
         )
         subprocess.run(
-            ["git", "stash", "push", "-u", "-m", "on other"],  # noqa: S607
+            ["git", "stash", "push", "-u", "-m", "on other"],
             cwd=repo,
             check=True,
             capture_output=True,
         )
         subprocess.run(
-            ["git", "checkout", "main"],  # noqa: S607
+            ["git", "checkout", "main"],
             cwd=repo,
             check=True,
             capture_output=True,

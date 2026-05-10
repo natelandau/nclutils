@@ -77,8 +77,9 @@ def is_dirty(cwd: Path | str | None = None) -> bool:
     Raises:
         NotARepoError: cwd is not inside a git repo.
     """
-    repo_root(cwd)  # validate; raises NotARepoError if not a repo
-    result = run_git("status", "--porcelain", cwd=cwd)
+    result = run_git("status", "--porcelain", cwd=cwd, check=False)
+    if result.returncode != 0:
+        raise _not_a_repo_error(cwd)
     return bool(result.stdout.strip())
 
 
@@ -145,10 +146,8 @@ def _classify_porcelain_v2_entry(  # noqa: PLR0911
     if len(xy) < _PORCELAIN_V2_XY_LEN:
         return None
     x, y = xy[0], xy[1]
-    # Staged when index differs from HEAD (X is not '.').
-    # Modified when worktree differs from index (Y is not '.').
-    # An entry can be both. Classification picks staged first to match
-    # what callers usually want for "staged count".
+    # An entry can be both staged and modified; we classify staged first
+    # so the staged-count matches what callers expect.
     if x != ".":
         return "staged"
     if y != ".":

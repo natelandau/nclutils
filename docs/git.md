@@ -17,9 +17,9 @@ if state.behind > 0 and not state.is_dirty:
 
 `nclutils.git` calls `git` directly through `nclutils.sh.run_command` rather than wrapping a third-party library like `GitPython` or `pygit2`. The trade-offs:
 
-- **No extra runtime dependency.** A working `git` binary is the only requirement.
-- **Predictable failure modes.** Every error is a `ShellCommandError`, `NotARepoError`, or `ValueError`. There is no separate exception hierarchy to learn.
-- **Process semantics match `git` on the command line.** Output matches what you would see in a terminal, hooks fire, configuration is loaded the same way, and `GIT_*` environment variables work as documented.
+- A working `git` binary is the only runtime requirement.
+- Every error is a `ShellCommandError`, `NotARepoError`, or `ValueError`, so there is no separate exception hierarchy to learn.
+- Process semantics match `git` on the command line: output matches what you would see in a terminal, hooks fire, configuration is loaded the same way, and `GIT_*` environment variables work as documented.
 
 The cost is that parsing porcelain output is the user's problem. The composites in this module do that work for the cases that come up most often.
 
@@ -101,7 +101,7 @@ If the pop conflicts on exit, the stash is left on the stack and `ShellCommandFa
 
 ### `sync_branch`
 
-The big workflow composite. Fetches the upstream, computes divergence, optionally stashes a dirty tree, then either fast-forwards or rebases the current branch.
+The central workflow composite. Fetches the upstream, computes divergence, optionally stashes a dirty tree, then either fast-forwards or rebases the current branch.
 
 ```python
 from nclutils.git import sync_branch
@@ -158,11 +158,10 @@ deleted = delete_branches(candidates)
 print(f"deleted {len(deleted)} branches")
 ```
 
-`prunable_branches` combines three sources of safe-to-delete branches; toggle each with the matching keyword:
+`prunable_branches` combines two sources of safe-to-delete branches; toggle each with the matching keyword:
 
-- `merged=True`: branches merged into `target` (default `default_branch()`)
-- `gone=True`: branches whose upstream tracking ref has been deleted on the remote
-- `empty=True`: branches with zero commits ahead of `target`
+- `merged=True`: branches merged into `target` (default `default_branch()`), which is the same set as branches with zero commits ahead of `target`.
+- `gone=True`: branches whose upstream tracking ref has been deleted on the remote.
 
 The current branch, the target branch, and any name in `exclude` (default `("main", "master", "develop")`) are always filtered out. `target=None` (the default) defers to `default_branch()`. `ValueError` is raised if a target is needed but `default_branch()` returns `None`.
 
@@ -256,8 +255,9 @@ Every git helper either returns a value or raises one of three exception types:
 
 | Exception                                | When raised                                                                                                       |
 | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `NotARepoError`                          | Operation requires a repo, but `cwd` (or the process cwd) is not inside one. Raised by `repo_root`, `is_dirty`, `is_rebase_in_progress`, `get_repo_state`, `fetch`, `stashed`. |
+| `NotARepoError`                          | Operation requires a repo, but `cwd` (or the process cwd) is not inside one. Raised by `repo_root`, `is_dirty`, `is_rebase_in_progress`, `get_repo_state`, `fetch`, `stashed`, and `sync_branch` (transitively, via `fetch`). |
 | `ValueError`                             | Caller asked for an operation that is not well-defined: detached HEAD where a branch was needed, missing upstream, missing default branch.     |
+| `RuntimeError`                           | Raised only by `add_worktree` if the new worktree was created but does not appear in the subsequent `git worktree list` output. A guard against silent bugs; should not fire in practice. |
 | `nclutils.sh.ShellCommandError` and subclasses | Any subprocess failure: `git` not on PATH, non-zero exit, timeout exceeded.                                       |
 
 `ShellCommandError` is the base class for all shell-level failures, so a single `except` handles every subprocess error:
@@ -319,7 +319,7 @@ This is independent of `nclutils.pp`. The git module never writes to the console
 - `ahead_behind(left, right, cwd=None) -> tuple[int, int]`. `(ahead, behind)` commit counts comparing `left` to `right`.
 - `merged_branches(target=None, cwd=None) -> frozenset[str]`. Local branches merged into `target`.
 - `gone_branches(cwd=None) -> frozenset[str]`. Branches whose upstream tracking ref has been deleted.
-- `prunable_branches(cwd=None, *, merged=True, gone=True, empty=True, target=None, exclude=("main", "master", "develop")) -> list[str]`. Local branches safe to delete.
+- `prunable_branches(cwd=None, *, merged=True, gone=True, target=None, exclude=("main", "master", "develop")) -> list[str]`. Local branches safe to delete.
 - `delete_branches(branches, cwd=None, *, force=False) -> list[str]`. Delete local branches; return the names actually deleted.
 
 ### Sync
@@ -334,5 +334,5 @@ This is independent of `nclutils.pp`. The git module never writes to the console
 - `list_worktrees(cwd=None) -> list[Worktree]`. All registered worktrees.
 - `create_worktree(path, branch, *, cwd=None, new_branch=False, start_point=None) -> None`. Create a worktree at `path` checked out to `branch`.
 - `remove_worktree(path, *, cwd=None, force=False) -> None`. Remove the worktree at `path`.
-- `add_worktree(path, branch, *, cwd=None, new_branch=False, start_point=None) -> Worktree`. Composite: create a worktree and return its resolved record.
+- `add_worktree(path, branch, *, cwd=None, new_branch=False, start_point=None) -> Worktree`. Composite: create a worktree and return its resolved record. Raises `RuntimeError` if the new worktree is missing from the subsequent listing.
 - `Worktree`. Frozen dataclass; see the field table above.
