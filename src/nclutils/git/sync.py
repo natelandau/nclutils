@@ -262,7 +262,6 @@ def _do_pull(
     stashed_flag: bool,
 ) -> SyncResult:
     """Perform the actual pull and shape a SyncResult."""
-    # Try fast-forward first when ahead == 0; falls back to rebase otherwise.
     if ahead_before == 0:
         ff_result = run_git("pull", "--ff-only", cwd=cwd, check=False)
         if ff_result.returncode == 0:

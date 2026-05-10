@@ -152,18 +152,6 @@ def gone_branches(cwd: Path | str | None = None) -> frozenset[str]:
     return frozenset(out)
 
 
-def _empty_branches(target: str, cwd: Path | str | None) -> set[str]:
-    """Return local branches with zero commits ahead of ``target``."""
-    out: set[str] = set()
-    for name in all_local_branches(cwd):
-        if name == target:
-            continue
-        ahead, _ = ahead_behind(name, target, cwd=cwd)
-        if ahead == 0:
-            out.add(name)
-    return out
-
-
 def prunable_branches(
     cwd: Path | str | None = None,
     *,
@@ -176,9 +164,10 @@ def prunable_branches(
     """Return local branches safe to delete.
 
     Combines:
-      - branches merged into ``target`` (default: default_branch())  if merged=True
-      - branches whose upstream is gone                               if gone=True
-      - branches with zero commits ahead of ``target``                if empty=True
+      - branches merged into ``target`` (or, equivalently, with zero
+        commits ahead of ``target``) when ``merged`` or ``empty`` is True.
+        ``target`` defaults to ``default_branch()``.
+      - branches whose upstream is gone, when ``gone`` is True.
 
     Always excludes the current branch and any name in ``exclude``.
 
@@ -192,12 +181,13 @@ def prunable_branches(
         raise ValueError(msg)
 
     candidates: set[str] = set()
-    if merged and target is not None:
+    if (merged or empty) and target is not None:
+        # merged_branches(target) returns the same set as branches with
+        # ahead_behind(branch, target)[0] == 0. The two flags are
+        # semantically equivalent and resolved with one subprocess call.
         candidates |= set(merged_branches(target, cwd=cwd))
     if gone:
         candidates |= set(gone_branches(cwd=cwd))
-    if empty and target is not None:
-        candidates |= _empty_branches(target, cwd)
 
     current = current_branch(cwd)
     excluded = set(exclude)
@@ -224,12 +214,13 @@ def delete_branches(
     With ``force=True``, runs ``git branch -D`` (deletes regardless of merge state).
     """
     current = current_branch(cwd)
+    existing = all_local_branches(cwd)
     flag = "-D" if force else "-d"
     deleted: list[str] = []
     for name in branches:
         if name == current:
             continue
-        if not branch_exists(name, cwd=cwd):
+        if name not in existing:
             continue
         run_git("branch", flag, name, cwd=cwd)
         deleted.append(name)

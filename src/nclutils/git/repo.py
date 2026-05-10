@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 from nclutils.sh import ShellCommandError, which
 
@@ -20,6 +21,11 @@ _PORCELAIN_V2_XY_LEN = 2
 def _cwd_for_message(cwd: Path | str | None) -> Path:
     """Return the cwd as a Path for use in error messages (unresolved is fine)."""
     return Path(cwd) if cwd is not None else Path.cwd()
+
+
+def _not_a_repo_error(cwd: Path | str | None) -> NotARepoError:
+    """Build a NotARepoError with the standard "not a git repository: <cwd>" message."""
+    return NotARepoError(f"not a git repository: {_cwd_for_message(cwd)}")
 
 
 def is_git_installed() -> bool:
@@ -44,8 +50,7 @@ def repo_root(cwd: Path | str | None = None) -> Path:
     """
     result = run_git("rev-parse", "--show-toplevel", cwd=cwd, check=False)
     if result.returncode != 0:
-        msg = f"not a git repository: {_cwd_for_message(cwd)}"
-        raise NotARepoError(msg)
+        raise _not_a_repo_error(cwd)
     return Path(result.stdout.strip())
 
 
@@ -89,8 +94,7 @@ def is_rebase_in_progress(cwd: Path | str | None = None) -> bool:
     # --absolute-git-dir gives us a usable Path without manual cwd resolution.
     git_dir_result = run_git("rev-parse", "--absolute-git-dir", cwd=cwd, check=False)
     if git_dir_result.returncode != 0:
-        msg = f"not a git repository: {_cwd_for_message(cwd)}"
-        raise NotARepoError(msg)
+        raise _not_a_repo_error(cwd)
     git_dir = Path(git_dir_result.stdout.strip())
     return (git_dir / "rebase-merge").exists() or (git_dir / "rebase-apply").exists()
 
@@ -116,7 +120,9 @@ class RepoState:
     rebase_in_progress: bool
 
 
-def _classify_porcelain_v2_entry(line: str) -> str | None:  # noqa: PLR0911
+def _classify_porcelain_v2_entry(  # noqa: PLR0911
+    line: str,
+) -> Literal["staged", "modified", "unmerged", "untracked"] | None:
     """Return one of 'staged', 'modified', 'unmerged', 'untracked', or None.
 
     Porcelain v2 lines:
@@ -132,7 +138,6 @@ def _classify_porcelain_v2_entry(line: str) -> str | None:  # noqa: PLR0911
         return "unmerged"
     if not line.startswith(("1 ", "2 ")):
         return None
-    # XY is the second whitespace-delimited field (after the leading "1" or "2")
     parts = line.split(" ", 2)
     if len(parts) < 2:  # noqa: PLR2004 -- minimum field count for malformed-line guard
         return None
