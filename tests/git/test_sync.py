@@ -55,3 +55,8 @@ class TestFetch:
         # When/Then
         with pytest.raises(ShellCommandFailedError):
             fetch(repo)
+
+    def test_fetch_all_remotes(self, repo_with_remote: Path) -> None:
+        """Verify fetch(all_remotes=True) calls git fetch --all without raising."""
+        # Given/When/Then
+        fetch(repo_with_remote, all_remotes=True)

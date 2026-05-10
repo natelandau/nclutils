@@ -54,13 +54,15 @@ def fetch(
         if primary is not None:
             target = primary[0]
     if target is None:
+        # Match nclutils.sh.run_command's cwd invariant (always None or absolute resolved Path).
+        resolved_cwd = Path(cwd).expanduser().resolve() if cwd is not None else None
         result = CompletedCommand(
             argv=("git", *args),
             returncode=1,
             stdout="",
             stderr="fetch: no remote configured and no remote argument given",
             duration=0.0,
-            cwd=Path(cwd) if cwd is not None else None,
+            cwd=resolved_cwd,
         )
         raise ShellCommandFailedError(result=result)
 
