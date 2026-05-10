@@ -1,5 +1,13 @@
 """Git utilities built on top of nclutils.sh."""
 
+from .branch import (
+    ahead_behind,
+    all_local_branches,
+    branch_exists,
+    current_branch,
+    default_branch,
+    tracking_branch,
+)
 from .repo import (
     is_dirty,
     is_git_installed,
@@ -12,6 +20,11 @@ from .runner import NotARepoError, run_git
 
 __all__ = [
     "NotARepoError",
+    "ahead_behind",
+    "all_local_branches",
+    "branch_exists",
+    "current_branch",
+    "default_branch",
     "is_dirty",
     "is_git_installed",
     "is_git_repo",
@@ -19,4 +32,5 @@ __all__ = [
     "primary_remote",
     "repo_root",
     "run_git",
+    "tracking_branch",
 ]

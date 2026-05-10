@@ -70,6 +70,7 @@ def repo_with_remote(tmp_path: Path) -> Path:
     _git("commit", "-m", "initial", cwd=work)
     _git("remote", "add", "origin", str(remote), cwd=work)
     _git("push", "-u", "origin", "main", cwd=work)
+    _git("remote", "set-head", "origin", "main", cwd=work)
     return work
 
 
@@ -106,3 +107,59 @@ def repo_in_rebase(repo: Path) -> Path:
     )
     assert proc.returncode != 0  # paused at the conflict
     return repo
+
+
+@pytest.fixture
+def repo_with_branches(repo_with_remote: Path) -> Path:
+    """Repo with: feat (tracks origin/feat), local-only (no upstream)."""
+    _git("checkout", "-b", "feat", cwd=repo_with_remote)
+    (repo_with_remote / "f.txt").write_text("f\n")
+    _git("add", "f.txt", cwd=repo_with_remote)
+    _git("commit", "-m", "feat", cwd=repo_with_remote)
+    _git("push", "-u", "origin", "feat", cwd=repo_with_remote)
+
+    _git("checkout", "-b", "local-only", "main", cwd=repo_with_remote)
+    _git("checkout", "main", cwd=repo_with_remote)
+    return repo_with_remote
+
+
+@pytest.fixture
+def repo_detached_head(repo: Path) -> Path:
+    """Repo checked out at a commit (detached HEAD)."""
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"],  # noqa: S607 -- relying on PATH for git is intentional in tests
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    _git("checkout", head, cwd=repo)
+    return repo
+
+
+@pytest.fixture
+def repo_diverged(repo_with_remote: Path) -> Path:
+    """Repo whose main is 2 ahead of origin/main, after origin gained 1 new commit."""
+    # Local commits
+    (repo_with_remote / "a.txt").write_text("a\n")
+    _git("add", "a.txt", cwd=repo_with_remote)
+    _git("commit", "-m", "a", cwd=repo_with_remote)
+    (repo_with_remote / "b.txt").write_text("b\n")
+    _git("add", "b.txt", cwd=repo_with_remote)
+    _git("commit", "-m", "b", cwd=repo_with_remote)
+
+    # Add a commit on the bare remote via a sibling clone, then re-fetch.
+    sibling = repo_with_remote.parent / "sibling"
+    _git(
+        "clone",
+        str(repo_with_remote.parent / "remote.git"),
+        str(sibling),
+        cwd=repo_with_remote.parent,
+    )
+    (sibling / "c.txt").write_text("c\n")
+    _git("add", "c.txt", cwd=sibling)
+    _git("commit", "-m", "c", cwd=sibling)
+    _git("push", "origin", "main", cwd=sibling)
+
+    _git("fetch", "origin", cwd=repo_with_remote)
+    return repo_with_remote
