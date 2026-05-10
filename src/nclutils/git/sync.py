@@ -58,7 +58,7 @@ def fetch(
     if target is None:
         primary = primary_remote(cwd)
         if primary is not None:
-            target = primary[0]
+            target = primary.name
     if target is None:
         msg = "fetch: no remote configured and no remote argument given"
         raise ShellCommandFailedError(msg=msg)

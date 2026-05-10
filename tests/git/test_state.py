@@ -29,6 +29,16 @@ class TestGetRepoState:
         assert state.unmerged == 0
         assert state.stash_count == 0
         assert state.rebase_in_progress is False
+        assert state.primary_remote is None
+
+    def test_primary_remote_populated(self, repo_with_remote: Path) -> None:
+        """Verify get_repo_state populates primary_remote when one is configured."""
+        # Given/When
+        state = get_repo_state(repo_with_remote)
+        # Then
+        assert state.primary_remote is not None
+        assert state.primary_remote.name == "origin"
+        assert state.primary_remote.url.endswith("remote.git")
 
     def test_dirty_repo(self, dirty_repo: Path) -> None:
         """Verify get_repo_state reports an untracked file."""

@@ -54,8 +54,20 @@ def repo_root(cwd: Path | str | None = None) -> Path:
     return Path(result.stdout.strip())
 
 
-def primary_remote(cwd: Path | str | None = None) -> tuple[str, str] | None:
-    """Return the (name, url) of the first configured remote, or None.
+@dataclass(frozen=True, slots=True)
+class Remote:
+    """A configured git remote.
+
+    ``name`` is the short remote name (e.g., ``"origin"``).
+    ``url`` is the configured fetch URL.
+    """
+
+    name: str
+    url: str
+
+
+def primary_remote(cwd: Path | str | None = None) -> Remote | None:
+    """Return the first configured remote, or None.
 
     "First" means the first line returned by ``git remote`` (alphabetical
     by default). Most repos have only one remote, so this is usually
@@ -68,7 +80,7 @@ def primary_remote(cwd: Path | str | None = None) -> tuple[str, str] | None:
     url_result = run_git("remote", "get-url", name, cwd=cwd, check=False)
     if url_result.returncode != 0:
         return None
-    return (name, url_result.stdout.strip())
+    return Remote(name=name, url=url_result.stdout.strip())
 
 
 def is_dirty(cwd: Path | str | None = None) -> bool:
@@ -110,6 +122,7 @@ class RepoState:
     root: Path
     branch: str | None
     upstream: str | None
+    primary_remote: Remote | None
     ahead: int
     behind: int
     is_dirty: bool
@@ -172,18 +185,21 @@ def get_repo_state(cwd: Path | str | None = None) -> RepoState:
     """Snapshot a repo's state in one git status pass.
 
     Replaces 6+ separate primitive calls (current_branch, is_dirty,
-    ahead_behind, stash list, status --porcelain, rebase-in-progress).
+    ahead_behind, stash list, status --porcelain, rebase-in-progress,
+    primary remote).
 
-    Issues four subprocess calls under the hood:
+    Issues these subprocess calls under the hood:
       1. ``git rev-parse --show-toplevel`` (via ``repo_root``) for the
          root path and to surface ``NotARepoError`` cleanly.
       2. ``git status --branch --porcelain=v2`` for branch, upstream,
          ahead/behind, and file counts.
       3. ``git stash list`` filtered to the current branch.
       4. ``git rev-parse --absolute-git-dir`` (via ``is_rebase_in_progress``).
+      5. ``git remote`` and ``git remote get-url`` (via ``primary_remote``)
+         for the first configured remote, if any.
 
-    The composite still wins because callers no longer assemble six
-    separate primitive calls and parse status output themselves.
+    The composite still wins because callers no longer assemble the
+    primitive calls and parse status output themselves.
 
     Raises:
         NotARepoError: cwd is not inside a repo.
@@ -229,11 +245,13 @@ def get_repo_state(cwd: Path | str | None = None) -> RepoState:
     is_dirty_now = bool(staged or modified or untracked or unmerged)
     stash_count = _stash_count_for_branch(branch, cwd)
     rebase = is_rebase_in_progress(cwd)
+    primary = primary_remote(cwd)
 
     return RepoState(
         root=root,
         branch=branch,
         upstream=upstream,
+        primary_remote=primary,
         ahead=ahead,
         behind=behind,
         is_dirty=is_dirty_now,

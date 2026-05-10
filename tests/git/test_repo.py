@@ -72,15 +72,14 @@ class TestPrimaryRemote:
     """Tests for primary_remote."""
 
     def test_returns_name_and_url(self, repo_with_remote: Path) -> None:
-        """Verify primary_remote returns (name, url) when origin is configured."""
+        """Verify primary_remote returns a Remote with name and url when origin is configured."""
         # Given/When
         result = primary_remote(repo_with_remote)
 
         # Then
         assert result is not None
-        name, url = result
-        assert name == "origin"
-        assert "remote.git" in url
+        assert result.name == "origin"
+        assert "remote.git" in result.url
 
     def test_returns_none_with_no_remote(self, repo: Path) -> None:
         """Verify primary_remote returns None when no remote is configured."""

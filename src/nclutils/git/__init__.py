@@ -13,6 +13,7 @@ from .branch import (
     tracking_branch,
 )
 from .repo import (
+    Remote,
     RepoState,
     get_repo_state,
     is_dirty,
@@ -34,6 +35,7 @@ from .worktree import (
 
 __all__ = [
     "NotARepoError",
+    "Remote",
     "RepoState",
     "SyncResult",
     "Worktree",
