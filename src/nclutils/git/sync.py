@@ -5,7 +5,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, NoReturn
 
 from nclutils.sh import CompletedCommand, ShellCommandFailedError
 
@@ -15,6 +15,26 @@ from .runner import run_git
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+
+
+def _resolved_cwd(cwd: Path | str | None) -> Path | None:
+    """Resolve cwd to an absolute Path or None (matches CompletedCommand invariant)."""
+    if cwd is None:
+        return None
+    return Path(cwd).expanduser().resolve()
+
+
+def _raise_failed(argv: tuple[str, ...], stderr: str, cwd: Path | str | None) -> NoReturn:
+    """Raise ShellCommandFailedError with a synthetic CompletedCommand."""
+    result = CompletedCommand(
+        argv=argv,
+        returncode=1,
+        stdout="",
+        stderr=stderr,
+        duration=0.0,
+        cwd=_resolved_cwd(cwd),
+    )
+    raise ShellCommandFailedError(result=result)
 
 
 def fetch(
@@ -60,17 +80,11 @@ def fetch(
         if primary is not None:
             target = primary[0]
     if target is None:
-        # Match nclutils.sh.run_command's cwd invariant (always None or absolute resolved Path).
-        resolved_cwd = Path(cwd).expanduser().resolve() if cwd is not None else None
-        result = CompletedCommand(
+        _raise_failed(
             argv=("git", *args),
-            returncode=1,
-            stdout="",
             stderr="fetch: no remote configured and no remote argument given",
-            duration=0.0,
-            cwd=resolved_cwd,
+            cwd=cwd,
         )
-        raise ShellCommandFailedError(result=result)
 
     args.append(target)
     run_git(*args, cwd=cwd)
@@ -135,26 +149,6 @@ def _conflict_paths(cwd: Path | str | None) -> tuple[Path, ...]:
     return tuple(Path(line.strip()) for line in result.stdout.splitlines() if line.strip())
 
 
-def _resolved_cwd(cwd: Path | str | None) -> Path | None:
-    """Resolve cwd to an absolute Path or None (matches CompletedCommand invariant)."""
-    if cwd is None:
-        return None
-    return Path(cwd).expanduser().resolve()
-
-
-def _raise_failed(argv: tuple[str, ...], stderr: str, cwd: Path | str | None) -> None:
-    """Raise ShellCommandFailedError with a synthetic CompletedCommand."""
-    result = CompletedCommand(
-        argv=argv,
-        returncode=1,
-        stdout="",
-        stderr=stderr,
-        duration=0.0,
-        cwd=_resolved_cwd(cwd),
-    )
-    raise ShellCommandFailedError(result=result)
-
-
 def sync_branch(
     cwd: Path | str | None = None,
     *,
@@ -163,11 +157,18 @@ def sync_branch(
     allow_rebase: bool = True,
     on_conflict: Literal["abort", "leave"] = "abort",
 ) -> SyncResult:
-    """Fetch and pull (rebase) ``branch`` from its upstream.
+    """Fetch and pull (rebase) the current branch from its upstream.
+
+    The optional ``branch=`` parameter is a safety check: if provided, it
+    must equal the currently checked-out branch, otherwise ``ValueError``
+    is raised. ``sync_branch`` always operates on the checked-out branch
+    because ``git pull`` does, the parameter exists so callers can assert
+    they are syncing the branch they think they are.
 
     Sequence:
-      1. Resolve branch (default: ``current_branch``). If ``branch=None`` and
-         ``current_branch()`` is None (detached HEAD), raise ``ValueError``.
+      1. Resolve the current branch via ``current_branch(cwd)``. If None
+         (detached HEAD), raise ValueError. If ``branch=`` was passed and
+         doesn't match, also raise ValueError.
       2. Resolve upstream via ``tracking_branch(branch)``. If None, raise
          ``ValueError``.
       3. ``fetch()`` the upstream's remote.
@@ -186,17 +187,24 @@ def sync_branch(
 
     Raises:
         NotARepoError: cwd is not a git repo.
-        ValueError: detached HEAD with ``branch=None``, or branch has no
-            upstream.
+        ValueError: detached HEAD, ``branch=`` does not match the checked-out
+            branch, or the branch has no upstream.
         ShellCommandFailedError: dirty tree with ``stash=False``, unrecoverable
             rebase conflict (``on_conflict='leave'``), failed
             ``git rebase --abort``, or any other git command failure not
             handled above.
     """
-    target = branch if branch is not None else current_branch(cwd)
-    if target is None:
-        msg = "sync_branch: detached HEAD; pass an explicit branch="
+    current = current_branch(cwd)
+    if current is None:
+        msg = "sync_branch: detached HEAD; check out a branch first"
         raise ValueError(msg)
+    if branch is not None and branch != current:
+        msg = (
+            f"sync_branch: branch={branch!r} does not match the checked-out "
+            f"branch {current!r}; sync_branch operates on the current branch"
+        )
+        raise ValueError(msg)
+    target = current
 
     upstream = tracking_branch(target, cwd)
     if upstream is None:
@@ -267,15 +275,11 @@ def _do_pull(
 
     if not allow_rebase:
         # Caller refused rebase but ff-only failed (or wasn't tried).
-        result = CompletedCommand(
+        _raise_failed(
             argv=("git", "pull"),
-            returncode=1,
-            stdout="",
             stderr="sync_branch: fast-forward not possible and allow_rebase=False",
-            duration=0.0,
-            cwd=_resolved_cwd(cwd),
+            cwd=cwd,
         )
-        raise ShellCommandFailedError(result=result)
 
     rebase_result = run_git("pull", "--rebase", cwd=cwd, check=False)
     if rebase_result.returncode == 0:

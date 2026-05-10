@@ -173,17 +173,48 @@ class TestSyncBranch:
         assert result.behind_before == 1
         assert result.ahead_before == 0
 
-    def test_dirty_with_stash_round_trip(self, repo_with_remote: Path) -> None:
-        """Verify sync_branch with stash=True restores dirty state after a no-op sync."""
-        # Given: a dirty tree (no remote changes, so up-to-date)
-        (repo_with_remote / "x.txt").write_text("x\n")
+    def test_dirty_with_stash_round_trip(self, repo_with_remote: Path, tmp_path: Path) -> None:
+        """Verify dirty tree is stashed, sync runs, then dirty state restored."""
+        # Given: dirty tree + behind state via sibling push
+        env = {
+            **os.environ,
+            "GIT_AUTHOR_NAME": "Test",
+            "GIT_AUTHOR_EMAIL": "test@example.com",
+            "GIT_COMMITTER_NAME": "Test",
+            "GIT_COMMITTER_EMAIL": "test@example.com",
+        }
+        sibling = tmp_path / "stash_round_sibling"
+        subprocess.run(  # noqa: S603 -- argv is a list; git lookup via PATH is intentional in tests
+            ["git", "clone", str(tmp_path / "remote.git"), str(sibling)],  # noqa: S607
+            check=True,
+            capture_output=True,
+        )
+        (sibling / "z.txt").write_text("z\n")
+        subprocess.run(["git", "add", "z.txt"], cwd=sibling, env=env, check=True)  # noqa: S607
+        subprocess.run(
+            ["git", "-c", "commit.gpgsign=false", "commit", "-m", "z"],  # noqa: S607
+            cwd=sibling,
+            env=env,
+            check=True,
+        )
+        subprocess.run(
+            ["git", "push", "origin", "main"],  # noqa: S607
+            cwd=sibling,
+            env=env,
+            check=True,
+        )
+
+        # Make local tree dirty
+        (repo_with_remote / "dirty.txt").write_text("dirty\n")
 
         # When
         result = sync_branch(repo_with_remote, stash=True)
 
-        # Then: untracked file is preserved
-        assert result.action == "up_to_date"
-        assert (repo_with_remote / "x.txt").exists()
+        # Then: ff applied, stashed flag set, dirty file restored
+        assert result.action == "fast_forwarded"
+        assert result.stashed is True
+        assert result.behind_before == 1
+        assert (repo_with_remote / "dirty.txt").exists()
 
     def test_dirty_with_stash_false_raises(self, repo_with_remote: Path) -> None:
         """Verify sync_branch with stash=False raises if there are changes to lose."""
@@ -234,3 +265,15 @@ class TestSyncBranch:
         # Given/When/Then
         with pytest.raises(ValueError, match="upstream"):
             sync_branch(repo)
+
+    def test_rebase_diverged(self, repo_diverged: Path) -> None:
+        """Verify sync_branch rebases when ahead and behind are both nonzero."""
+        # Given: repo_diverged is 2 ahead, 1 behind
+        # When
+        result = sync_branch(repo_diverged)
+
+        # Then
+        assert result.action == "rebased"
+        assert result.ahead_before == 2
+        assert result.behind_before == 1
+        assert result.stashed is False
