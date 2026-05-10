@@ -24,13 +24,20 @@ from .repo import (
 )
 from .runner import NotARepoError, run_git
 from .sync import SyncResult, fetch, stashed, sync_branch
-from .worktree import Worktree, create_worktree, list_worktrees, remove_worktree
+from .worktree import (
+    Worktree,
+    add_worktree,
+    create_worktree,
+    list_worktrees,
+    remove_worktree,
+)
 
 __all__ = [
     "NotARepoError",
     "RepoState",
     "SyncResult",
     "Worktree",
+    "add_worktree",
     "ahead_behind",
     "all_local_branches",
     "branch_exists",

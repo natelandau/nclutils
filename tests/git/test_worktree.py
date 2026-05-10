@@ -2,14 +2,18 @@
 
 from pathlib import Path
 
+import pytest
+
 from nclutils.git import (
     Worktree,
+    add_worktree,
     branch_exists,
     create_worktree,
     list_worktrees,
     remove_worktree,
     run_git,
 )
+from nclutils.git import worktree as wt_mod
 
 
 class TestListWorktrees:
@@ -74,3 +78,33 @@ class TestRemoveWorktree:
         # Then
         resolved_paths = {wt.path.resolve() for wt in list_worktrees(repo_with_worktree)}
         assert wt_path.resolve() not in resolved_paths
+
+
+class TestAddWorktree:
+    """Tests for add_worktree."""
+
+    def test_returns_worktree_record(self, repo: Path, tmp_path: Path) -> None:
+        """Verify add_worktree returns a Worktree matching what list_worktrees reports."""
+        # Given/When
+        wt_path = tmp_path / "wt-add"
+        result = add_worktree(wt_path, "feature-add", cwd=repo, new_branch=True)
+
+        # Then
+        assert isinstance(result, Worktree)
+        assert result.path.resolve() == wt_path.resolve()
+        assert result.branch == "feature-add"
+
+        # And the record matches the listing
+        listed = next(wt for wt in list_worktrees(repo) if wt.path.resolve() == wt_path.resolve())
+        assert listed == result
+
+    def test_raises_when_worktree_not_found_after_create(
+        self, repo: Path, tmp_path: Path, mocker: pytest.MonkeyPatch
+    ) -> None:
+        """Verify add_worktree raises if the listing does not contain the new path."""
+        # Given: simulate a create that leaves no listing
+        mocker.patch.object(wt_mod, "list_worktrees", autospec=True, return_value=[])
+
+        # When/Then
+        with pytest.raises(RuntimeError, match="not found"):
+            add_worktree(tmp_path / "nope", "x", cwd=repo, new_branch=True)

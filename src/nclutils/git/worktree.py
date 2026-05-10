@@ -148,3 +148,50 @@ def remove_worktree(
         args.append("--force")
     args.append(str(path))
     run_git(*args, cwd=cwd)
+
+
+def add_worktree(
+    path: Path | str,
+    branch: str,
+    *,
+    cwd: Path | str | None = None,
+    new_branch: bool = False,
+    start_point: str | None = None,
+) -> Worktree:
+    """Create a worktree and return its :class:`Worktree` record.
+
+    Composite over :func:`create_worktree` + :func:`list_worktrees`. Creates
+    the worktree, then reads back the resolved record from
+    ``git worktree list``.
+
+    Args:
+        path: Filesystem path where the new worktree will be created.
+        branch: Branch name to check out (or create when ``new_branch=True``).
+        cwd: Working directory of the source repo; ``None`` inherits the
+            process cwd.
+        new_branch: When ``True``, create ``branch`` as part of adding the
+            worktree (passes ``-b`` to ``git worktree add``).
+        start_point: Optional commit/ref to base ``branch`` on. Only honored
+            when ``new_branch=True``.
+
+    Returns:
+        The :class:`Worktree` record for the newly created worktree.
+
+    Raises:
+        RuntimeError: the worktree was created but does not appear in the
+            subsequent listing. Should not happen in practice; guards
+            against silent bugs.
+    """
+    create_worktree(
+        path,
+        branch,
+        cwd=cwd,
+        new_branch=new_branch,
+        start_point=start_point,
+    )
+    resolved_path = Path(path).expanduser().resolve()
+    for wt in list_worktrees(cwd):
+        if wt.path.resolve() == resolved_path:
+            return wt
+    msg = f"add_worktree: created worktree at {resolved_path} not found in listing"
+    raise RuntimeError(msg)
