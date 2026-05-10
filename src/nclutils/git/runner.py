@@ -1,4 +1,4 @@
-"""Foundation: NotARepoError, run_git, cwd resolution.
+"""Foundation: NotARepoError, run_git.
 
 This module is the single git-subprocess entry point. Every other module in
 nclutils.git calls run_git rather than running subprocess directly.
@@ -7,29 +7,19 @@ nclutils.git calls run_git rather than running subprocess directly.
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from nclutils.sh import CompletedCommand, run_command
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+    from pathlib import Path
 
 logger = logging.getLogger("nclutils.git")
 
 
 class NotARepoError(Exception):
     """Raised when an operation requires a git repo but cwd isn't inside one."""
-
-
-def _resolve_cwd(cwd: Path | str | None) -> Path | None:
-    """Normalize cwd to an absolute Path or None.
-
-    None means "inherit the process cwd". We let run_command handle it.
-    """
-    if cwd is None:
-        return None
-    return Path(cwd).expanduser().resolve()
 
 
 def run_git(  # noqa: PLR0913
@@ -45,10 +35,11 @@ def run_git(  # noqa: PLR0913
 ) -> CompletedCommand:
     """Run a git subcommand and return the structured result.
 
-    Thin wrapper over :func:`nclutils.sh.run_command`. Prepends ``git`` to
-    ``args``, logs the invocation at DEBUG level under the
-    ``nclutils.git`` logger, and otherwise passes every parameter through
-    verbatim.
+    Thin prefix-and-log wrapper over :func:`nclutils.sh.run_command`.
+    Prepends ``git`` to ``args``, logs the invocation at DEBUG level under
+    the ``nclutils.git`` logger, and passes every other parameter through
+    verbatim. ``run_command`` handles cwd normalization (``Path.expanduser().resolve()``
+    plus ``is_dir()`` validation), so this layer does not re-resolve.
 
     Args:
         *args: Git subcommand and arguments. ``run_git("status", "-s")``
@@ -81,7 +72,7 @@ def run_git(  # noqa: PLR0913
     logger.debug(" ".join(argv))
     return run_command(
         argv,
-        cwd=_resolve_cwd(cwd),
+        cwd=cwd,
         env=env,
         input=input,
         timeout=timeout,
