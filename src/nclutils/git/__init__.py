@@ -24,14 +24,17 @@ from .repo import (
 )
 from .runner import NotARepoError, run_git
 from .sync import SyncResult, fetch, stashed, sync_branch
+from .worktree import Worktree, create_worktree, list_worktrees, remove_worktree
 
 __all__ = [
     "NotARepoError",
     "RepoState",
     "SyncResult",
+    "Worktree",
     "ahead_behind",
     "all_local_branches",
     "branch_exists",
+    "create_worktree",
     "current_branch",
     "default_branch",
     "delete_branches",
@@ -42,9 +45,11 @@ __all__ = [
     "is_git_installed",
     "is_git_repo",
     "is_rebase_in_progress",
+    "list_worktrees",
     "merged_branches",
     "primary_remote",
     "prunable_branches",
+    "remove_worktree",
     "repo_root",
     "run_git",
     "stashed",

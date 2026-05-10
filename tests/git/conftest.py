@@ -11,6 +11,20 @@ from pathlib import Path
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _scrub_git_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Strip inherited GIT_* env vars for every test in tests/git/.
+
+    Pre-commit hooks set GIT_INDEX_FILE, GIT_DIR, GIT_WORK_TREE, etc. pointing
+    at the host repo. Those leak into subprocess calls that operate on temp
+    repos and break operations like `git worktree add` (which tries to write
+    a new index at the inherited path).
+    """
+    for key in list(os.environ):
+        if key.startswith("GIT_"):
+            monkeypatch.delenv(key, raising=False)
+
+
 def _git(*args: str, cwd: Path) -> None:
     """Run a git command with deterministic identity and signing off."""
     env = {
@@ -200,3 +214,11 @@ def repo_with_stash(dirty_repo: Path) -> Path:
     """Repo with one stash entry on the current branch."""
     _git("stash", "push", "-u", "-m", "test stash", cwd=dirty_repo)
     return dirty_repo
+
+
+@pytest.fixture
+def repo_with_worktree(repo: Path, tmp_path: Path) -> Path:
+    """Repo plus a worktree at tmp_path/wt-feat tracking branch 'feat'."""
+    wt_path = tmp_path / "wt-feat"
+    _git("worktree", "add", "-b", "feat", str(wt_path), cwd=repo)
+    return repo
