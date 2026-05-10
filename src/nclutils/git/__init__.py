@@ -6,8 +6,10 @@ from .branch import (
     branch_exists,
     current_branch,
     default_branch,
+    delete_branches,
     gone_branches,
     merged_branches,
+    prunable_branches,
     tracking_branch,
 )
 from .repo import (
@@ -32,6 +34,7 @@ __all__ = [
     "branch_exists",
     "current_branch",
     "default_branch",
+    "delete_branches",
     "fetch",
     "get_repo_state",
     "gone_branches",
@@ -41,6 +44,7 @@ __all__ = [
     "is_rebase_in_progress",
     "merged_branches",
     "primary_remote",
+    "prunable_branches",
     "repo_root",
     "run_git",
     "stashed",

@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from .runner import run_git
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from pathlib import Path
 
 _GONE_RE = re.compile(r"^[*+ ]?\s*(\S+)\s+\S+\s+\[[^\]]+:\s*gone\b")
@@ -149,3 +150,87 @@ def gone_branches(cwd: Path | str | None = None) -> frozenset[str]:
         if match:
             out.add(match.group(1))
     return frozenset(out)
+
+
+def _empty_branches(target: str, cwd: Path | str | None) -> set[str]:
+    """Return local branches with zero commits ahead of ``target``."""
+    out: set[str] = set()
+    for name in all_local_branches(cwd):
+        if name == target:
+            continue
+        ahead, _ = ahead_behind(name, target, cwd=cwd)
+        if ahead == 0:
+            out.add(name)
+    return out
+
+
+def prunable_branches(
+    cwd: Path | str | None = None,
+    *,
+    merged: bool = True,
+    gone: bool = True,
+    empty: bool = True,
+    target: str | None = None,
+    exclude: tuple[str, ...] = ("main", "master", "develop"),
+) -> list[str]:
+    """Return local branches safe to delete.
+
+    Combines:
+      - branches merged into ``target`` (default: default_branch())  if merged=True
+      - branches whose upstream is gone                               if gone=True
+      - branches with zero commits ahead of ``target``                if empty=True
+
+    Always excludes the current branch and any name in ``exclude``.
+
+    Raises:
+        ValueError: target=None and default_branch() returns None.
+    """
+    if (merged or empty) and target is None:
+        target = default_branch(cwd)
+    if (merged or empty) and target is None:
+        msg = "prunable_branches: no target and default branch could not be resolved"
+        raise ValueError(msg)
+
+    candidates: set[str] = set()
+    if merged and target is not None:
+        candidates |= set(merged_branches(target, cwd=cwd))
+    if gone:
+        candidates |= set(gone_branches(cwd=cwd))
+    if empty and target is not None:
+        candidates |= _empty_branches(target, cwd)
+
+    current = current_branch(cwd)
+    excluded = set(exclude)
+    if current is not None:
+        excluded.add(current)
+    if target is not None:
+        excluded.add(target)
+
+    return sorted(candidates - excluded)
+
+
+def delete_branches(
+    branches: Sequence[str],
+    cwd: Path | str | None = None,
+    *,
+    force: bool = False,
+) -> list[str]:
+    """Delete local branches; return the names actually deleted.
+
+    Silently skips:
+      - the current branch (``git branch -d`` would fail anyway)
+      - branches that don't exist locally
+
+    With ``force=True``, runs ``git branch -D`` (deletes regardless of merge state).
+    """
+    current = current_branch(cwd)
+    flag = "-D" if force else "-d"
+    deleted: list[str] = []
+    for name in branches:
+        if name == current:
+            continue
+        if not branch_exists(name, cwd=cwd):
+            continue
+        run_git("branch", flag, name, cwd=cwd)
+        deleted.append(name)
+    return deleted
