@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import pytest
+from pytest_mock import MockerFixture
 
 from nclutils.git import (
     Worktree,
@@ -99,7 +100,7 @@ class TestAddWorktree:
         assert listed == result
 
     def test_raises_when_worktree_not_found_after_create(
-        self, repo: Path, tmp_path: Path, mocker: pytest.MonkeyPatch
+        self, repo: Path, tmp_path: Path, mocker: MockerFixture
     ) -> None:
         """Verify add_worktree raises if the listing does not contain the new path."""
         # Given: simulate a create that leaves no listing
