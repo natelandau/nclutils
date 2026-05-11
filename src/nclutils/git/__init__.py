@@ -22,6 +22,7 @@ from .repo import (
     is_rebase_in_progress,
     primary_remote,
     repo_root,
+    stash_counts,
 )
 from .runner import NotARepoError, run_git
 from .sync import SyncResult, fetch, stashed, sync_branch
@@ -61,6 +62,7 @@ __all__ = [
     "remove_worktree",
     "repo_root",
     "run_git",
+    "stash_counts",
     "stashed",
     "sync_branch",
     "tracking_branch",

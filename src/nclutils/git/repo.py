@@ -268,6 +268,40 @@ def _classify_porcelain_v2_entry(  # noqa: PLR0911
     return None
 
 
+def stash_counts(
+    cwd: Path | str | None = None,
+    *,
+    stream: bool = False,
+    env: Mapping[str, str] | None = None,
+) -> dict[str, int]:
+    r"""Return per-branch stash counts parsed from ``git stash list``.
+
+    Useful for status dashboards that need stash counts across the whole
+    repo rather than just the current branch (which is what
+    :attr:`RepoState.stash_count` reports).
+
+    Detached-HEAD stashes (where ``git stash list`` shows ``(no branch)``
+    instead of a branch name) are excluded. The regex's ``\S+`` group
+    cannot match across the whitespace inside ``(no branch)``.
+
+    Args:
+        cwd: Working directory; ``None`` inherits the process cwd.
+        stream: Forwarded to :func:`run_git`.
+        env: Forwarded to :func:`run_git`.
+
+    Returns:
+        Mapping of branch name to stash count. Empty dict when no
+        branch-attached stashes exist.
+    """
+    result = run_git("stash", "list", cwd=cwd, stream=stream, env=env)
+    counts: dict[str, int] = {}
+    for line in result.stdout.splitlines():
+        match = _STASH_BRANCH_RE.match(line)
+        if match:
+            counts[match.group(1)] = counts.get(match.group(1), 0) + 1
+    return counts
+
+
 def _stash_count_for_branch(
     branch: str | None,
     cwd: Path | str | None,
@@ -278,13 +312,7 @@ def _stash_count_for_branch(
     """Return the count of stash entries created on ``branch``."""
     if branch is None:
         return 0
-    result = run_git("stash", "list", cwd=cwd, stream=stream, env=env)
-    count = 0
-    for line in result.stdout.splitlines():
-        match = _STASH_BRANCH_RE.match(line)
-        if match and match.group(1) == branch:
-            count += 1
-    return count
+    return stash_counts(cwd, stream=stream, env=env).get(branch, 0)
 
 
 def get_repo_state(
