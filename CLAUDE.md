@@ -39,7 +39,15 @@ Every module must be imported from its submodule. The preferred form for the pre
 
 `docs/` contains per-module guides (`fs.md`, `strings.md`, `utils.md`, `pp.md`, `ask.md`, `shell_commands.md`). The README is an index; the `docs/` pages are the deep dives.
 
-**Always update documentation when code changes.** Any change that affects a public function's signature, behavior, defaults, exceptions, or examples must be reflected in the matching `docs/<module>.md` page (and the README's module summary table if the surface area shifts). New public exports must be added to the relevant `__init__.py`'s `__all__`, the module's API reference section in `docs/`, and the README. Removing or renaming a public symbol is a breaking change — update the docs in the same commit.
+`skill/` is the AI-agent-facing reference shipped alongside the source. `skill/SKILL.md` is the quick-reference card (import patterns, task-to-module lookup, top gotchas); `skill/references/<module>.md` holds per-module deep dives written for agents. Downstream agents read it directly from this repo, often pinned to a tag, so the content must stay accurate for the version it lives in.
+
+**Always update documentation when code changes.** Any change that affects a public function's signature, behavior, defaults, exceptions, or examples must be reflected in:
+
+1. The matching `docs/<module>.md` page (the human deep dive).
+2. The matching `skill/references/<module>.md` page (the agent deep dive), AND `skill/SKILL.md` if the change touches anything called out there (import patterns, the task-to-module table, the gotchas, the Python compatibility note, or the public-symbols list for a module).
+3. The README's module summary table if the surface area shifts.
+
+New public exports must be added to the relevant `__init__.py`'s `__all__`, the module's API reference section in `docs/`, the matching `skill/references/<module>.md`, the public-symbols list in `skill/SKILL.md`, and the README. Removing or renaming a public symbol is a breaking change — update `docs/`, `skill/`, and the README in the same commit. If a new top-level module is added, also add a new `skill/references/<module>.md` and link it from `skill/SKILL.md`.
 
 ### Two logging systems
 

@@ -104,6 +104,16 @@ replace_in_file("config.toml", {r"^old": "new"}, use_regex=True)
 ensure_lines_in_file(".gitignore", [".env", "*.pyc"])
 ```
 
+## For coding agents
+
+A bundled reference skill lives in [`skill/`](skill/). It's a quick-reference card aimed at AI coding agents working in projects that depend on `nclutils`: correct import paths, a task-to-module lookup, top gotchas (the `pp` vs stdlib `logging` split, `sh.run_command` error handling, places to reach for `nclutils` instead of hand-rolling shutil/subprocess/uuid equivalents), with per-module deep dives in [`skill/references/`](skill/references/).
+
+If you use an AI coding agent (Claude Code, Cursor, etc.) in a project that imports `nclutils`, point it at the skill before it starts editing. For example:
+
+> Before writing any code that touches `nclutils`, read `https://raw.githubusercontent.com/natelandau/nclutils/main/skill/SKILL.md`. Follow the import patterns and gotchas described there. If a task involves the `pp`, `sh`, `fs`, `git`, `strings`, or smaller modules in detail, also read the matching file under `https://raw.githubusercontent.com/natelandau/nclutils/main/skill/references/`.
+
+Pinning to a tag (e.g. `/v3.1.0/skill/SKILL.md`) keeps the guidance aligned with whichever version of `nclutils` the project depends on.
+
 ## Diagnostic logging
 
 Internal modules (`nclutils.fs`, `nclutils.text`) emit diagnostic messages through the stdlib `logging` module under their own logger names. By default these are silent. Attach a handler in your application to see them:
