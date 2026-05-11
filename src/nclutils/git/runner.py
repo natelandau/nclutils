@@ -6,7 +6,6 @@ nclutils.git calls run_git rather than running subprocess directly.
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING
 
 from nclutils.sh import CompletedCommand, run_command
@@ -14,8 +13,6 @@ from nclutils.sh import CompletedCommand, run_command
 if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
-
-logger = logging.getLogger("nclutils.git")
 
 
 class NotARepoError(Exception):
@@ -35,11 +32,11 @@ def run_git(  # noqa: PLR0913
 ) -> CompletedCommand:
     """Run a git subcommand and return the structured result.
 
-    Thin prefix-and-log wrapper over :func:`nclutils.sh.run_command`.
-    Prepends ``git`` to ``args``, logs the invocation at DEBUG level under
-    the ``nclutils.git`` logger, and passes every other parameter through
-    verbatim. ``run_command`` handles cwd normalization (``Path.expanduser().resolve()``
-    plus ``is_dir()`` validation), so this layer does not re-resolve.
+    Thin prefix wrapper over :func:`nclutils.sh.run_command`. Prepends
+    ``git`` to ``args`` and passes every other parameter through verbatim.
+    ``run_command`` handles cwd normalization (``Path.expanduser().resolve()``
+    plus ``is_dir()`` validation) and logs each invocation at DEBUG under
+    the ``nclutils.sh`` logger, so this layer does not duplicate either.
 
     Args:
         *args: Git subcommand and arguments. ``run_git("status", "-s")``
@@ -69,7 +66,6 @@ def run_git(  # noqa: PLR0913
         nclutils.sh.ShellCommandTimeoutError: ``timeout`` exceeded.
     """
     argv = ["git", *args]
-    logger.debug(" ".join(argv))
     return run_command(
         argv,
         cwd=cwd,

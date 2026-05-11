@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import logging
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -21,6 +23,8 @@ from .errors import (
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
+
+logger = logging.getLogger("nclutils.sh")
 
 
 def which(cmd: str) -> Path | None:
@@ -96,6 +100,9 @@ def run_command(  # noqa: C901, PLR0912, PLR0913, PLR0915
     if sudo:
         final_argv = ["sudo", *final_argv]
     final_argv_tuple = tuple(final_argv)
+
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug("%s", shlex.join(final_argv))
 
     resolved_cwd = _resolve_cwd(cwd)
     exclude_pattern = re.compile(exclude_regex) if exclude_regex else None

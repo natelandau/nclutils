@@ -425,6 +425,38 @@ class TestRunCommandCapture:
             assert result.cwd == tmp_path.resolve()
 
 
+class TestRunCommandLogging:
+    """Tests for the DEBUG logging emitted by run_command."""
+
+    @pytest.mark.parametrize(
+        ("argv", "expected"),
+        [
+            (["echo", "hello"], "echo hello"),
+            (["echo", "two words"], "'two words'"),
+        ],
+    )
+    def test_logs_argv_at_debug(
+        self, sh_caplog: pytest.LogCaptureFixture, argv: list[str], expected: str
+    ) -> None:
+        """Verify run_command emits the shlex-joined argv at DEBUG under nclutils.sh."""
+        # When
+        run_command(argv)
+
+        # Then
+        messages = [r.getMessage() for r in sh_caplog.records if r.name == "nclutils.sh"]
+        assert any(expected in m for m in messages)
+
+    def test_logs_before_subprocess_spawn(self, sh_caplog: pytest.LogCaptureFixture) -> None:
+        """Verify the invocation is logged even when the executable is missing."""
+        # When: a non-existent binary is invoked (raises before any output)
+        with pytest.raises(ShellCommandNotFoundError):
+            run_command(["definitely-not-a-real-binary-xyz-12345"])
+
+        # Then
+        messages = [r.getMessage() for r in sh_caplog.records if r.name == "nclutils.sh"]
+        assert any("definitely-not-a-real-binary-xyz-12345" in m for m in messages)
+
+
 class TestRunCommandStreaming:
     """Tests for stream=True and exclude_regex."""
 
