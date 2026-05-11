@@ -1,6 +1,7 @@
 """Git utilities built on top of nclutils.sh."""
 
 from .branch import (
+    DeleteOutcome,
     PrunableBranch,
     PruneReason,
     ahead_behind,
@@ -38,6 +39,7 @@ from .worktree import (
 )
 
 __all__ = [
+    "DeleteOutcome",
     "NotARepoError",
     "PrunableBranch",
     "PruneReason",

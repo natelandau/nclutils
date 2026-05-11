@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from nclutils.git import (
+    DeleteOutcome,
     PrunableBranch,
     branch_exists,
     delete_branches,
@@ -221,35 +222,71 @@ class TestPrunableBranches:
 class TestDeleteBranches:
     """Tests for delete_branches."""
 
-    def test_deletes_merged(self, repo_with_merged_branch: Path) -> None:
-        """Verify delete_branches removes a merged branch."""
+    def test_deleted_appears_in_outcome(self, repo_with_merged_branch: Path) -> None:
+        """Verify a successfully deleted branch lands in outcome.deleted."""
         # Given: merged-feat exists
         # When
-        deleted = delete_branches(["merged-feat"], cwd=repo_with_merged_branch)
+        outcome = delete_branches(["merged-feat"], cwd=repo_with_merged_branch)
         # Then
-        assert deleted == ["merged-feat"]
+        assert isinstance(outcome, DeleteOutcome)
+        assert outcome.deleted == ("merged-feat",)
+        assert outcome.skipped == ()
+        assert outcome.failed == {}
         assert branch_exists("merged-feat", cwd=repo_with_merged_branch) is False
 
-    def test_skips_current_branch(self, repo: Path) -> None:
-        """Verify delete_branches silently skips the current branch."""
+    def test_current_branch_skipped(self, repo: Path) -> None:
+        """Verify the current branch lands in outcome.skipped."""
         # Given/When
-        deleted = delete_branches(["main"], cwd=repo)
+        outcome = delete_branches(["main"], cwd=repo)
         # Then
-        assert deleted == []
+        assert outcome.deleted == ()
+        assert outcome.skipped == ("main",)
+        assert outcome.failed == {}
         assert branch_exists("main", cwd=repo) is True
 
-    def test_skips_missing_branch(self, repo: Path) -> None:
-        """Verify delete_branches silently skips a branch that doesn't exist."""
+    def test_missing_branch_skipped(self, repo: Path) -> None:
+        """Verify a non-existent branch lands in outcome.skipped."""
         # Given/When
-        deleted = delete_branches(["nope"], cwd=repo)
+        outcome = delete_branches(["nope"], cwd=repo)
         # Then
-        assert deleted == []
+        assert outcome.deleted == ()
+        assert outcome.skipped == ("nope",)
+        assert outcome.failed == {}
 
     def test_force_deletes_unmerged(self, repo_with_branches: Path) -> None:
         """Verify force=True deletes an unmerged branch."""
         # Given: feat is unmerged
         # When
-        deleted = delete_branches(["feat"], cwd=repo_with_branches, force=True)
+        outcome = delete_branches(["feat"], cwd=repo_with_branches, force=True)
         # Then
-        assert deleted == ["feat"]
+        assert outcome.deleted == ("feat",)
+        assert outcome.failed == {}
         assert branch_exists("feat", cwd=repo_with_branches) is False
+
+    def test_unmerged_branch_without_force_fails(self, repo_with_branches: Path) -> None:
+        """Verify an unmerged branch with force=False lands in outcome.failed."""
+        # Given: unpushed has local commits with no remote; git -d refuses it
+        # When
+        outcome = delete_branches(["unpushed"], cwd=repo_with_branches, force=False)
+        # Then
+        assert outcome.deleted == ()
+        assert outcome.skipped == ()
+        assert "unpushed" in outcome.failed
+        assert outcome.failed["unpushed"] != ""
+        assert branch_exists("unpushed", cwd=repo_with_branches) is True
+
+    def test_partial_failures_do_not_block_other_deletions(self, repo_with_branches: Path) -> None:
+        """Verify a per-branch failure does not stop subsequent branches."""
+        # Given: unpushed has local-only commits with no remote so -d fails;
+        # local-only is a no-op branch at main's commit, safely deletable with -d
+        # When: ask to delete a missing name, the unpushed branch, and
+        # local-only; only local-only should succeed
+        outcome = delete_branches(
+            ["nope", "unpushed", "local-only"],
+            cwd=repo_with_branches,
+            force=False,
+        )
+        # Then
+        assert outcome.deleted == ("local-only",)
+        assert outcome.skipped == ("nope",)
+        assert "unpushed" in outcome.failed

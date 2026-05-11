@@ -168,14 +168,21 @@ def repo_in_rebase(repo: Path) -> Path:
 
 @pytest.fixture
 def repo_with_branches(repo_with_remote: Path) -> Path:
-    """Repo with: feat (tracks origin/feat), local-only (no upstream)."""
+    """Repo with: feat (tracks origin/feat), local-only (no upstream), unpushed (local commits only)."""
     _git("checkout", "-b", "feat", cwd=repo_with_remote)
     (repo_with_remote / "f.txt").write_text("f\n")
     _git("add", "f.txt", cwd=repo_with_remote)
-    _git("commit", "-m", "feat", cwd=repo_with_remote)
+    _git("commit", "-m", "feat: add f", cwd=repo_with_remote)
     _git("push", "-u", "origin", "feat", cwd=repo_with_remote)
 
     _git("checkout", "-b", "local-only", "main", cwd=repo_with_remote)
+    _git("checkout", "main", cwd=repo_with_remote)
+
+    # unpushed has local commits with no upstream; git -d refuses it
+    _git("checkout", "-b", "unpushed", cwd=repo_with_remote)
+    (repo_with_remote / "u.txt").write_text("u\n")
+    _git("add", "u.txt", cwd=repo_with_remote)
+    _git("commit", "-m", "feat: unpushed commit", cwd=repo_with_remote)
     _git("checkout", "main", cwd=repo_with_remote)
     return repo_with_remote
 

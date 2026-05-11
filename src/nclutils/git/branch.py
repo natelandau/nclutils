@@ -34,6 +34,28 @@ class PrunableBranch:
     reason: PruneReason
 
 
+@dataclass(frozen=True, slots=True)
+class DeleteOutcome:
+    """Per-branch result from :func:`delete_branches`.
+
+    Returned by :func:`delete_branches`. Callers can report fine-grained
+    progress (e.g., "deleted 3, skipped 1, failed 2") instead of seeing
+    a list truncated by the first failure.
+
+    Attributes:
+        deleted: Branches that were actually deleted, in input order.
+        skipped: Branches skipped because they are the current branch or
+            do not exist locally.
+        failed: Branches whose ``git branch -d/-D`` invocation returned
+            non-zero. The value is the captured stderr (or a fallback
+            "git branch failed (exit N)" when stderr is empty).
+    """
+
+    deleted: tuple[str, ...]
+    skipped: tuple[str, ...]
+    failed: dict[str, str]
+
+
 def current_branch(
     cwd: Path | str | None = None,
     *,
@@ -382,24 +404,54 @@ def delete_branches(
     force: bool = False,
     stream: bool = False,
     env: Mapping[str, str] | None = None,
-) -> list[str]:
-    """Delete local branches; return the names actually deleted.
+) -> DeleteOutcome:
+    """Delete local branches, returning a structured per-branch outcome.
 
-    Silently skips:
-      - the current branch (``git branch -d`` would fail anyway)
-      - branches that don't exist locally
+    Skips (does not attempt) the current branch and branches that do not
+    exist locally. Per-branch deletion failures (e.g., unmerged with
+    ``force=False``) are captured in ``DeleteOutcome.failed`` rather than
+    raised. Infrastructural errors (git missing, not a repo) still
+    propagate.
 
-    With ``force=True``, runs ``git branch -D`` (deletes regardless of merge state).
+    With ``force=True``, runs ``git branch -D`` (deletes regardless of
+    merge state).
+
+    Args:
+        branches: Branch names to delete.
+        cwd: Working directory; ``None`` inherits the process cwd.
+        force: When ``True``, pass ``-D`` instead of ``-d``.
+        stream: Forwarded to :func:`run_git`.
+        env: Forwarded to :func:`run_git`.
+
+    Returns:
+        :class:`DeleteOutcome` with deleted, skipped, and failed groups.
     """
     current = current_branch(cwd, stream=stream, env=env)
     existing = all_local_branches(cwd, stream=stream, env=env)
     flag = "-D" if force else "-d"
     deleted: list[str] = []
+    skipped: list[str] = []
+    failed: dict[str, str] = {}
     for name in branches:
-        if name == current:
+        if name == current or name not in existing:
+            skipped.append(name)
             continue
-        if name not in existing:
-            continue
-        run_git("branch", flag, name, cwd=cwd, stream=stream, env=env)
-        deleted.append(name)
-    return deleted
+        result = run_git(
+            "branch",
+            flag,
+            name,
+            cwd=cwd,
+            check=False,
+            stream=stream,
+            env=env,
+        )
+        if result.returncode == 0:
+            deleted.append(name)
+        else:
+            msg = result.stderr.strip() or f"git branch failed (exit {result.returncode})"
+            failed[name] = msg
+    return DeleteOutcome(
+        deleted=tuple(deleted),
+        skipped=tuple(skipped),
+        failed=failed,
+    )
