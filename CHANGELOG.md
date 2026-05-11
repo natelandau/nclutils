@@ -1,3 +1,9 @@
+## v3.3.0 (2026-05-11)
+
+### Feat
+
+- add structured returns and new primitives (#43)
+
 ## v3.2.0 (2026-05-10)
 
 ### Feat
