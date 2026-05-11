@@ -35,28 +35,24 @@ uv run pytest tests/filesystem/test_copy.py -k "backup"
 
 Every module must be imported from its submodule. The preferred form for the pretty-printer is `from nclutils import pp` and call sites use `pp.info(...)`, `pp.success(...)`, etc.; individual symbols may also be pulled with `from nclutils.pp import info`. Other modules follow the same pattern (`from nclutils.fs import copy_file`). Preserve this convention — it's the public API contract and is documented in the README.
 
-`tests/` mirrors the source layout. Larger modules have their own subdirectory (`tests/filesystem/`, `tests/pp/`), each with its own `conftest.py`. Smaller modules use a single `tests/test_<module>.py` file.
+`tests/` mirrors the source layout. Larger modules have their own subdirectory with its own `conftest.py`; smaller modules use a single `tests/test_<module>.py` file. Match the existing pattern when adding tests.
 
-`docs/` contains per-module guides (`fs.md`, `strings.md`, `utils.md`, `pp.md`, `ask.md`, `shell_commands.md`). The README is an index; the `docs/` pages are the deep dives.
+`docs/` contains one per-module guide per public module. The README is an index; the `docs/` pages are the deep dives.
 
 `skill/` is the AI-agent-facing reference shipped alongside the source. `skill/SKILL.md` is the quick-reference card (import patterns, task-to-module lookup, top gotchas); `skill/references/<module>.md` holds per-module deep dives written for agents. Downstream agents read it directly from this repo, often pinned to a tag, so the content must stay accurate for the version it lives in.
 
-**Always update documentation when code changes.** Any change that affects a public function's signature, behavior, defaults, exceptions, or examples must be reflected in:
+**Always update documentation when code changes.** Any change to a public function's signature, behavior, defaults, exceptions, or examples must be reflected in the matching `docs/<module>.md`, the matching `skill/references/<module>.md`, and the README's module summary table if the surface area shifts. Update `skill/SKILL.md` too when the change touches anything it calls out (import patterns, the task-to-module table, the gotchas, the public-symbols list).
 
-1. The matching `docs/<module>.md` page (the human deep dive).
-2. The matching `skill/references/<module>.md` page (the agent deep dive), AND `skill/SKILL.md` if the change touches anything called out there (import patterns, the task-to-module table, the gotchas, the Python compatibility note, or the public-symbols list for a module).
-3. The README's module summary table if the surface area shifts.
-
-New public exports must be added to the relevant `__init__.py`'s `__all__`, the module's API reference section in `docs/`, the matching `skill/references/<module>.md`, the public-symbols list in `skill/SKILL.md`, and the README. Removing or renaming a public symbol is a breaking change — update `docs/`, `skill/`, and the README in the same commit. If a new top-level module is added, also add a new `skill/references/<module>.md` and link it from `skill/SKILL.md`.
+New public exports must be added to the relevant `__init__.py`'s `__all__`, the module's API reference in `docs/`, the matching `skill/references/<module>.md`, the public-symbols list in `skill/SKILL.md`, and the README. Removing or renaming a public symbol is a breaking change. If a new top-level module is added, also add a new `skill/references/<module>.md` and link it from `skill/SKILL.md`.
 
 ### Two logging systems
 
 The project has two parallel output paths and they are intentionally separate:
 
 1. **`nclutils.pp`** — Rich-based user-facing CLI output (`info`, `success`, `error`, `step()`, etc.). The `Emitter` class owns this, with module-level functions delegating to a shared default. Has its own theme, verbosity gates, and optional file logger.
-2. **stdlib `logging`** — internal diagnostics inside `nclutils.fs` and `nclutils.text`. Each module logs under `nclutils.<module>` and is silent unless the host application attaches a handler.
+2. **stdlib `logging`** — internal diagnostics inside library modules. Each module logs under its own `nclutils.<module>` logger and is silent unless the host application attaches a handler.
 
-Do not bridge these. `nclutils.fs` does not call `pp`; `pp` does not call stdlib `logging` for its own output. The project recently migrated off `loguru` (commit 6cafada) — any older guidance referencing `loguru` (including `.cursor/rules/python_preferred_tools.mdc`) is stale.
+Do not bridge these. Library modules do not call `pp`; `pp` does not call stdlib `logging` for its own output.
 
 ## Testing conventions
 
@@ -70,7 +66,7 @@ Tests follow a strict house style enforced by code review (not lint):
 
 ## Commits and branches
 
-Commits are enforced by `committed` and `commitizen` pre-commit hooks. The format is conventional commits with these types only: `build`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `style`, `test`. Header: `<type>(<scope>): <subject>` with imperative-mood, lowercase subject, no trailing period, ≤70 chars.
+Commits are enforced by the `committed` pre-commit hook. The format is conventional commits with these allowed types: `build`, `bump`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style`, `test`. Header: `<type>(<scope>): <subject>` with imperative-mood, lowercase subject, no trailing period, ≤70 chars.
 
 Always work on a feature branch (`feat/<name>`, `fix/<name>`, `refactor/<name>`). Never commit to `main` or push to `origin/main` without explicit permission.
 
@@ -78,4 +74,4 @@ If pre-commit modifies files during a commit, re-stage and create a new commit �
 
 ## Python compatibility
 
-The package supports Python 3.10+. A few features (e.g., `nclutils.fs.copy_directory`) gate themselves on Python 3.12 via `nclutils.utils.check_python_version`. When adding code that depends on newer language or stdlib features, gate it the same way rather than raising the project minimum.
+The package supports Python 3.10+. When adding code that depends on newer language or stdlib features, gate it on `nclutils.utils.check_python_version(major, minor)` rather than raising the project minimum.

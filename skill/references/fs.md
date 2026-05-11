@@ -1,52 +1,160 @@
 # `nclutils.fs` reference
 
-Filesystem helpers built on `pathlib`, `shutil`, and Rich.
+Filesystem helpers built on `pathlib`, `shutil`, and Rich. Emits diagnostics through stdlib `logging` (logger name: `nclutils.fs`); never writes to the console directly — pass `console=` to share a Rich `Console` with `pp.console()`.
 
 ## Copying
 
-`copy_file(src, dst, *, with_progress=False, transient=True, keep_backup=True, console=None, strict=False)` — drop-in for `shutil.copy` with:
+### `copy_file`
 
-- Optional Rich progress bar (`with_progress=True`; `transient=True` clears the bar on completion).
-- Timestamped backup of an existing destination by default (`keep_backup=True`). Backup format: `dst.<timestamp>-<rand>.bak` (same scheme as `new_timestamp_uid`).
-- `console=` to share a Rich `Console` with `pp.console()`.
-- `~` is expanded in both `src` and `dst`.
-- Raises `IsADirectoryError` if `src` is a directory; `OSError` for any other non-regular file. With `strict=True`, same-source-and-destination raises `shutil.SameFileError` (otherwise warns and returns src). With `strict=False` (default), parent/child copy attempts return src with a warning; `strict=True` raises `ValueError`.
+```python
+copy_file(
+    src: Path,
+    dst: Path,
+    *,
+    with_progress: bool = False,
+    transient: bool = True,
+    keep_backup: bool = True,
+    console: Console | None = None,
+    strict: bool = False,
+) -> Path
+```
 
-`copy_directory(src, dst, ...)` — same surface for directories. Requires Python 3.12+ (uses `Path.walk`). Progress bar shows total bytes across all files plus a recycled per-file subtask. When `keep_backup=True` and destination exists, you see two sequential phases (Backup, then Copy), each with its own bar. Preserves source directory's permission bits via `shutil.copystat`; mtimes are NOT preserved because writes during copy bump the mirrored directory's mtime.
+Drop-in for `shutil.copy` with progress and backup. Both paths have `~` expanded and are `.resolve()`d. Returns the destination `Path` on success.
 
-Both helpers follow symlinks (matching `shutil.copytree(symlinks=False)` default): a symlink to a directory inside the source tree is materialized as a real directory with target contents copied recursively.
+Behavior:
+
+- `with_progress=True` shows a Rich progress bar. `transient=True` clears it on completion.
+- `keep_backup=True` (default) snapshots an existing destination via `backup_path` BEFORE overwriting. Backup name: `dst.<timestamp_uid>.bak`.
+- `console=` lets you pass a shared Rich `Console`.
+- Same-source-and-destination (`src == dst` or `samefile`): with `strict=True` raises `shutil.SameFileError`; with `strict=False` (default) logs a warning and returns `src`.
+- Reads in 4 MiB chunks (`IO_BUFFER_SIZE = 4096 * 1024`). Preserves source mode via `shutil.copymode`. Mtimes NOT preserved (the write itself bumps mtime).
+
+Raises:
+
+- `FileNotFoundError` — `src` does not exist.
+- `IsADirectoryError` — `src` is a directory (use `copy_directory`).
+- `OSError` — `src` exists but is not a regular file (e.g. socket, device).
+- `shutil.SameFileError` — `src` and `dst` resolve to the same file, AND `strict=True`.
+- `RuntimeError` — internal: destination byte count doesn't match source after the copy (should not happen in practice).
+
+### `copy_directory`
+
+```python
+copy_directory(
+    src: Path,
+    dst: Path,
+    *,
+    with_progress: bool = False,
+    transient: bool = True,
+    keep_backup: bool = True,
+    console: Console | None = None,
+    strict: bool = False,
+) -> Path
+```
+
+Recursively copy a directory tree. Same kwargs and progress/backup semantics as `copy_file`. Returns destination `Path`.
+
+> [!NOTE]
+> No Python-version gate. The implementation uses `os.walk(followlinks=True)`, not `Path.walk`. (Older docs claiming 3.12+ are stale.)
+
+Behavior:
+
+- Approximates `shutil.copytree(src, dst)` (no kwargs): follows symlinks (including to directories — they materialize as real directories with target contents), preserves directory mode AND timestamps via `shutil.copystat`, preserves file mode via `shutil.copymode`. File mtimes NOT preserved.
+- With `with_progress=True`, pre-walks the tree once to compute total bytes (extra `stat` per file), then drives a single `Progress` with an outer total-bytes bar and a recycled per-file subtask. With `keep_backup=True` AND destination exists, you see two sequential phases (Backup, then Copy), each with its own bar.
+- Existing destination handling: symlink → `unlink`; directory → `rmtree` (after the backup, if any).
+
+Raises:
+
+- `FileNotFoundError` — `src` does not exist or is not a directory.
+- `shutil.SameFileError` — `src == dst`, AND `strict=True` (else warns and returns `src`).
+- `ValueError` — `src` is inside `dst` or vice versa (parent/child), AND `strict=True` (else warns and returns `src`).
 
 ## Standalone backup
 
-`backup_path(src, backup_suffix="", *, with_progress=False, transient=True, console=None, strict=False)` — snapshot a path without copying it elsewhere. Default suffix is `.<timestamp>-<rand>.bak`; override with `backup_suffix=".pre-migration.bak"`.
+### `backup_path`
 
-Returns `None` when source doesn't exist (default). `strict=True` raises `FileNotFoundError`. File backups preserve permission bits but not timestamps. Directory backups walk via `Path.walk(follow_symlinks=True)`, mirror directory mode and timestamps via `shutil.copystat`, and follow symlinks.
+```python
+backup_path(
+    src: Path,
+    backup_suffix: str = "",
+    *,
+    with_progress: bool = False,
+    transient: bool = True,
+    console: Console | None = None,
+    strict: bool = False,
+) -> Path | None
+```
+
+Snapshot a path in place. Returns the backup path, or `None` when `src` is missing and `strict=False`.
+
+- Default suffix is `"." + new_timestamp_uid() + ".bak"`. Override with `backup_suffix=".pre-migration.bak"` (LITERAL string — no timestamp added). The suffix is appended to the existing name with `with_name(src.name + backup_suffix)`.
+- Pre-existing target (collision) is cleared first (`unlink` for files/symlinks, `rmtree` for dirs). Not atomic across processes; the timestamped default makes collisions very rare.
+- File backups: `shutil.copymode` only (no mtime).
+- Directory backups: `os.walk(followlinks=True)`, mirror directory mode + timestamps via `shutil.copystat`, follow symlinks.
+
+Raises `FileNotFoundError` only when `src` is missing AND `strict=True`.
 
 ## Cleaning
 
-`clean_directory(directory, *, strict=False)` — empties a directory in place. Files unlinked, subdirectories removed recursively, the directory itself stays. Symlinks (including dangling links and links to directories) are removed via `unlink()`; targets are not modified. If the path isn't an existing directory, no-op + warning. `strict=True` raises `NotADirectoryError`.
+### `clean_directory`
+
+```python
+clean_directory(directory: Path, *, strict: bool = False) -> None
+```
+
+Empties `directory` in place. Files and symlinks (including dangling and links-to-directories) are `unlink`ed; subdirectories are `rmtree`d; the directory itself stays.
+
+When `directory` is not an existing directory: with `strict=False` (default), logs a warning and returns; with `strict=True`, raises `NotADirectoryError`.
 
 ## Searching
 
-### `find_files(path, globs=None, *, ignore_dotfiles=False) -> list[Path]`
+### `find_files`
 
-Files in a directory, optionally matching a list of globs. Without `globs`, returns every file in the top level (no recursion). Globs pass through to `Path.glob`, so `**/*.py` works for recursive matching.
+```python
+find_files(
+    path: Path,
+    globs: list[str] | None = None,
+    *,
+    ignore_dotfiles: bool = False,
+) -> list[Path]
+```
 
-- Sorted, deduplicated (if multiple globs match the same file, it appears once).
-- `ignore_dotfiles=True` also excludes files reached through hidden directories (e.g. `**/.cache/foo.py`). The user-supplied ROOT is never filtered, so passing `Path("~/.config")` as the search root works.
+Files in `path` matching any of `globs` (passed straight to `Path.glob`, so `"**/*.py"` works for recursive matching). Without `globs`, returns every file at the top level via `path.glob("*")` (no recursion).
 
-### `find_subdirectories(directory, depth=1, filter_regex="", *, ignore_dotfiles=False, leaf_dirs_only=False) -> list[Path]`
+- Returned list is sorted (lexicographic `Path` sort) and deduplicated (a file matching multiple globs appears once).
+- `ignore_dotfiles=True` excludes any file whose path-relative-to-`path` contains a component starting with `.`. The user-supplied root is NEVER filtered, so passing `Path("~/.config")` as the root works.
 
-Search subdirectories with depth and regex filtering.
+### `find_subdirectories`
 
-- `depth` must be `>= 1`; passing `0` or negative raises `ValueError`.
-- `filter_regex` applied with `re.search` — anchor with `^`/`$` for whole-name matching.
-- `leaf_dirs_only=True` excludes directories that still contain matching subdirectories within the depth limit.
-- `ignore_dotfiles=True` filters descendants whose own name starts with `.`. The user-supplied root is never filtered.
+```python
+find_subdirectories(
+    directory: Path,
+    depth: int = 1,
+    filter_regex: str = "",
+    *,
+    ignore_dotfiles: bool = False,
+    leaf_dirs_only: bool = False,
+) -> list[Path]
+```
 
-## Building a tree
+Walk subdirectories with depth + regex filtering. Returns sorted `list[Path]`.
 
-`directory_tree(directory, *, show_hidden=False) -> rich.tree.Tree`
+- `depth >= 1` required; `0` or negative raises `ValueError`. `depth=1` means immediate children only.
+- `filter_regex` applied with `re.search` (UNANCHORED — matches if the pattern is found anywhere in the directory name; anchor with `^`/`$` for whole-name). Empty string matches all.
+- `ignore_dotfiles=True` skips dirs whose own name starts with `.` AND prevents descent into them. Root is never filtered.
+- `leaf_dirs_only=True` returns only directories with no matching descendant inside the depth limit. Implemented by computing the union of all ancestors of matches and filtering anything that's an ancestor.
+
+Raises `ValueError` if `depth < 1`.
+
+## Tree rendering
+
+### `directory_tree`
+
+```python
+directory_tree(directory: Path, *, show_hidden: bool = False) -> rich.tree.Tree
+```
+
+Build a `rich.tree.Tree` of `directory`'s contents. Subdirectories sorted before files; within each group, lowercase name order. Dotfiles excluded unless `show_hidden=True`. Files show their size via `rich.filesize.decimal`.
 
 ```python
 from nclutils import pp
@@ -57,15 +165,33 @@ pp.console().print(directory_tree(Path("./src")))
 
 ## Sudo-aware home lookup
 
-`find_user_home_dir(username=None, *, strict=False) -> Path | None`
+### `find_user_home_dir`
 
-Resolves a home directory. Honors `SUDO_USER` when running under `sudo`, so it returns the invoking user's home, not `/root`. POSIX lookups go through `pwd.getpwnam(username).pw_dir`; no subprocess.
+```python
+find_user_home_dir(
+    username: str | None = None,
+    *,
+    strict: bool = False,
+) -> Path | None
+```
 
-Returns `None` if user not found or `pwd` is unavailable (Windows). `strict=True` raises `KeyError` when user is unknown (but the platform-unavailability path always returns `None`, since that's not a runtime error). A warning is logged on platforms without `pwd`.
+Resolve a home directory. POSIX lookups go through `pwd.getpwnam(username).pw_dir`; no subprocess.
+
+Resolution order when `username=None`:
+
+1. Check `SUDO_USER` env var. If set, use it as the username.
+2. Otherwise return `Path.home()` (the current process's home).
+
+Returns `None` when:
+
+- `username` (or the resolved SUDO_USER) is unknown AND `strict=False`.
+- `pwd` is unavailable (e.g. Windows) — REGARDLESS of `strict`, since this is a platform capability rather than a runtime error. A warning is logged.
+
+Raises `KeyError` when `username` is unknown AND `strict=True` (POSIX only).
 
 ## Diagnostic logging
 
-`nclutils.fs` emits `DEBUG`/`WARNING`/`ERROR` through stdlib `logging` under the `nclutils.fs` logger. Silent until the host attaches a handler.
+`nclutils.fs` emits `DEBUG`/`WARNING`/`ERROR` through stdlib `logging` under the `nclutils.fs` logger. Silent until the host attaches a handler. Independent of `nclutils.pp`.
 
 ```python
 import logging
@@ -73,4 +199,19 @@ logging.getLogger("nclutils.fs").setLevel(logging.DEBUG)
 logging.basicConfig()
 ```
 
-Covers internal operations like "starting a copy" or "skipping a backup because source is missing." Independent of `nclutils.pp`.
+Records cover internal operations like "starting a copy", "skipping a backup because source is missing", "backup target collision cleared".
+
+## API reference (signatures only)
+
+```python
+copy_file(src, dst, *, with_progress=False, transient=True, keep_backup=True, console=None, strict=False) -> Path
+copy_directory(src, dst, *, with_progress=False, transient=True, keep_backup=True, console=None, strict=False) -> Path
+backup_path(src, backup_suffix="", *, with_progress=False, transient=True, console=None, strict=False) -> Path | None
+clean_directory(directory, *, strict=False) -> None
+find_files(path, globs=None, *, ignore_dotfiles=False) -> list[Path]
+find_subdirectories(directory, depth=1, filter_regex="", *, ignore_dotfiles=False, leaf_dirs_only=False) -> list[Path]
+directory_tree(directory, *, show_hidden=False) -> rich.tree.Tree
+find_user_home_dir(username=None, *, strict=False) -> Path | None
+```
+
+Every function takes positional path-like args first; kwargs are keyword-only (the `*` is real in the signatures above).
