@@ -109,3 +109,106 @@ class TestAddWorktree:
         # When/Then
         with pytest.raises(RuntimeError, match="not found"):
             add_worktree(tmp_path / "nope", "x", cwd=repo, new_branch=True)
+
+
+class TestCreateWorktreeTrack:
+    """Tests for the track parameter on create_worktree and add_worktree."""
+
+    def test_track_false_disables_upstream(self, repo_with_remote: Path, tmp_path: Path) -> None:
+        """Verify track=False produces a local branch with no upstream configured."""
+        # Given: origin/main exists (via repo_with_remote)
+        # When
+        wt_path = tmp_path / "wt-no-track"
+        create_worktree(
+            wt_path,
+            "feat/no-track",
+            cwd=repo_with_remote,
+            new_branch=True,
+            start_point="origin/main",
+            track=False,
+        )
+        # Then: branch exists but has no remote configured
+        assert branch_exists("feat/no-track", cwd=repo_with_remote)
+        remote_result = run_git(
+            "config",
+            "--get",
+            "branch.feat/no-track.remote",
+            cwd=repo_with_remote,
+            check=False,
+        )
+        assert remote_result.returncode != 0
+        assert remote_result.stdout.strip() == ""
+
+    def test_track_none_preserves_default_tracking(
+        self, repo_with_remote: Path, tmp_path: Path
+    ) -> None:
+        """Verify track=None leaves git's default tracking behavior intact."""
+        # Given: origin/main exists; default git behavior sets up tracking
+        # When
+        wt_path = tmp_path / "wt-default"
+        create_worktree(
+            wt_path,
+            "feat/default",
+            cwd=repo_with_remote,
+            new_branch=True,
+            start_point="origin/main",
+        )
+        # Then: branch.feat/default.remote is "origin"
+        remote_result = run_git(
+            "config",
+            "--get",
+            "branch.feat/default.remote",
+            cwd=repo_with_remote,
+        )
+        assert remote_result.stdout.strip() == "origin"
+
+    def test_track_true_forces_tracking_against_local_ref(
+        self, repo_with_remote: Path, tmp_path: Path
+    ) -> None:
+        """Verify track=True forces tracking even against a non-remote start point."""
+        # Given: HEAD is a local-only ref (no remote tracking by default)
+        # When
+        wt_path = tmp_path / "wt-force-track"
+        create_worktree(
+            wt_path,
+            "feat/force-track",
+            cwd=repo_with_remote,
+            new_branch=True,
+            start_point="HEAD",
+            track=True,
+        )
+        # Then: branch.feat/force-track.remote is configured (value is "."
+        # for local-ref tracking; what matters is that it is set)
+        remote_result = run_git(
+            "config",
+            "--get",
+            "branch.feat/force-track.remote",
+            cwd=repo_with_remote,
+        )
+        assert remote_result.returncode == 0
+        assert remote_result.stdout.strip() != ""
+
+    def test_add_worktree_forwards_track_false(
+        self, repo_with_remote: Path, tmp_path: Path
+    ) -> None:
+        """Verify add_worktree forwards track=False to create_worktree."""
+        # Given/When
+        wt_path = tmp_path / "wt-add-no-track"
+        result = add_worktree(
+            wt_path,
+            "feat/add-no-track",
+            cwd=repo_with_remote,
+            new_branch=True,
+            start_point="origin/main",
+            track=False,
+        )
+        # Then: returned Worktree is correct and upstream is not set
+        assert result.branch == "feat/add-no-track"
+        remote_result = run_git(
+            "config",
+            "--get",
+            "branch.feat/add-no-track.remote",
+            cwd=repo_with_remote,
+            check=False,
+        )
+        assert remote_result.returncode != 0
