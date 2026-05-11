@@ -1,5 +1,6 @@
 """Tests for nclutils.git.repo primitives."""
 
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -12,6 +13,7 @@ from nclutils.git import (
     is_rebase_in_progress,
     primary_remote,
     repo_root,
+    stash_counts,
 )
 from nclutils.git.repo import _infer_web_url
 
@@ -191,3 +193,86 @@ class TestIsRebaseInProgress:
         """Verify is_rebase_in_progress detects a paused rebase."""
         # Given/When/Then
         assert is_rebase_in_progress(repo_in_rebase) is True
+
+
+class TestStashCounts:
+    """Tests for stash_counts."""
+
+    def test_returns_empty_mapping_with_no_stashes(self, repo: Path) -> None:
+        """Verify stash_counts returns {} when no stashes exist."""
+        # Given/When/Then
+        assert stash_counts(repo) == {}
+
+    def test_aggregates_across_branches(self, repo: Path) -> None:
+        """Verify stash_counts returns per-branch counts across the whole repo."""
+        # Given: two stashes on feat/a, one on main
+        subprocess.run(
+            ["git", "checkout", "-b", "feat/a"],
+            cwd=repo,
+            check=True,
+            capture_output=True,
+        )
+        (repo / "a1.txt").write_text("a1\n")
+        subprocess.run(
+            ["git", "stash", "push", "-u", "-m", "a1"],
+            cwd=repo,
+            check=True,
+            capture_output=True,
+        )
+        (repo / "a2.txt").write_text("a2\n")
+        subprocess.run(
+            ["git", "stash", "push", "-u", "-m", "a2"],
+            cwd=repo,
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "checkout", "main"],
+            cwd=repo,
+            check=True,
+            capture_output=True,
+        )
+        (repo / "m1.txt").write_text("m1\n")
+        subprocess.run(
+            ["git", "stash", "push", "-u", "-m", "m1"],
+            cwd=repo,
+            check=True,
+            capture_output=True,
+        )
+
+        # When
+        result = stash_counts(repo)
+
+        # Then
+        assert result == {"feat/a": 2, "main": 1}
+
+    def test_excludes_detached_head_stashes(self, repo: Path) -> None:
+        """Verify stash_counts omits stashes created in detached-HEAD state."""
+        # Given: detach HEAD and stash an untracked file
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        subprocess.run(
+            ["git", "checkout", head],
+            cwd=repo,
+            check=True,
+            capture_output=True,
+        )
+        (repo / "detached.txt").write_text("d\n")
+        subprocess.run(
+            ["git", "stash", "push", "-u", "-m", "detached"],
+            cwd=repo,
+            check=True,
+            capture_output=True,
+        )
+
+        # When
+        result = stash_counts(repo)
+
+        # Then: no branch key from the detached-HEAD stash
+        assert all(name not in result for name in ("(no", "(no branch)"))
+        assert result == {}

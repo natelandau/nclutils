@@ -40,6 +40,8 @@ from nclutils.fs import (
 from nclutils.git import (
     get_repo_state, sync_branch, fetch, stashed,
     add_worktree, prunable_branches, delete_branches, run_git,
+    is_empty_branch, stash_counts,
+    PrunableBranch, PruneReason, DeleteOutcome,
     NotARepoError,
 )
 from nclutils.net import network_available
@@ -110,7 +112,10 @@ A task → module lookup. When you are about to write code for one of these, rea
 | Pull/rebase the current branch                      | `nclutils.git.sync_branch()`                                                                             | Auto-stashes, ff-or-rebase, returns `SyncResult`. Refuses detached HEAD.       |
 | Stash around a risky operation                      | `with nclutils.git.stashed(): ...`                                                                       | Yields `bool` (was a stash created). Pops on exit.                             |
 | Create a worktree                                   | `nclutils.git.add_worktree(path, branch, new_branch=True)`                                               | Returns a populated `Worktree` record.                                         |
-| Find / delete merged or gone branches               | `nclutils.git.prunable_branches()` then `delete_branches([...])`                                         | Split so you can review the list first.                                        |
+| Create a worktree without auto-tracking             | `nclutils.git.add_worktree(path, branch, new_branch=True, track=False)`                                  | Pass `track=False` to suppress upstream tracking for short-lived branches.     |
+| Find / delete merged or gone branches               | `nclutils.git.prunable_branches()` then `delete_branches([pb.name for pb in ...])`                       | Returns `list[PrunableBranch]`; extract `.name` before passing to `delete_branches`. |
+| Detect empty (never-written) branches               | `nclutils.git.is_empty_branch(branch)` or `prunable_branches(include_empty=True)`                        | "Empty" means zero commits ahead of the default branch.                        |
+| Count stashes across all branches                   | `nclutils.git.stash_counts()`                                                                            | Returns `dict[branch, count]`. `RepoState.stash_count` covers current branch only. |
 | Any other git subcommand                            | `nclutils.git.run_git("log", "--oneline", "-5")`                                                         | Escape hatch. Returns `CompletedCommand`.                                      |
 | TCP reachability check                              | `nclutils.net.network_available()`                                                                       | Defaults to 8.8.4.4:53, 5-second timeout.                                      |
 | Replace text in a file in place                     | `nclutils.text.replace_in_file(path, {"old": "new"})`                                                    | `use_regex=True` for regex keys. Returns `True` if changed.                    |
@@ -260,7 +265,7 @@ When you need API details beyond the table above, read the relevant file in `ref
 
 - `references/pp.md` — full pretty-printer surface (per-call tags, exceptions, kv, file logger, themes, ASCII fallback, isolated emitters)
 - `references/sh.md` — `run_command` options, error hierarchy, migration from the old `sh`-package API
-- `references/git.md` — composites (`get_repo_state`, `sync_branch`, `stashed`, `add_worktree`), primitives, dataclass field tables (`RepoState`, `SyncResult`, `Worktree`, `Remote`)
+- `references/git.md`: composites (`get_repo_state`, `sync_branch`, `stashed`, `add_worktree`), primitives, dataclass field tables (`RepoState`, `SyncResult`, `Worktree`, `Remote`, `PrunableBranch`, `DeleteOutcome`)
 - `references/fs.md` — copy/backup semantics, symlink handling, search edge cases
 - `references/strings.md` — every case-conversion / tokenizer / padding signature
 - `references/misc.md` — `ask`, `net`, `text`, `utils` reference

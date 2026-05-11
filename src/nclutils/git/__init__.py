@@ -1,6 +1,9 @@
 """Git utilities built on top of nclutils.sh."""
 
 from .branch import (
+    DeleteOutcome,
+    PrunableBranch,
+    PruneReason,
     ahead_behind,
     all_local_branches,
     branch_exists,
@@ -8,6 +11,7 @@ from .branch import (
     default_branch,
     delete_branches,
     gone_branches,
+    is_empty_branch,
     merged_branches,
     prunable_branches,
     tracking_branch,
@@ -22,6 +26,7 @@ from .repo import (
     is_rebase_in_progress,
     primary_remote,
     repo_root,
+    stash_counts,
 )
 from .runner import NotARepoError, run_git
 from .sync import SyncResult, fetch, stashed, sync_branch
@@ -34,7 +39,10 @@ from .worktree import (
 )
 
 __all__ = [
+    "DeleteOutcome",
     "NotARepoError",
+    "PrunableBranch",
+    "PruneReason",
     "Remote",
     "RepoState",
     "SyncResult",
@@ -51,6 +59,7 @@ __all__ = [
     "get_repo_state",
     "gone_branches",
     "is_dirty",
+    "is_empty_branch",
     "is_git_installed",
     "is_git_repo",
     "is_rebase_in_progress",
@@ -61,6 +70,7 @@ __all__ = [
     "remove_worktree",
     "repo_root",
     "run_git",
+    "stash_counts",
     "stashed",
     "sync_branch",
     "tracking_branch",

@@ -111,6 +111,7 @@ def create_worktree(  # noqa: PLR0913
     cwd: Path | str | None = None,
     new_branch: bool = False,
     start_point: str | None = None,
+    track: bool | None = None,
     stream: bool = False,
     env: Mapping[str, str] | None = None,
 ) -> None:
@@ -119,6 +120,12 @@ def create_worktree(  # noqa: PLR0913
     With ``new_branch=True``, also creates the branch (passes ``-b``).
     ``start_point`` is the commit/ref to start the new branch from and
     requires ``new_branch=True``.
+
+    ``track`` controls upstream tracking: ``None`` (default) leaves git's
+    default behavior intact; ``True`` passes ``--track`` (force tracking
+    even against a non-remote ref); ``False`` passes ``--no-track``
+    (suppress automatic tracking even when the start point is a
+    remote-tracking ref).
 
     Args:
         path: Filesystem path where the new worktree will be created.
@@ -129,6 +136,9 @@ def create_worktree(  # noqa: PLR0913
             worktree (passes ``-b`` to ``git worktree add``).
         start_point: Optional commit/ref to base ``branch`` on. Requires
             ``new_branch=True``.
+        track: Tri-state control of upstream tracking. ``None`` passes no
+            flag; ``True`` passes ``--track``; ``False`` passes
+            ``--no-track``.
         stream: Forwarded to :func:`run_git`.
         env: Forwarded to :func:`run_git`.
 
@@ -139,6 +149,10 @@ def create_worktree(  # noqa: PLR0913
         msg = "create_worktree: start_point requires new_branch=True"
         raise ValueError(msg)
     args: list[str] = ["worktree", "add"]
+    if track is True:
+        args.append("--track")
+    elif track is False:
+        args.append("--no-track")
     if new_branch:
         args.extend(["-b", branch, str(path)])
         if start_point is not None:
@@ -183,6 +197,7 @@ def add_worktree(  # noqa: PLR0913
     cwd: Path | str | None = None,
     new_branch: bool = False,
     start_point: str | None = None,
+    track: bool | None = None,
     stream: bool = False,
     env: Mapping[str, str] | None = None,
 ) -> Worktree:
@@ -201,6 +216,8 @@ def add_worktree(  # noqa: PLR0913
             worktree (passes ``-b`` to ``git worktree add``).
         start_point: Optional commit/ref to base ``branch`` on. Requires
             ``new_branch=True``.
+        track: Forwarded to :func:`create_worktree`. See its docstring for
+            the tri-state semantics.
         stream: Forwarded to every internal :func:`run_git` call.
         env: Forwarded to every internal :func:`run_git` call.
 
@@ -219,6 +236,7 @@ def add_worktree(  # noqa: PLR0913
         cwd=cwd,
         new_branch=new_branch,
         start_point=start_point,
+        track=track,
         stream=stream,
         env=env,
     )
