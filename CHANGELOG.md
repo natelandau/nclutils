@@ -1,3 +1,11 @@
+## v3.2.0 (2026-05-10)
+
+### Feat
+
+- **skill**: add agent-facing reference skill
+- **sh**: log every run_command invocation at DEBUG (#42)
+- **git**: add nclutils.git module (#41)
+
 ## v3.1.0 (2026-05-08)
 
 ### Feat
