@@ -117,17 +117,63 @@ Sequence: resolve current branch → optional safety check vs `branch=` → reso
 
 When `action="fast_forwarded"` or `"rebased"`, local branch contains remote commits. When `"aborted"`, local branch is exactly where it started; remote commits are still in `origin/<branch>` after the fetch but not integrated.
 
-### `prunable_branches(*, merged=True, gone=True, target=None, exclude=("main","master","develop")) -> list[str]`
+### `prunable_branches(*, merged=True, gone=True, include_empty=False, target=None, exclude=("main","master","develop")) -> list[PrunableBranch]`
 
-Sorted list of short local branch names safe to delete. Combines two sources (each gated by a keyword): branches merged into `target`, and branches whose upstream-tracking ref is `[gone]`. Current branch, the resolved `target`, and any name in `exclude` are filtered out. `target=None` defers to `default_branch()`; if that also returns `None`, `ValueError`.
+Sorted list of branches safe to delete, with the reason each qualifies. Each item is a `PrunableBranch(name: str, reason: PruneReason)` frozen dataclass. `PruneReason` is `Literal["merged", "gone", "empty"]`.
 
-### `delete_branches(branches, *, force=False) -> list[str]`
+When a branch qualifies under more than one criterion, the highest-precedence reason wins: `"gone"` > `"merged"` > `"empty"`. Results are sorted alphabetically by name.
 
-Take a sequence of short names; return names actually deleted (in input order). Silently skips the current branch and names not present locally. `force=True` uses `git branch -D`. Pair with `prunable_branches()` so callers can review the list first.
+Sources (each gated by a keyword):
+- `merged=True`: branches fully merged into `target`.
+- `gone=True`: branches whose upstream-tracking ref is `[gone]`.
+- `include_empty=False`: when `True`, also surfaces branches with zero commits ahead of `target` that are not already classified as merged or gone (useful for catching placeholder branches that were created but never written to).
 
-### `add_worktree(path, branch, *, new_branch=False, start_point=None) -> Worktree`
+Current branch, the resolved `target`, and any name in `exclude` are filtered out. `target=None` defers to `default_branch()`; if that also returns `None`, `ValueError`.
+
+```python
+from nclutils.git import prunable_branches, delete_branches
+
+candidates = prunable_branches()
+for pb in candidates:
+    print(f"{pb.name}: {pb.reason}")
+
+# Extract names before passing to delete_branches
+outcome = delete_branches([pb.name for pb in candidates])
+```
+
+> [!WARNING]
+> `prunable_branches` returns `list[PrunableBranch]`, not `list[str]`. Passing its result directly to `delete_branches` is a type error. Always extract `.name` first.
+
+### `delete_branches(branches, *, force=False) -> DeleteOutcome`
+
+Takes a sequence of short names; returns a `DeleteOutcome` frozen dataclass describing what happened per branch.
+
+`DeleteOutcome` fields:
+
+| Field     | Type               | Description                                                                             |
+| --------- | ------------------ | --------------------------------------------------------------------------------------- |
+| `deleted` | `tuple[str, ...]`  | Branches actually deleted, in input order.                                               |
+| `skipped` | `tuple[str, ...]`  | Branches skipped (current branch or not present locally).                               |
+| `failed`  | `dict[str, str]`   | Branches whose `git branch -d/-D` failed. Value is the captured stderr message.         |
+
+Per-branch failures are captured in `failed`, not raised. Only infrastructural errors (git missing, not a repo) propagate. `force=True` uses `git branch -D` (deletes regardless of merge state).
+
+```python
+outcome = delete_branches([pb.name for pb in prunable_branches()])
+print(f"deleted={outcome.deleted} skipped={outcome.skipped}")
+if outcome.failed:
+    for branch, msg in outcome.failed.items():
+        print(f"FAILED {branch}: {msg}")
+```
+
+> [!WARNING]
+> `delete_branches` returns a `DeleteOutcome` dataclass, not `list[str]`. Read results via `outcome.deleted`, `outcome.skipped`, `outcome.failed`. Per-branch failures land in `outcome.failed[name]` (stderr) rather than raising.
+
+### `add_worktree(path, branch, *, new_branch=False, start_point=None, track=None) -> Worktree`
 
 Composes `create_worktree` and `list_worktrees`. Returns the populated `Worktree` record with the resolved HEAD SHA. Raises `RuntimeError` if the new worktree is missing from the subsequent listing.
+
+`track: bool | None = None` controls upstream tracking for the new branch: `None` leaves git's default intact; `True` passes `--track`; `False` passes `--no-track`. Use `track=False` for short-lived feature branches that should not auto-track a remote.
 
 `Worktree` (frozen dataclass): `path: Path`, `branch: str | None`, `head: str`, `is_bare: bool`, `is_detached: bool`, `is_locked: bool`.
 
@@ -143,6 +189,7 @@ When composites don't fit, drop down. Every primitive accepts `cwd=`, `stream=`,
 - `primary_remote(cwd=None) -> Remote | None` — first remote alphabetically, or `None`.
 - `is_dirty(cwd=None) -> bool` — `True` if `git status --porcelain` non-empty.
 - `is_rebase_in_progress(cwd=None) -> bool` — checks for `.git/rebase-merge/` or `.git/rebase-apply/`.
+- `stash_counts(cwd=None) -> dict[str, int]`: per-branch stash counts across the whole repo. Detached-HEAD stashes excluded. Use when you need counts beyond just the current branch (which `RepoState.stash_count` already provides).
 
 ### Branch (all short names)
 
@@ -154,11 +201,12 @@ When composites don't fit, drop down. Every primitive accepts `cwd=`, `stream=`,
 - `ahead_behind(left, right, cwd=None) -> tuple[int, int]` — accepts anything `git rev-parse` accepts.
 - `merged_branches(target=None, cwd=None) -> frozenset[str]` — includes `target` itself.
 - `gone_branches(cwd=None) -> frozenset[str]` — appears after `git fetch --prune`.
+- `is_empty_branch(branch, target=None, *, cwd=None) -> bool`: `True` when `branch` has zero commits ahead of `target`. `target=None` defers to `default_branch()`; raises `ValueError` if that also returns `None`. The primitive behind `prunable_branches(include_empty=True)`.
 
 ### Worktree
 
 - `list_worktrees(cwd=None) -> list[Worktree]` — all registered worktrees (bare repo's bare worktree has `is_bare=True`).
-- `create_worktree(path, branch, *, new_branch=False, start_point=None) -> None` — `start_point` requires `new_branch=True`.
+- `create_worktree(path, branch, *, new_branch=False, start_point=None, track=None) -> None`: `start_point` requires `new_branch=True`. `track=None` passes no flag; `True` passes `--track`; `False` passes `--no-track`.
 - `remove_worktree(path, *, force=False) -> None` — `force=True` for dirty worktrees or submodules.
 
 ### Runner — escape hatch
