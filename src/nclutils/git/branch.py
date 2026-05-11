@@ -26,8 +26,8 @@ class PrunableBranch:
 
     - ``"gone"``: upstream tracking ref has been deleted.
     - ``"merged"``: branch is fully merged into the target.
-    - ``"empty"``: branch has zero commits ahead of the target (only
-      surfaced when ``prunable_branches(include_empty=True)``).
+    - ``"empty"``: branch has zero commits ahead of the target. Only
+      surfaced when the caller opts in to empty-branch detection.
     """
 
     name: str
@@ -331,7 +331,7 @@ def gone_branches(
     return frozenset(out)
 
 
-def prunable_branches(  # noqa: C901, PLR0912, PLR0913
+def prunable_branches(  # noqa: C901, PLR0913
     cwd: Path | str | None = None,
     *,
     merged: bool = True,
@@ -377,12 +377,9 @@ def prunable_branches(  # noqa: C901, PLR0912, PLR0913
             reasons[name] = "gone"  # overwrites "merged"; gone wins
     if include_empty and target is not None:
         for name in all_local_branches(cwd=cwd, stream=stream, env=env):
-            if name in reasons:
+            if name in reasons or name == target:
                 continue
-            if name == target:
-                continue
-            ahead, _ = ahead_behind(name, target, cwd=cwd, stream=stream, env=env)
-            if ahead == 0:
+            if is_empty_branch(name, target, cwd=cwd, stream=stream, env=env):
                 reasons[name] = "empty"
 
     current = current_branch(cwd, stream=stream, env=env)
