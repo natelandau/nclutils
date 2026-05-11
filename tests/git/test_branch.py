@@ -1,5 +1,6 @@
 """Tests for nclutils.git.branch primitives."""
 
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -11,6 +12,7 @@ from nclutils.git import (
     current_branch,
     default_branch,
     gone_branches,
+    is_empty_branch,
     merged_branches,
     tracking_branch,
 )
@@ -165,3 +167,82 @@ class TestGoneBranches:
         result = gone_branches(cwd=repo_with_remote)
         # Then: an intact upstream produces no entries at all
         assert result == frozenset()
+
+
+class TestIsEmptyBranch:
+    """Tests for is_empty_branch."""
+
+    def test_zero_ahead_returns_true(self, repo_with_remote: Path) -> None:
+        """Verify a branch created from target with no new commits is empty."""
+        # Given
+        subprocess.run(
+            ["git", "checkout", "-b", "feat/empty"],
+            cwd=repo_with_remote,
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "checkout", "main"],
+            cwd=repo_with_remote,
+            check=True,
+            capture_output=True,
+        )
+        # When/Then
+        assert is_empty_branch("feat/empty", cwd=repo_with_remote) is True
+
+    def test_one_ahead_returns_false(self, repo_with_remote: Path) -> None:
+        """Verify a branch with one commit ahead of target is not empty."""
+        # Given
+        subprocess.run(
+            ["git", "checkout", "-b", "feat/with-commit"],
+            cwd=repo_with_remote,
+            check=True,
+            capture_output=True,
+        )
+        (repo_with_remote / "wc.txt").write_text("wc\n")
+        subprocess.run(
+            ["git", "add", "wc.txt"],
+            cwd=repo_with_remote,
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "commit", "-m", "wc"],
+            cwd=repo_with_remote,
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "checkout", "main"],
+            cwd=repo_with_remote,
+            check=True,
+            capture_output=True,
+        )
+        # When/Then
+        assert is_empty_branch("feat/with-commit", cwd=repo_with_remote) is False
+
+    def test_explicit_target_overrides_default(self, repo_with_remote: Path) -> None:
+        """Verify an explicit target argument is used instead of default_branch."""
+        # Given: feat branches off main with no new commits, so it is empty
+        # relative to main
+        subprocess.run(
+            ["git", "checkout", "-b", "feat/explicit"],
+            cwd=repo_with_remote,
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "checkout", "main"],
+            cwd=repo_with_remote,
+            check=True,
+            capture_output=True,
+        )
+        # When/Then
+        assert is_empty_branch("feat/explicit", target="main", cwd=repo_with_remote) is True
+
+    def test_no_default_branch_raises(self, repo: Path) -> None:
+        """Verify is_empty_branch raises ValueError without a default branch."""
+        # Given: repo has no origin, default_branch returns None
+        # When/Then
+        with pytest.raises(ValueError, match="default branch"):
+            is_empty_branch("main", cwd=repo)

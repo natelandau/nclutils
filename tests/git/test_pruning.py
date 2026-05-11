@@ -56,6 +56,62 @@ class TestPrunableBranches:
         with pytest.raises(ValueError, match="default branch"):
             prunable_branches(repo)
 
+    def test_include_empty_surfaces_empty_branch(self, repo_with_remote: Path) -> None:
+        """Verify include_empty=True reports an empty branch with reason='empty'."""
+        # Given: feat branched off main with no new commits
+        subprocess.run(
+            ["git", "checkout", "-b", "feat/empty"],
+            cwd=repo_with_remote,
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "checkout", "main"],
+            cwd=repo_with_remote,
+            check=True,
+            capture_output=True,
+        )
+
+        # When
+        result = prunable_branches(repo_with_remote, merged=False, gone=False, include_empty=True)
+
+        # Then
+        assert PrunableBranch(name="feat/empty", reason="empty") in result
+
+    def test_excludes_empty_by_default(self, repo_with_remote: Path) -> None:
+        """Verify empty branches are absent when include_empty is False (default)."""
+        # Given: feat branched off main with no new commits
+        subprocess.run(
+            ["git", "checkout", "-b", "feat/empty-default"],
+            cwd=repo_with_remote,
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "checkout", "main"],
+            cwd=repo_with_remote,
+            check=True,
+            capture_output=True,
+        )
+
+        # When: exclude merged so only include_empty=False is being tested
+        result = prunable_branches(repo_with_remote, merged=False, gone=False)
+
+        # Then
+        assert all(pb.name != "feat/empty-default" for pb in result)
+
+    def test_empty_loses_to_merged(self, repo_with_merged_branch: Path) -> None:
+        """Verify a branch that is empty AND merged reports reason='merged'."""
+        # Given: merged-feat is merged into main. After merge, merged-feat
+        # is also "zero commits ahead" of main, so both classifiers fire.
+        # When
+        result = prunable_branches(
+            repo_with_merged_branch, merged=True, gone=False, include_empty=True
+        )
+        # Then
+        match = next(pb for pb in result if pb.name == "merged-feat")
+        assert match.reason == "merged"
+
     def test_gone_wins_over_merged(self, repo_with_remote: Path) -> None:
         """Verify a branch that is both merged and gone reports reason='gone'."""
         # Given: create branch, push, merge into main, then delete remote
@@ -116,6 +172,49 @@ class TestPrunableBranches:
         names = [pb.name for pb in result]
         assert names.count("both") == 1
         match = next(pb for pb in result if pb.name == "both")
+        assert match.reason == "gone"
+
+    def test_gone_wins_over_empty(self, repo_with_remote: Path) -> None:
+        """Verify a branch that is both empty and gone reports reason='gone'."""
+        # Given: feat branched off main with no commits, pushed, then remote deleted
+        subprocess.run(
+            ["git", "checkout", "-b", "feat/empty-gone"],
+            cwd=repo_with_remote,
+            check=True,
+            capture_output=True,
+        )
+        # Push the empty branch (still at main's commit) so it has an upstream
+        subprocess.run(
+            ["git", "push", "-u", "origin", "feat/empty-gone"],
+            cwd=repo_with_remote,
+            check=True,
+            capture_output=True,
+        )
+        # Delete the remote tracking ref and prune so [gone] is reported
+        subprocess.run(
+            ["git", "push", "origin", "--delete", "feat/empty-gone"],
+            cwd=repo_with_remote,
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "fetch", "--prune", "origin"],
+            cwd=repo_with_remote,
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "checkout", "main"],
+            cwd=repo_with_remote,
+            check=True,
+            capture_output=True,
+        )
+
+        # When
+        result = prunable_branches(repo_with_remote, merged=False, gone=True, include_empty=True)
+
+        # Then: feat/empty-gone appears exactly once with reason='gone'
+        match = next(pb for pb in result if pb.name == "feat/empty-gone")
         assert match.reason == "gone"
 
 

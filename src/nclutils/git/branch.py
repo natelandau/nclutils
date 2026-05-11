@@ -209,6 +209,45 @@ def ahead_behind(
     return (int(parts[0]), int(parts[1]))
 
 
+def is_empty_branch(
+    branch: str,
+    target: str | None = None,
+    *,
+    cwd: Path | str | None = None,
+    stream: bool = False,
+    env: Mapping[str, str] | None = None,
+) -> bool:
+    """Return True when ``branch`` has zero commits ahead of ``target``.
+
+    Useful as a primitive for "is this feature branch worth keeping?"
+    checks: an empty branch was never written to and is a legitimate
+    cleanup candidate even when it is not merged or gone.
+
+    ``target=None`` defers to :func:`default_branch` (with the implicit
+    default ``remote="origin"``).
+
+    Args:
+        branch: Branch to inspect.
+        target: Comparison base. Defaults to the repo's default branch.
+        cwd: Working directory; ``None`` inherits the process cwd.
+        stream: Forwarded to :func:`run_git`.
+        env: Forwarded to :func:`run_git`.
+
+    Returns:
+        True when ``branch`` has zero commits that are not also on ``target``.
+
+    Raises:
+        ValueError: ``target=None`` and ``default_branch()`` returns None.
+    """
+    if target is None:
+        target = default_branch(cwd, stream=stream, env=env)
+    if target is None:
+        msg = "is_empty_branch: target=None and default branch could not be resolved"
+        raise ValueError(msg)
+    ahead, _ = ahead_behind(branch, target, cwd=cwd, stream=stream, env=env)
+    return ahead == 0
+
+
 def merged_branches(
     target: str | None = None,
     cwd: Path | str | None = None,
@@ -270,11 +309,12 @@ def gone_branches(
     return frozenset(out)
 
 
-def prunable_branches(  # noqa: PLR0913
+def prunable_branches(  # noqa: C901, PLR0912, PLR0913
     cwd: Path | str | None = None,
     *,
     merged: bool = True,
     gone: bool = True,
+    include_empty: bool = False,
     target: str | None = None,
     exclude: tuple[str, ...] = ("main", "master", "develop"),
     stream: bool = False,
@@ -283,22 +323,26 @@ def prunable_branches(  # noqa: PLR0913
     """Return local branches safe to delete, with the reason each qualifies.
 
     Combines:
-      - branches merged into ``target`` (equivalently, branches with zero
-        commits ahead of ``target``) when ``merged`` is True. ``target``
+      - branches merged into ``target`` when ``merged`` is True. ``target``
         defaults to ``default_branch()``.
       - branches whose upstream is gone, when ``gone`` is True.
+      - branches with zero commits ahead of ``target`` when
+        ``include_empty`` is True (excluding those already classified as
+        merged or gone).
 
     Always excludes the current branch and any name in ``exclude``.
 
     Reason precedence when a branch qualifies under multiple criteria:
-    ``"gone"`` > ``"merged"``. Order is alphabetical by name.
+    ``"gone"`` > ``"merged"`` > ``"empty"``. Order is alphabetical by
+    name.
 
     Raises:
-        ValueError: target=None and default_branch() returns None.
+        ValueError: ``merged`` or ``include_empty`` is True, ``target``
+            is None, and ``default_branch()`` returns None.
     """
-    if merged and target is None:
+    if (merged or include_empty) and target is None:
         target = default_branch(cwd, stream=stream, env=env)
-    if merged and target is None:
+    if (merged or include_empty) and target is None:
         msg = "prunable_branches: no target and default branch could not be resolved"
         raise ValueError(msg)
 
@@ -309,6 +353,15 @@ def prunable_branches(  # noqa: PLR0913
     if gone:
         for name in gone_branches(cwd=cwd, stream=stream, env=env):
             reasons[name] = "gone"  # overwrites "merged"; gone wins
+    if include_empty and target is not None:
+        for name in all_local_branches(cwd=cwd, stream=stream, env=env):
+            if name in reasons:
+                continue
+            if name == target:
+                continue
+            ahead, _ = ahead_behind(name, target, cwd=cwd, stream=stream, env=env)
+            if ahead == 0:
+                reasons[name] = "empty"
 
     current = current_branch(cwd, stream=stream, env=env)
     excluded: set[str] = set(exclude)
