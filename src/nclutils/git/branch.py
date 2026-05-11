@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Literal
 
 from .runner import run_git
 
@@ -12,6 +13,25 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 _GONE_RE = re.compile(r"^[*+ ]?\s*(\S+)\s+\S+\s+\[[^\]]+:\s*gone\b")
+
+PruneReason = Literal["merged", "gone", "empty"]
+
+
+@dataclass(frozen=True, slots=True)
+class PrunableBranch:
+    """A local branch that is safe to delete, with the reason it qualifies.
+
+    Returned from :func:`prunable_branches`. The ``reason`` field carries
+    the precedence-resolved classification:
+
+    - ``"gone"``: upstream tracking ref has been deleted.
+    - ``"merged"``: branch is fully merged into the target.
+    - ``"empty"``: branch has zero commits ahead of the target (only
+      surfaced when ``prunable_branches(include_empty=True)``).
+    """
+
+    name: str
+    reason: PruneReason
 
 
 def current_branch(
@@ -259,8 +279,8 @@ def prunable_branches(  # noqa: PLR0913
     exclude: tuple[str, ...] = ("main", "master", "develop"),
     stream: bool = False,
     env: Mapping[str, str] | None = None,
-) -> list[str]:
-    """Return local branches safe to delete.
+) -> list[PrunableBranch]:
+    """Return local branches safe to delete, with the reason each qualifies.
 
     Combines:
       - branches merged into ``target`` (equivalently, branches with zero
@@ -269,6 +289,9 @@ def prunable_branches(  # noqa: PLR0913
       - branches whose upstream is gone, when ``gone`` is True.
 
     Always excludes the current branch and any name in ``exclude``.
+
+    Reason precedence when a branch qualifies under multiple criteria:
+    ``"gone"`` > ``"merged"``. Order is alphabetical by name.
 
     Raises:
         ValueError: target=None and default_branch() returns None.
@@ -279,20 +302,24 @@ def prunable_branches(  # noqa: PLR0913
         msg = "prunable_branches: no target and default branch could not be resolved"
         raise ValueError(msg)
 
-    candidates: set[str] = set()
+    reasons: dict[str, PruneReason] = {}
     if merged and target is not None:
-        candidates |= set(merged_branches(target, cwd=cwd, stream=stream, env=env))
+        for name in merged_branches(target, cwd=cwd, stream=stream, env=env):
+            reasons[name] = "merged"
     if gone:
-        candidates |= set(gone_branches(cwd=cwd, stream=stream, env=env))
+        for name in gone_branches(cwd=cwd, stream=stream, env=env):
+            reasons[name] = "gone"  # overwrites "merged"; gone wins
 
     current = current_branch(cwd, stream=stream, env=env)
-    excluded = set(exclude)
+    excluded: set[str] = set(exclude)
     if current is not None:
         excluded.add(current)
     if target is not None:
         excluded.add(target)
 
-    return sorted(candidates - excluded)
+    return [
+        PrunableBranch(name=n, reason=r) for n, r in sorted(reasons.items()) if n not in excluded
+    ]
 
 
 def delete_branches(
