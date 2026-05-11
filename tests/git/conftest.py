@@ -223,6 +223,33 @@ def repo_diverged(repo_with_remote: Path) -> Path:
 
 
 @pytest.fixture
+def repo_will_conflict_rebase(repo_with_remote: Path) -> Path:
+    """Local main is 1 ahead and origin is 1 ahead, both touching README.md.
+
+    A fetch + rebase against origin/main will hit a merge conflict on README.md.
+    The fixture stops short of fetching so the caller's sync_branch sees a
+    stale tracking ref and performs the fetch itself.
+    """
+    # Local commit on README.md
+    (repo_with_remote / "README.md").write_text("local\n")
+    _git("commit", "-am", "local change", cwd=repo_with_remote)
+
+    # Sibling pushes a conflicting commit on the same file/line
+    sibling = repo_with_remote.parent / "conflict_sibling"
+    _git(
+        "clone",
+        str(repo_with_remote.parent / "remote.git"),
+        str(sibling),
+        cwd=repo_with_remote.parent,
+    )
+    (sibling / "README.md").write_text("remote\n")
+    _git("commit", "-am", "remote change", cwd=sibling)
+    _git("push", "origin", "main", cwd=sibling)
+
+    return repo_with_remote
+
+
+@pytest.fixture
 def repo_with_merged_branch(repo_with_remote: Path) -> Path:
     """Repo with a feature branch merged into main."""
     _git("checkout", "-b", "merged-feat", cwd=repo_with_remote)

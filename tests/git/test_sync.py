@@ -12,6 +12,7 @@ from nclutils.git import (
     stashed,
     sync_branch,
 )
+from nclutils.git.sync import _conflict_paths
 from nclutils.sh import ShellCommandFailedError
 
 from .conftest import advance_origin
@@ -219,3 +220,74 @@ class TestSyncBranch:
         assert result.ahead_before == 2
         assert result.behind_before == 1
         assert result.stashed is False
+
+    def test_allow_rebase_false_raises_when_ff_unavailable(self, repo_diverged: Path) -> None:
+        """Verify sync_branch with allow_rebase=False raises when ff-only fails."""
+        # Given: repo_diverged is 2 ahead, 1 behind, so --ff-only cannot succeed
+        # When/Then
+        with pytest.raises(ShellCommandFailedError, match="allow_rebase=False"):
+            sync_branch(repo_diverged, allow_rebase=False)
+
+    def test_rebase_conflict_aborts_by_default(self, repo_will_conflict_rebase: Path) -> None:
+        """Verify sync_branch rolls back and returns action='aborted' on conflict."""
+        # Given: local and origin both modified README.md (1 ahead, 1 behind)
+        # When
+        result = sync_branch(repo_will_conflict_rebase)
+
+        # Then: action=aborted, conflicts populated, rebase rolled back
+        assert result.action == "aborted"
+        assert result.ahead_before == 1
+        assert result.behind_before == 1
+        assert Path("README.md") in result.conflicts
+        assert not (repo_will_conflict_rebase / ".git" / "rebase-merge").exists()
+        assert not (repo_will_conflict_rebase / ".git" / "rebase-apply").exists()
+        # Local branch is exactly where it started
+        head_msg = subprocess.run(
+            ["git", "log", "-1", "--pretty=%s"],
+            cwd=repo_will_conflict_rebase,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        assert head_msg == "local change"
+
+    def test_rebase_conflict_leave_raises(self, repo_will_conflict_rebase: Path) -> None:
+        """Verify sync_branch on_conflict='leave' raises and keeps the rebase paused."""
+        # Given: local and origin both modified README.md
+        # When/Then
+        with pytest.raises(ShellCommandFailedError):
+            sync_branch(repo_will_conflict_rebase, on_conflict="leave")
+
+        # Rebase is still paused on disk
+        rebase_paused = (repo_will_conflict_rebase / ".git" / "rebase-merge").exists() or (
+            repo_will_conflict_rebase / ".git" / "rebase-apply"
+        ).exists()
+        assert rebase_paused
+
+
+class TestConflictPaths:
+    """Tests for the _conflict_paths internal helper."""
+
+    def test_returns_empty_outside_repo(self, tmp_path: Path) -> None:
+        """Verify _conflict_paths returns an empty tuple when git diff fails."""
+        # Given: a directory that is not a git repo
+        # When
+        result = _conflict_paths(tmp_path, stream=False, env=None)
+        # Then
+        assert result == ()
+
+    def test_returns_empty_on_clean_repo(self, repo: Path) -> None:
+        """Verify _conflict_paths returns an empty tuple when no files are unmerged."""
+        # Given: a clean repo with no merge in progress
+        # When
+        result = _conflict_paths(repo, stream=False, env=None)
+        # Then
+        assert result == ()
+
+    def test_returns_unmerged_paths(self, repo_in_rebase: Path) -> None:
+        """Verify _conflict_paths returns the paths of files with merge conflicts."""
+        # Given: a repo paused mid-rebase with README.md unmerged
+        # When
+        result = _conflict_paths(repo_in_rebase, stream=False, env=None)
+        # Then
+        assert Path("README.md") in result
