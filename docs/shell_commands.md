@@ -250,6 +250,19 @@ else:
     print("ripgrep not installed; falling back to grep")
 ```
 
+## Diagnostic logging
+
+`run_command` emits a `DEBUG` record for every invocation through stdlib `logging` under the `nclutils.sh` logger. The message is the final argv (after any `sudo=True` prepend), formatted with `shlex.join` so it can be pasted back into a shell. Nothing is logged about stdout, stderr, or the return code; the returned `CompletedCommand` already carries those.
+
+```python
+import logging
+
+logging.getLogger("nclutils.sh").setLevel(logging.DEBUG)
+logging.basicConfig()
+```
+
+The logger is silent until the host application attaches a handler, so importing `nclutils.sh` never produces output on its own. This is independent of `nclutils.pp`. Anything built on top of `run_command` (including `nclutils.git.run_git`) inherits this logging for free; callers do not need to log invocations themselves.
+
 ## Migrating from the old API
 
 The previous `nclutils.sh` module was a thin wrapper around the third-party `sh` package. The new implementation uses stdlib `subprocess` directly.

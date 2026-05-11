@@ -348,7 +348,7 @@ Every branch helper returns or accepts short branch names (no `refs/heads/` pref
 
 ### Runner
 
-`run_git(*args, cwd=None, env=None, input=None, timeout=None, exclude_regex=None, stream=False, check=True, okay_codes=(0,)) -> CompletedCommand` is the single subprocess entry point used by every other helper in the module. It prepends `git` to `args`, logs the invocation at `DEBUG`, and forwards every option to `nclutils.sh.run_command`. Returns a `CompletedCommand` (see [shell_commands.md](shell_commands.md)).
+`run_git(*args, cwd=None, env=None, input=None, timeout=None, exclude_regex=None, stream=False, check=True, okay_codes=(0,)) -> CompletedCommand` is the single subprocess entry point used by every other helper in the module. It prepends `git` to `args` and forwards every option to `nclutils.sh.run_command`. Returns a `CompletedCommand` (see [shell_commands.md](shell_commands.md)).
 
 ```python
 from nclutils.git import run_git
@@ -400,16 +400,16 @@ See [docs/shell_commands.md](shell_commands.md) for the full `ShellCommandError`
 
 ## Diagnostic logging
 
-`nclutils.git` emits `DEBUG` messages through stdlib `logging` under the `nclutils.git` logger. Every git invocation is logged. To see them:
+Every git invocation is logged at `DEBUG` by `nclutils.sh.run_command`, which is what `run_git` delegates to. The records arrive under the `nclutils.sh` logger, not `nclutils.git`:
 
 ```python
 import logging
 
-logging.getLogger("nclutils.git").setLevel(logging.DEBUG)
+logging.getLogger("nclutils.sh").setLevel(logging.DEBUG)
 logging.basicConfig()
 ```
 
-This is independent of `nclutils.pp`. The git module never writes to the console directly; for visible progress on long-running commands, pass `stream=True` to the helper instead.
+See [shell_commands.md](shell_commands.md#diagnostic-logging) for what the records contain. This is independent of `nclutils.pp`; the git module never writes to the console directly. For visible progress on long-running commands, pass `stream=True` to the helper instead.
 
 ## API reference
 

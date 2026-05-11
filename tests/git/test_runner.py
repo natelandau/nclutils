@@ -93,14 +93,16 @@ class TestRunGit:
         result = run_git("log", "-1", "--pretty=%an", cwd=repo)
         assert result.stdout.strip() == "EnvAuthor"
 
-    def test_logs_at_debug_level(self, repo: Path, caplog: pytest.LogCaptureFixture) -> None:
-        """Verify run_git logs each invocation under nclutils.git at DEBUG."""
-        # Given: caplog set to capture nclutils.git at DEBUG
-        caplog.set_level(logging.DEBUG, logger="nclutils.git")
+    def test_logs_at_debug_level(self, repo: Path, sh_caplog: pytest.LogCaptureFixture) -> None:
+        """Verify run_git invocations surface through nclutils.sh and add no nclutils.git records."""
+        # Given: also capture the retired nclutils.git logger so a regression would show up
+        sh_caplog.set_level(logging.DEBUG, logger="nclutils.git")
 
-        # When: any call is made
+        # When
         run_git("status", cwd=repo)
 
-        # Then: at least one record contains 'git status'
-        messages = [r.getMessage() for r in caplog.records if r.name == "nclutils.git"]
-        assert any("git status" in m for m in messages)
+        # Then: the invocation surfaces under nclutils.sh, and the retired
+        # nclutils.git logger emits nothing.
+        sh_messages = [r.getMessage() for r in sh_caplog.records if r.name == "nclutils.sh"]
+        assert any("git status" in m for m in sh_messages)
+        assert not any(r.name == "nclutils.git" for r in sh_caplog.records)
