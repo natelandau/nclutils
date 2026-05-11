@@ -182,8 +182,11 @@ def sync_branch(  # noqa: PLR0913
       6. If dirty and ``stash=True``: stash via the ``stashed`` context manager.
          If dirty and ``stash=False``: raise ``ShellCommandFailedError`` before
          any rebase attempt.
-      7. If ``allow_rebase=True`` and ahead == 0: ``git pull --ff-only``.
-         Otherwise (or if ``--ff-only`` fails): ``git pull --rebase``.
+      7. If ahead == 0: try ``git pull --ff-only`` first. On success,
+         return ``action='fast_forwarded'``. If ``--ff-only`` fails (or
+         was skipped because ahead > 0), and ``allow_rebase=True``,
+         try ``git pull --rebase``. With ``allow_rebase=False``, raise
+         ``ShellCommandFailedError`` instead of rebasing.
       8. On rebase conflict:
          - ``on_conflict='abort'``: ``git rebase --abort``, restore stash,
            return ``action='aborted'`` with conflicts populated.
