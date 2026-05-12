@@ -147,10 +147,9 @@ class TestAsciiStepHeader:
         # Given an ASCII-encoding emitter
         e, out, _ = _make_ascii_emitter()
 
-        # When step() raises (non-ephemeral)
-        err_msg = "boom"
-        with pytest.raises(RuntimeError, match=err_msg), e.step("compiling"):
-            raise RuntimeError(err_msg)
+        # When step() exits via fail() (non-ephemeral)
+        with e.step("compiling") as s:
+            s.fail("compiling")
 
         # Then the failure line uses the ASCII error marker, not the unicode one
         text = out.export_text()

@@ -125,6 +125,7 @@
             "S607",  # starting process with partial path (relying on PATH for git is intentional in tests)
             "SLF001",  # Access a private attribute
             "PT012",  # pytest.raises block multiple statements (legit when state must be set on a yielded object before raising)
+            "TRY301",  # Abstract `raise` to an inner function (tests intentionally raise inline to exercise real call sites)
         ], "duties.py" = ["ANN001", "FBT001", "FBT002"], "src/nclutils/pp/emitter.py" = [
             "ANN401", # Dynamically typed expressions (typing.Any) are disallowed in `**kwargs`
         ] }

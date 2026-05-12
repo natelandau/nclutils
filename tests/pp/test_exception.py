@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 def _capture(exc_cls: type[BaseException], message: str) -> BaseException:
     """Raise `exc_cls(message)`, catch it, and return the captured instance with a traceback."""
     try:
-        raise exc_cls(message)  # noqa: TRY301 -- inner raise IS the test setup; cannot abstract further
+        raise exc_cls(message)
     except BaseException as exc:  # noqa: BLE001 -- intentional broad catch to relay any subtype
         return exc
 
@@ -96,7 +96,7 @@ class TestExceptionTrue:
         # When error is called with exception=True inside an except block
         try:
             msg = "boom"
-            raise ValueError(msg)  # noqa: TRY301 -- direct raise required to populate sys.exc_info
+            raise ValueError(msg)
         except ValueError:
             e.error("operation failed", exception=True)
 
@@ -282,7 +282,7 @@ class TestExceptionLogfile:
         # When an exception with brackets in its message is logged
         try:
             msg = "['missing_key']"
-            raise KeyError(msg)  # noqa: TRY301 -- inline raise required to populate the traceback
+            raise KeyError(msg)
         except KeyError as exc:
             e.error("lookup failed", exception=exc)
 

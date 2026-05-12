@@ -349,17 +349,16 @@ class TestThemeAppliedToOutput:
         assert "compiling" in text
         assert "✓" not in text
 
-    def test_step_renders_custom_error_marker_on_exception(
+    def test_step_renders_custom_error_marker_on_fail(
         self, make_recording_emitter: RecordingEmitterFactory
     ) -> None:
         """Verify step()'s failure completion uses the error.marker override."""
         # Given an Emitter with error.marker overridden
         e, out, _ = make_recording_emitter(theme=Theme(error=Level(marker="💥 ")))
 
-        # When a step block raises an exception
-        err_msg = "boom"
-        with pytest.raises(RuntimeError), e.step("compiling"):
-            raise RuntimeError(err_msg)
+        # When a step block exits via s.fail()
+        with e.step("compiling") as s:
+            s.fail("aborted")
 
         # Then the custom error marker appears and the default ✗ does not
         text = out.export_text()
