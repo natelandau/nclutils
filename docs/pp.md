@@ -320,6 +320,31 @@ The setter wins over the matching `success_msg` / `failure_msg` kwarg, which win
 
 `set_success()` is a no-op when the block raises; `set_failure()` is a no-op when the block returns normally.
 
+### Marking a step as skipped
+
+Some steps neither succeed nor fail: there was nothing to do, a precondition wasn't met, or the work was intentionally bypassed. Call `s.set_skipped()` from inside the block to render the completion with info-level styling (no checkmark, no error glyph) and log a `skipped:` line instead of `succeeded:`:
+
+```python
+with pp.step("compiling sources") as s:
+    if not sources:
+        s.set_skipped("no source files found")
+        return
+    for path in sources:
+        compile_one(path)
+```
+
+Pass the message inline, or pre-set it with `skip_msg=` and call `set_skipped()` with no arguments:
+
+```python
+with pp.step("warming caches", skip_msg="caches already warm") as s:
+    if cache.is_warm():
+        s.set_skipped()
+        return
+    warm_cache()
+```
+
+`set_skipped()` (or the `skip_msg` kwarg) is a no-op until `set_skipped()` actually fires; without that call the block follows the success path as usual. The failure path takes precedence: if the block raises after `set_skipped()`, the step renders as failed. The setter value, kwarg, and original message follow the same precedence as the success path (setter > kwarg > original).
+
 ## File logging
 
 Pass `logfile=` to write a parallel record of every emission to disk:

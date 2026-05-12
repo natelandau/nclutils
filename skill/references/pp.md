@@ -140,6 +140,7 @@ def step(
     markup: bool = False,
     success_msg: str | RenderableType | None = None,
     failure_msg: str | RenderableType | None = None,
+    skip_msg: str | RenderableType | None = None,
 ) -> Generator[Step]
 ```
 
@@ -150,22 +151,26 @@ with pp.step("running migrations") as s:
         s.sub(f"applied {m.name}")
 ```
 
-The `Step` object yielded has three public methods:
+The `Step` object yielded has four public methods:
 
 ```python
 Step.sub(text: str | Text, *, markup: bool = False) -> None
 Step.set_success(message: str | RenderableType, *, markup: bool = False) -> None
 Step.set_failure(message: str | RenderableType, *, markup: bool = False) -> None
+Step.set_skipped(message: str | RenderableType | None = None, *, markup: bool = False) -> None
 ```
 
 `sub()` appends a sub-item beneath the spinner. Strings are escaped by default; `markup=True` parses Rich markup. A `Text` instance keeps its own styling. Each sub-item is also written to the logfile (indented continuation line at `INFO`).
 
 `set_success()` / `set_failure()` update the completion header from inside the block when the text depends on work done there (a count, a duration, the item that failed). Setter wins over the matching kwarg, which wins over the original message. Each setter has its own `markup=` flag. The setter value also appears in the `succeeded:` / `failed:` log line. `set_success()` is ignored if the block raises; `set_failure()` is ignored if it returns normally.
 
-On exit, the spinner resolves to `✓` (success) or `✗` (failure) and any sub-items remain on screen. Exceptions inside the block (including `SystemExit` and `KeyboardInterrupt`) re-raise after marking failure.
+`set_skipped()` opts the step into a third outcome: the block did not run, but it didn't fail either (nothing to do, precondition unmet, intentional bypass). The completion header uses info-level styling (no checkmark) and the logfile records a `skipped:` line. The `message` argument is optional: if omitted, falls back to `skip_msg=` kwarg, then to the original step message. Ignored if the block raises (failure path wins).
 
-- `ephemeral=True` wipes the spinner AND sub-items on success; on failure the red X surfaces (and `failure_msg` / `set_failure()` value if set).
-- `success_msg=` and `failure_msg=` override the resolved text; either can be omitted independently. The `step(markup=...)` flag covers all three messages, but setters carry their own per-call `markup=` flag.
+On exit, the spinner resolves to `✓` (success), `✗` (failure), or the info-styled message (skipped). Any sub-items remain on screen. Exceptions inside the block (including `SystemExit` and `KeyboardInterrupt`) re-raise after marking failure.
+
+- `ephemeral=True` wipes the spinner AND sub-items on success/skip; on failure the red X surfaces (and `failure_msg` / `set_failure()` value if set). Skip text still records in the logfile when ephemeral.
+- `success_msg=` / `failure_msg=` / `skip_msg=` override the resolved text; any can be omitted independently. The `step(markup=...)` flag covers all message kwargs, but setters carry their own per-call `markup=` flag.
+- `skip_msg=` alone does NOT trigger the skip outcome — `set_skipped()` must be called from inside the block to opt in. Without that call, the block follows the success path normally.
 - **`pp.step()` CANNOT NEST.** Rich's `Live` cannot stack — `pp` raises `RuntimeError` on nested entry on the same emitter. Use `s.sub("...")` for nested progress lines instead.
 
 ## Configuration
@@ -383,10 +388,13 @@ dryrun(message, *, details=None, markup=False, style=None, detail_style=None, ma
 # Structural output
 header(message="", *, align="center", markup=False, **kwargs) -> None  # **kwargs forwarded to Console.rule()
 kv(items, *, indent=2, separator=": ", markup=False) -> None
-step(message, *, ephemeral=False, markup=False, success_msg=None, failure_msg=None) -> Generator[Step]
+step(message, *, ephemeral=False, markup=False, success_msg=None, failure_msg=None, skip_msg=None) -> Generator[Step]
 
 # Step API
 Step.sub(text, *, markup=False) -> None
+Step.set_success(message, *, markup=False) -> None
+Step.set_failure(message, *, markup=False) -> None
+Step.set_skipped(message=None, *, markup=False) -> None
 
 # Configuration
 configure(*, verbosity=None, quiet=None, console=None, err_console=None, theme=None, logfile=None, loglevel=None, logfmt=None) -> None

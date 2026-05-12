@@ -558,3 +558,242 @@ class TestSetFailureFromBlock:
         text = out.export_text()
         assert "would-be failure" not in text
         assert "would-be failure" not in logfile.read_text()
+
+
+class TestStepSkipMsg:
+    """`skip_msg` kwarg supplies the default text used when `set_skipped()` fires."""
+
+    def test_skip_msg_displays_when_set_skipped_called_no_args(
+        self, make_recording_emitter: RecordingEmitterFactory
+    ) -> None:
+        """Verify skip_msg kwarg supplies the header when set_skipped() is called without args."""
+        # Given an emitter wired to a recording console
+        e, out, _ = make_recording_emitter()
+
+        # When step() runs and set_skipped() fires with no message
+        with e.step("compiling", skip_msg="nothing to compile") as s:
+            s.set_skipped()
+
+        # Then the kwarg message appears in the rendered output
+        text = out.export_text()
+        assert "nothing to compile" in text
+
+    def test_skip_msg_falls_back_to_original_message(
+        self, make_recording_emitter: RecordingEmitterFactory
+    ) -> None:
+        """Verify set_skipped() with no kwarg/arg uses the original step message."""
+        # Given an emitter and a step with no skip_msg
+        e, out, _ = make_recording_emitter()
+
+        # When set_skipped() fires without overrides
+        with e.step("compiling") as s:
+            s.set_skipped()
+
+        # Then the original message appears in the rendered output
+        text = out.export_text()
+        assert "compiling" in text
+
+    def test_skip_msg_records_skipped_in_logfile(
+        self,
+        make_recording_emitter: RecordingEmitterFactory,
+        tmp_path: Path,
+    ) -> None:
+        """Verify the logfile records a `skipped:` line when the step is skipped."""
+        # Given an emitter with a logfile
+        logfile = tmp_path / "run.log"
+        e, _, _ = make_recording_emitter(logfile=logfile)
+
+        # When the block marks itself skipped with a kwarg message
+        with e.step("compiling", skip_msg="nothing to compile") as s:
+            s.set_skipped()
+
+        # Then the logfile records the skipped: line with the kwarg message
+        contents = logfile.read_text()
+        assert "skipped: nothing to compile" in contents
+        # And it should not record a succeeded: or failed: line
+        assert "succeeded:" not in contents
+        assert "failed:" not in contents
+
+    def test_skip_msg_kwarg_alone_does_not_trigger_skip(
+        self,
+        make_recording_emitter: RecordingEmitterFactory,
+        tmp_path: Path,
+    ) -> None:
+        """Verify skip_msg kwarg without set_skipped() leaves the step on the success path."""
+        # Given an emitter with a logfile and a skip_msg kwarg
+        logfile = tmp_path / "run.log"
+        e, out, _ = make_recording_emitter(logfile=logfile)
+
+        # When the block exits normally without calling set_skipped()
+        with e.step("compiling", skip_msg="would skip"):
+            pass
+
+        # Then the step records as succeeded and skip_msg does not surface
+        contents = logfile.read_text()
+        assert "succeeded: compiling" in contents
+        assert "skipped:" not in contents
+        assert "would skip" not in out.export_text()
+
+
+class TestSetSkippedFromBlock:
+    """`Step.set_skipped()` marks the step as skipped from inside the block."""
+
+    def test_set_skipped_with_message_replaces_header(
+        self, make_recording_emitter: RecordingEmitterFactory
+    ) -> None:
+        """Verify set_skipped("msg") applied inside the block replaces the completion header."""
+        # Given an emitter
+        e, out, _ = make_recording_emitter()
+
+        # When the block decides to skip with an inline message
+        with e.step("compiling") as s:
+            s.set_skipped("no source files found")
+
+        # Then the inline message appears in the rendered output
+        text = out.export_text()
+        assert "no source files found" in text
+
+    def test_set_skipped_overrides_kwarg(
+        self, make_recording_emitter: RecordingEmitterFactory
+    ) -> None:
+        """Verify set_skipped(message) takes precedence over the skip_msg kwarg."""
+        # Given an emitter with a kwarg-provided skip_msg
+        e, out, _ = make_recording_emitter()
+
+        # When set_skipped() overrides it from inside the block
+        with e.step("compiling", skip_msg="kwarg skip") as s:
+            s.set_skipped("setter skip")
+
+        # Then the setter's message appears and the kwarg's does not
+        text = out.export_text()
+        assert "setter skip" in text
+        assert "kwarg skip" not in text
+
+    def test_set_skipped_in_logfile(
+        self,
+        make_recording_emitter: RecordingEmitterFactory,
+        tmp_path: Path,
+    ) -> None:
+        """Verify set_skipped() message is recorded in the `skipped:` log line."""
+        # Given an emitter with a logfile
+        logfile = tmp_path / "run.log"
+        e, _, _ = make_recording_emitter(logfile=logfile)
+
+        # When set_skipped() is used inside the block
+        with e.step("compiling") as s:
+            s.set_skipped("no source files found")
+
+        # Then the logfile records the setter message under `skipped:`
+        contents = logfile.read_text()
+        assert "skipped: no source files found" in contents
+
+    def test_set_skipped_uses_info_styling_not_success(
+        self, make_recording_emitter: RecordingEmitterFactory
+    ) -> None:
+        """Verify the skipped completion does not use the success checkmark marker."""
+        # Given an emitter
+        e, out, _ = make_recording_emitter()
+
+        # When the block marks itself skipped
+        with e.step("compiling") as s:
+            s.set_skipped("no source files")
+
+        # Then the rendered output does not contain the success marker glyph
+        text = out.export_text()
+        assert "no source files" in text
+        # Success glyph (unicode or ASCII fallback) must not appear
+        assert "✓" not in text
+        assert "+ no source files" not in text
+
+    def test_set_skipped_markup_parses_tags(
+        self, make_recording_emitter: RecordingEmitterFactory
+    ) -> None:
+        """Verify set_skipped(markup=True) parses Rich markup in the message."""
+        # Given an emitter
+        e, out, _ = make_recording_emitter()
+
+        # When the setter is invoked with markup=True
+        with e.step("compiling") as s:
+            s.set_skipped("[bold]nothing to do[/]", markup=True)
+
+        # Then the rendered output contains the message text without literal tags
+        text = out.export_text()
+        assert "nothing to do" in text
+        assert "[bold]" not in text
+
+    def test_set_skipped_accepts_renderable(
+        self, make_recording_emitter: RecordingEmitterFactory
+    ) -> None:
+        """Verify set_skipped() accepts an arbitrary Rich renderable."""
+        # Given an emitter
+        e, out, _ = make_recording_emitter()
+
+        # When a Padding renderable is supplied
+        with e.step("compiling") as s:
+            s.set_skipped(Padding("no work to do", (0, 1)))
+
+        # Then the renderable's text appears in the rendered output
+        text = out.export_text()
+        assert "no work to do" in text
+
+    def test_set_skipped_ignored_on_failure(
+        self,
+        make_recording_emitter: RecordingEmitterFactory,
+        tmp_path: Path,
+    ) -> None:
+        """Verify set_skipped() has no effect when the block raises (failure path wins)."""
+        # Given an emitter with a logfile
+        logfile = tmp_path / "run.log"
+        e, _, _ = make_recording_emitter(logfile=logfile)
+        err_msg = "boom"
+
+        # When set_skipped() is called and then an exception is raised
+        with pytest.raises(RuntimeError, match=err_msg), e.step("compiling") as s:
+            s.set_skipped("would skip")
+            raise RuntimeError(err_msg)
+
+        # Then the logfile records `failed:`, not `skipped:`
+        contents = logfile.read_text()
+        assert "failed: compiling" in contents
+        assert "skipped:" not in contents
+
+    def test_set_skipped_ephemeral_clears_console_but_logs(
+        self,
+        make_recording_emitter: RecordingEmitterFactory,
+        tmp_path: Path,
+    ) -> None:
+        """Verify ephemeral skip wipes the console output but records skipped: in logfile."""
+        # Given an emitter with logfile and an ephemeral step
+        logfile = tmp_path / "run.log"
+        e, out, _ = make_recording_emitter(logfile=logfile)
+
+        # When the block marks itself skipped under ephemeral=True
+        with e.step("warming caches", ephemeral=True, skip_msg="caches already warm") as s:
+            s.set_skipped()
+
+        # Then the console is clean of skip text (ephemeral wipes the marker)
+        # but the logfile records the skip
+        assert "caches already warm" not in out.export_text()
+        assert "skipped: caches already warm" in logfile.read_text()
+
+
+class TestModuleLevelStepSkip:
+    """Module-level `step()` forwards `skip_msg` to the default emitter."""
+
+    def test_module_step_accepts_skip_msg(
+        self,
+        make_recording_emitter: RecordingEmitterFactory,
+        isolated_default: None,
+    ) -> None:
+        """Verify the module-level step() forwards skip_msg to the default emitter."""
+        # Given the default emitter is replaced with a recording one
+        e, out, _ = make_recording_emitter()
+        pp_emitter.set_default(e)
+
+        # When the module-level step() runs and the block calls set_skipped()
+        with pp_emitter.step("compiling", skip_msg="nothing to compile") as s:
+            s.set_skipped()
+
+        # Then the kwarg message appears in the rendered output
+        text = out.export_text()
+        assert "nothing to compile" in text
