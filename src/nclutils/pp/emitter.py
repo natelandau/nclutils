@@ -1523,33 +1523,22 @@ class Emitter:
             msg = "step() cannot be nested; use sequential steps instead."
             raise RuntimeError(msg)
         self._active_step = True
-        info_style, _, _ = self._resolve("info")
-        success_style, _, success_marker = self._resolve("success")
-        error_style, _, error_marker = self._resolve("error")
-
-        log_text = _message_to_log_text(message, markup=markup)
-
-        self._logsink.emit(
-            level=_LEVEL_TO_LOG_SEVERITY["info"],
-            message=f"starting: {log_text}",
-            details=None,
-        )
-
-        s = Step(message, header_style=info_style, logsink=self._logsink, markup=markup)
-        failed_exc: BaseException | None = None
-        # Pre-seed both branches with the original message so the finally
-        # block always has a defined value to log, even on paths static
-        # analysis can't prove (exception during _resolve_step_message, etc.).
-        success_message: str | RenderableType = message
-        success_markup: bool = markup
-        failure_message: str | RenderableType = message
-        failure_markup: bool = markup
         try:
+            info_style, _, _ = self._resolve("info")
+            success_style, _, success_marker = self._resolve("success")
+            error_style, _, error_marker = self._resolve("error")
+
+            self._logsink.emit(
+                level=_LEVEL_TO_LOG_SEVERITY["info"],
+                message=f"starting: {_message_to_log_text(message, markup=markup)}",
+                details=None,
+            )
+
+            s = Step(message, header_style=info_style, logsink=self._logsink, markup=markup)
             with Live(s, console=self.console, refresh_per_second=12.5, transient=ephemeral):
                 try:
                     yield s
                 except BaseException as exc:
-                    failed_exc = exc
                     failure_message, failure_markup = _resolve_step_message(
                         s.failure_override, failure_msg, message, default_markup=markup
                     )
@@ -1565,6 +1554,15 @@ class Emitter:
                                 markup=failure_markup,
                             )
                         )
+                    failure_text = _message_to_log_text(failure_message, markup=failure_markup)
+                    self._logsink.emit(
+                        level=_LEVEL_TO_LOG_SEVERITY["error"],
+                        message=f"failed: {failure_text}",
+                        details=[f"{type(exc).__name__}: {exc}"],
+                    )
+                    if ephemeral:
+                        # Pass the original renderable (not the plain-text strip) so styling/markup is preserved.
+                        self.error(failure_message)
                     raise
                 success_message, success_markup = _resolve_step_message(
                     s.success_override, success_msg, message, default_markup=markup
@@ -1579,25 +1577,13 @@ class Emitter:
                             markup=success_markup,
                         )
                     )
+            self._logsink.emit(
+                level=_LEVEL_TO_LOG_SEVERITY["info"],
+                message=f"succeeded: {_message_to_log_text(success_message, markup=success_markup)}",
+                details=None,
+            )
         finally:
             self._active_step = False
-            if failed_exc is not None:
-                failure_text = _message_to_log_text(failure_message, markup=failure_markup)
-                self._logsink.emit(
-                    level=_LEVEL_TO_LOG_SEVERITY["error"],
-                    message=f"failed: {failure_text}",
-                    details=[f"{type(failed_exc).__name__}: {failed_exc}"],
-                )
-                if ephemeral:
-                    # Pass the original renderable (not the plain-text strip) so styling/markup is preserved.
-                    self.error(failure_message)
-            else:
-                success_text = _message_to_log_text(success_message, markup=success_markup)
-                self._logsink.emit(
-                    level=_LEVEL_TO_LOG_SEVERITY["info"],
-                    message=f"succeeded: {success_text}",
-                    details=None,
-                )
 
 
 _default = Emitter()
