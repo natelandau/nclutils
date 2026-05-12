@@ -480,7 +480,7 @@ class _StepExit(BaseException):
         markup: bool,
         exception: BaseException | bool = False,
     ) -> None:
-        super().__init__()
+        super().__init__(outcome, message)
         self.outcome = outcome
         self.message = message
         self.markup = markup
@@ -606,7 +606,7 @@ class Step:
                 grab `sys.exc_info()`. Defaults to `False` (nothing attached).
             markup: When True, parses Rich markup in a `str` `message`.
         """
-        raise _StepExit("failure", message, markup=markup, exception=exception)  # noqa: EM101 -- discriminant literal, not an error message
+        raise _StepExit("failure", message, markup=markup, exception=exception)  # noqa: EM101  # first positional arg is the discriminant, not an error message
 
     def skip(
         self,
@@ -627,7 +627,7 @@ class Step:
                 renderables pass through.
             markup: When True, parses Rich markup in a `str` `message`.
         """
-        raise _StepExit("skip", message, markup=markup)  # noqa: EM101 -- discriminant literal, not an error message
+        raise _StepExit("skip", message, markup=markup)  # noqa: EM101  # first positional arg is the discriminant, not an error message
 
     def set_completion(self, completion: _StepCompletion) -> None:
         """Record completion state so __rich_console__ rebuilds the header with ASCII fallback.
@@ -1586,7 +1586,10 @@ class Emitter:
         by the message in the success style. On any exception (including
         typer.Exit), prints the error marker then re-raises. Sub-items added
         via `Step.sub()` render beneath the spinner during the step and remain
-        on screen beneath the final marker.
+        on screen beneath the final marker. Calling `s.fail(msg)` or
+        `s.skip(msg)` from inside the block exits early via an internal
+        sentinel and renders the corresponding outcome; see `Step.fail` and
+        `Step.skip` for details.
 
         When `ephemeral` is True the spinner and sub-items are cleared from the
         console on completion. Success leaves no trace; failure prints only the
