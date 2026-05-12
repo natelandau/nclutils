@@ -42,7 +42,7 @@ def test_human_size_default_decimals(size_bytes: int, expected: str) -> None:
     # When formatting with defaults
     result = human_size(size_bytes)
 
-    # Then the value uses the largest unit below 1000 of the next
+    # Then the value renders with the largest unit whose magnitude is below 1000
     assert result == expected
 
 

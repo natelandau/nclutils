@@ -143,7 +143,7 @@ def kebab_case(text: str) -> str:
 def human_size(size_bytes: float, *, decimals: int = 1) -> str:
     """Format a byte count as a human-readable string with appropriate unit.
 
-    Uses SI base 1000 with SI unit labels (``B``, ``kB``, ``MB``, ..., ``YB``). Bytes
+    Uses SI decimal units (base 1000): ``B``, ``kB``, ``MB``, ..., ``YB``. Bytes
     always render as integers since fractional bytes are not meaningful; larger units
     honor ``decimals``. Negative inputs keep their sign so the helper is usable for
     byte deltas. Values above 1000 YB stay on the YB unit rather than rolling over.
