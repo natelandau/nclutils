@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shlex
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -16,6 +17,8 @@ class CompletedCommand:
 
     Returned from :func:`run_command` on success and exposed as ``.result`` on
     :class:`ShellCommandFailedError` / :class:`ShellCommandTimeoutError`.
+    Trailing newlines on ``stdout`` and ``stderr`` are stripped; embedded
+    newlines between lines are preserved.
     """
 
     argv: tuple[str, ...]
@@ -29,6 +32,21 @@ class CompletedCommand:
     def ok(self) -> bool:
         """Return True when the command exited with status 0."""
         return self.returncode == 0
+
+    @property
+    def command_line(self) -> str:
+        """Return ``argv`` rendered with :func:`shlex.join` so it can be pasted into a shell."""
+        return shlex.join(self.argv)
+
+    @property
+    def stdout_lines(self) -> list[str]:
+        """Return ``stdout`` split into lines. Recomputed on each access; bind locally to iterate twice."""
+        return self.stdout.splitlines()
+
+    @property
+    def stderr_lines(self) -> list[str]:
+        """Return ``stderr`` split into lines. Recomputed on each access; bind locally to iterate twice."""
+        return self.stderr.splitlines()
 
 
 class ShellCommandError(Exception):
@@ -79,11 +97,11 @@ class ShellCommandFailedError(ShellCommandError):
             super().__init__("Shell command failed (no result captured)")
             return
 
-        parts = [f"Shell command failed: {' '.join(result.argv)} (exit code {result.returncode})"]
+        parts = [f"Shell command failed: {result.command_line} (exit code {result.returncode})"]
         if result.stderr:
-            parts.append(f"Stderr: {result.stderr.rstrip()}")
+            parts.append(f"Stderr: {result.stderr}")
         if result.stdout:
-            parts.append(f"Stdout: {result.stdout.rstrip()}")
+            parts.append(f"Stdout: {result.stdout}")
         super().__init__("\n".join(parts))
 
 
@@ -98,5 +116,4 @@ class ShellCommandTimeoutError(ShellCommandError):
     ) -> None:
         self.result = result
         self.timeout = timeout
-        argv_str = " ".join(result.argv)
-        super().__init__(f"Shell command timed out after {timeout}s: {argv_str}")
+        super().__init__(f"Shell command timed out after {timeout}s: {result.command_line}")

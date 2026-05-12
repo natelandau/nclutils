@@ -13,15 +13,20 @@ print(result.stdout)
 
 Takes the command and all its arguments as ONE list. Returns a `CompletedCommand`:
 
-| Field        | Type              | Description                                          |
-| ------------ | ----------------- | ---------------------------------------------------- |
-| `argv`       | `tuple[str, ...]` | Full argument list executed.                         |
-| `returncode` | `int`             | Process exit code.                                   |
-| `stdout`     | `str`             | Captured standard output.                            |
-| `stderr`     | `str`             | Captured standard error (always separate).           |
-| `duration`   | `float`           | Wall-clock seconds the process ran.                  |
-| `cwd`        | `Path \| None`    | Resolved working directory, or `None` if inherited.  |
-| `ok`         | `bool` (property) | `True` when `returncode == 0`.                       |
+| Field          | Type                   | Description                                                              |
+| -------------- | ---------------------- | ------------------------------------------------------------------------ |
+| `argv`         | `tuple[str, ...]`      | Full argument list executed.                                             |
+| `returncode`   | `int`                  | Process exit code.                                                       |
+| `stdout`       | `str`                  | Captured stdout. Trailing newlines stripped; embedded ones kept.         |
+| `stderr`       | `str`                  | Captured stderr (always separate). Trailing newlines stripped.           |
+| `duration`     | `float`                | Wall-clock seconds the process ran.                                      |
+| `cwd`          | `Path \| None`         | Resolved working directory, or `None` if inherited.                      |
+| `ok`           | `bool` (property)      | `True` when `returncode == 0`.                                           |
+| `command_line` | `str` (property)       | `argv` rendered with `shlex.join`. Shell-safe; copy-pasteable.           |
+| `stdout_lines` | `list[str]` (property) | `stdout.splitlines()` — iterate without splitting manually.              |
+| `stderr_lines` | `list[str]` (property) | `stderr.splitlines()`.                                                   |
+
+The trailing newline most commands emit is stripped, so `result.stdout == "hello"` rather than `"hello\n"`. Compare directly; reach for `stdout_lines` / `stderr_lines` to iterate.
 
 ### Options
 

@@ -30,7 +30,7 @@ class TestCompletedCommand:
         result = CompletedCommand(
             argv=("echo", "hi"),
             returncode=0,
-            stdout="hi\n",
+            stdout="hi",
             stderr="",
             duration=0.01,
             cwd=Path("/some/cwd"),
@@ -39,7 +39,7 @@ class TestCompletedCommand:
         # Then: every field is reachable and ok is True
         assert result.argv == ("echo", "hi")
         assert result.returncode == 0
-        assert result.stdout == "hi\n"
+        assert result.stdout == "hi"
         assert result.stderr == ""
         assert result.duration == 0.01
         assert result.cwd == Path("/some/cwd")
@@ -60,6 +60,48 @@ class TestCompletedCommand:
         # Then: ok is False
         assert result.ok is False
 
+    def test_command_line_quotes_argv(self) -> None:
+        """Verify command_line renders argv as a shell-safe string."""
+        # Given: argv containing a value with a space
+        result = CompletedCommand(
+            argv=("echo", "two words"),
+            returncode=0,
+            stdout="",
+            stderr="",
+            duration=0.0,
+            cwd=None,
+        )
+
+        # Then: the spaced argument is quoted
+        assert result.command_line == "echo 'two words'"
+
+    def test_stdout_lines_and_stderr_lines_split(self) -> None:
+        """Verify stdout_lines/stderr_lines return splitlines() of the captured strings."""
+        # Given: multi-line stdout/stderr
+        result = CompletedCommand(
+            argv=("printf", r"a\nb\nc"),
+            returncode=0,
+            stdout="a\nb\nc",
+            stderr="warn1\nwarn2",
+            duration=0.0,
+            cwd=None,
+        )
+
+        # Then: each is split on newlines without trailing empty entries
+        assert result.stdout_lines == ["a", "b", "c"]
+        assert result.stderr_lines == ["warn1", "warn2"]
+
+    def test_lines_properties_empty_on_empty_output(self) -> None:
+        """Verify stdout_lines/stderr_lines return [] when the captured string is empty."""
+        # Given: empty stdout/stderr
+        result = CompletedCommand(
+            argv=("true",), returncode=0, stdout="", stderr="", duration=0.0, cwd=None
+        )
+
+        # Then: both lines properties are empty lists
+        assert result.stdout_lines == []
+        assert result.stderr_lines == []
+
     def test_frozen_and_hashable(self) -> None:
         """Verify CompletedCommand is frozen and hashable."""
         # Given: a CompletedCommand
@@ -69,7 +111,7 @@ class TestCompletedCommand:
 
         # When: attempting to mutate, it raises; hashing succeeds
         with pytest.raises(FrozenInstanceError):
-            result.returncode = 1  # type: ignore[misc]
+            result.returncode = 1  # type: ignore[misc]  # ty: ignore[invalid-assignment]
         assert isinstance(hash(result), int)
 
 
@@ -347,8 +389,8 @@ class TestRunCommandCapture:
         # Given/When: bytes input
         result = run_command(["cat"], input=b"raw bytes\n")
 
-        # Then: stdout matches the bytes decoded as utf-8
-        assert result.stdout == "raw bytes\n"
+        # Then: stdout matches the bytes decoded as utf-8, trailing newline stripped
+        assert result.stdout == "raw bytes"
 
     def test_timeout_raises_timeout_error_with_partial_result(self) -> None:
         """Verify timeout= terminates the child and raises ShellCommandTimeoutError."""
@@ -404,6 +446,16 @@ class TestRunCommandCapture:
         # Given/When/Then: a python child that emits invalid utf-8 bytes
         with pytest.raises(UnicodeDecodeError):
             run_command(["python3", "-c", r"import sys; sys.stdout.buffer.write(b'\xff\xfe')"])
+
+    def test_trailing_newlines_stripped_from_stdout_and_stderr(self) -> None:
+        """Verify run_command strips trailing newlines but preserves embedded ones."""
+        # Given/When: a shell command that emits two lines on each stream, each
+        # terminated with a newline (the conventional shell shape)
+        result = run_command(["sh", "-c", "printf 'a\\nb\\n'; printf 'x\\ny\\n' >&2"])
+
+        # Then: the trailing newline is gone but the separator between lines stays
+        assert result.stdout == "a\nb"
+        assert result.stderr == "x\ny"
 
     def test_concurrent_stdout_and_stderr_both_captured(self) -> None:
         """Verify both stdout and stderr are captured when child writes to both."""
@@ -506,10 +558,10 @@ class TestRunCommandStreaming:
             exclude_regex=r"^b$",
         )
 
-        # Then: b is gone from capture
+        # Then: b is gone from capture; trailing newline already stripped
         assert "a\n" in result.stdout
         assert "b" not in result.stdout
-        assert "c\n" in result.stdout
+        assert result.stdout.endswith("c")
 
 
 class TestRunInteractive:

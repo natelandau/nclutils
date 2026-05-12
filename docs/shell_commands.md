@@ -28,15 +28,21 @@ print(result.stdout)
 
 Every call to `run_command` returns a `CompletedCommand` (a frozen dataclass):
 
-| Field        | Type             | Description                                         |
-| ------------ | ---------------- | --------------------------------------------------- |
-| `argv`       | `tuple[str, ...]` | The full argument list that was executed.          |
-| `returncode` | `int`            | The process exit code.                              |
-| `stdout`     | `str`            | Captured standard output.                          |
-| `stderr`     | `str`            | Captured standard error (always separate).         |
-| `duration`   | `float`          | Wall-clock seconds the process ran.                |
-| `cwd`        | `Path \| None`   | Resolved working directory, or `None` if inherited. |
-| `ok`         | `bool` (property) | `True` when `returncode == 0`.                    |
+| Field          | Type                  | Description                                                                  |
+| -------------- | --------------------- | ---------------------------------------------------------------------------- |
+| `argv`         | `tuple[str, ...]`     | The full argument list that was executed.                                    |
+| `returncode`   | `int`                 | The process exit code.                                                       |
+| `stdout`       | `str`                 | Captured standard output. Trailing newlines stripped; embedded ones kept.    |
+| `stderr`       | `str`                 | Captured standard error (always separate). Trailing newlines stripped.       |
+| `duration`     | `float`               | Wall-clock seconds the process ran.                                          |
+| `cwd`          | `Path \| None`        | Resolved working directory, or `None` if inherited.                          |
+| `ok`           | `bool` (property)     | `True` when `returncode == 0`.                                               |
+| `command_line` | `str` (property)      | `argv` rendered with `shlex.join` — shell-safe and copy-pasteable.           |
+| `stdout_lines` | `list[str]` (property)| `stdout.splitlines()` — convenience for iterating output.                    |
+| `stderr_lines` | `list[str]` (property)| `stderr.splitlines()`.                                                       |
+
+> [!NOTE]
+> The single trailing newline most commands print is stripped from `stdout` and `stderr`, so `result.stdout == "hello"` rather than `"hello\n"`. Use `stdout_lines` / `stderr_lines` when you want to iterate without splitting manually.
 
 ### Streaming output
 
@@ -283,7 +289,7 @@ The previous `nclutils.sh` module was a thin wrapper around the third-party `sh`
 - `run_command(argv, *, cwd=None, env=None, input=None, timeout=None, exclude_regex=None, stream=False, check=True, okay_codes=(0,), sudo=False) -> CompletedCommand`. Run a non-interactive command and return captured output.
 - `run_interactive(argv, *, cwd=None, env=None, sudo=False, check=True) -> int`. Run a command with a real terminal. Returns the exit code.
 - `which(cmd) -> Path | None`. Resolve an executable name to its absolute path, or `None` if not found.
-- `CompletedCommand`. Frozen dataclass returned by `run_command`. Fields: `argv`, `returncode`, `stdout`, `stderr`, `duration`, `cwd`. Property: `ok`.
+- `CompletedCommand`. Frozen dataclass returned by `run_command`. Fields: `argv`, `returncode`, `stdout`, `stderr`, `duration`, `cwd`. Properties: `ok`, `command_line`, `stdout_lines`, `stderr_lines`. Trailing newlines on `stdout` and `stderr` are stripped.
 - `ShellCommandError`. Base exception for all `nclutils.sh` failures.
 - `ShellCommandNotFoundError`. Raised when `argv[0]` is not on PATH.
 - `ShellCommandFailedError`. Raised on non-zero exit or unreachable `cwd`. Carries `result: CompletedCommand | None`.

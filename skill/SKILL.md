@@ -156,12 +156,15 @@ logging.basicConfig()
 from nclutils.sh import run_command, ShellCommandError
 
 result = run_command(["git", "status", "--short"])
-result.stdout      # str — captured stdout
-result.stderr      # str — captured stderr (always separate from stdout)
-result.returncode  # int
-result.ok          # bool — True if returncode == 0
-result.duration    # float — wall-clock seconds
-result.argv        # tuple[str, ...] — what actually ran
+result.stdout         # str — captured stdout (trailing newlines stripped)
+result.stderr         # str — captured stderr, separate from stdout (trailing newlines stripped)
+result.returncode     # int
+result.ok             # bool — True if returncode == 0
+result.duration       # float — wall-clock seconds
+result.argv           # tuple[str, ...] — what actually ran
+result.command_line   # str — argv rendered via shlex.join, shell-safe
+result.stdout_lines   # list[str] — stdout.splitlines(), for iteration
+result.stderr_lines   # list[str]
 ```
 
 Common wrong patterns:

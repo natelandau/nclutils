@@ -94,7 +94,7 @@ def run_command(  # noqa: C901, PLR0912, PLR0913, PLR0915
         sudo: When True, prepends ``["sudo"]`` to argv.
 
     Returns:
-        CompletedCommand with stdout, stderr, returncode, argv, duration, cwd.
+        See :class:`CompletedCommand` for the returned shape.
     """
     final_argv: list[str] = list(argv)
     if sudo:
@@ -211,8 +211,8 @@ def run_command(  # noqa: C901, PLR0912, PLR0913, PLR0915
     result = CompletedCommand(
         argv=final_argv_tuple,
         returncode=proc.returncode,
-        stdout="".join(stdout_lines),
-        stderr="".join(stderr_lines),
+        stdout="".join(stdout_lines).rstrip("\n"),
+        stderr="".join(stderr_lines).rstrip("\n"),
         duration=duration,
         cwd=resolved_cwd,
     )
