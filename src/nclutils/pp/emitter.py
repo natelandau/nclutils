@@ -15,7 +15,7 @@ import time
 import traceback as _traceback
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, NoReturn
 
 from rich.console import Console
 from rich.live import Live
@@ -462,6 +462,31 @@ def _resolve_step_message(
     return default_message, default_markup
 
 
+class _StepExit(BaseException):
+    """Internal control-flow signal raised by `Step.fail()` / `Step.skip()`.
+
+    Subclasses `BaseException` (not `Exception`) so a stray `except Exception:`
+    inside the step body does not swallow it. `Emitter.step()` catches it
+    specifically and dispatches to the matching outcome path.
+    """
+
+    __slots__ = ("exception", "markup", "message", "outcome")
+
+    def __init__(
+        self,
+        outcome: Literal["failure", "skip"],
+        message: str | RenderableType,
+        *,
+        markup: bool,
+        exception: BaseException | bool = False,
+    ) -> None:
+        super().__init__()
+        self.outcome = outcome
+        self.message = message
+        self.markup = markup
+        self.exception = exception
+
+
 @dataclass(frozen=True, slots=True)
 class _StepCompletion:
     """Completion state recorded by `step()` and rendered by `Step.__rich_console__`.
@@ -556,6 +581,53 @@ class Step:
         self.is_skipped = True
         if message is not None:
             self.skip_override = (message, markup)
+
+    def fail(
+        self,
+        message: str | RenderableType,
+        *,
+        exception: BaseException | bool = False,
+        markup: bool = False,
+    ) -> NoReturn:
+        """End the step with a failure outcome.
+
+        Renders the error marker on the spinner line in place, writes a
+        `failed:` line to the logfile, and exits the `with` block. Code after
+        the call inside the block does not execute. Pass `exception=` to attach
+        the exception type/message (or active traceback when `True`) as a
+        logfile continuation line.
+
+        Args:
+            message: Failure header text. Strings are escaped unless
+                `markup=True`; `Text` keeps its own styling; other Rich
+                renderables pass through.
+            exception: Optional exception to attach to the `failed:` log line.
+                Pass an instance, or `True` from inside an `except` block to
+                grab `sys.exc_info()`. Defaults to `False` (nothing attached).
+            markup: When True, parses Rich markup in a `str` `message`.
+        """
+        raise _StepExit("failure", message, markup=markup, exception=exception)  # noqa: EM101 -- discriminant literal, not an error message
+
+    def skip(
+        self,
+        message: str | RenderableType,
+        *,
+        markup: bool = False,
+    ) -> NoReturn:
+        """End the step with a skip outcome.
+
+        Use when the work the step describes did not run (nothing to do,
+        preconditions unmet) but the situation is not an error. Renders an
+        info-styled completion header (no checkmark, no error glyph), writes a
+        `skipped:` line to the logfile, and exits the `with` block.
+
+        Args:
+            message: Skip header text. Strings are escaped unless
+                `markup=True`; `Text` keeps its own styling; other Rich
+                renderables pass through.
+            markup: When True, parses Rich markup in a `str` `message`.
+        """
+        raise _StepExit("skip", message, markup=markup)  # noqa: EM101 -- discriminant literal, not an error message
 
     def set_completion(self, completion: _StepCompletion) -> None:
         """Record completion state so __rich_console__ rebuilds the header with ASCII fallback.
@@ -1498,7 +1570,7 @@ class Emitter:
         self.console.print(_KVBlock(pair_list, indent=indent, separator=separator, markup=markup))
 
     @contextmanager
-    def step(
+    def step(  # noqa: C901, PLR0912, PLR0915 -- transitional: new _StepExit branch coexists with auto-failure path; trimmed in follow-up
         self,
         message: str | RenderableType,
         *,
@@ -1579,6 +1651,50 @@ class Emitter:
             with Live(s, console=self.console, refresh_per_second=12.5, transient=ephemeral):
                 try:
                     yield s
+                except _StepExit as exit_signal:
+                    if exit_signal.outcome == "failure":
+                        if not ephemeral:
+                            s.set_completion(
+                                _StepCompletion(
+                                    level_name="error",
+                                    message=exit_signal.message,
+                                    style=error_style,
+                                    marker=error_marker,
+                                    markup=exit_signal.markup,
+                                )
+                            )
+                        failure_text = _message_to_log_text(
+                            exit_signal.message, markup=exit_signal.markup
+                        )
+                        log_details = _format_exception_for_logfile(exit_signal.exception)
+                        self._logsink.emit(
+                            level=_LEVEL_TO_LOG_SEVERITY["error"],
+                            message=f"failed: {failure_text}",
+                            details=log_details,
+                        )
+                        if ephemeral:
+                            self.error(exit_signal.message, markup=exit_signal.markup)
+                        return
+                    # skip outcome: we've already written our own log line, so we
+                    # return out of `with Live(...)` instead of falling through to
+                    # the natural success bookkeeping below.
+                    if not ephemeral:
+                        s.set_completion(
+                            _StepCompletion(
+                                level_name="info",
+                                message=exit_signal.message,
+                                style=info_style,
+                                marker=info_marker,
+                                markup=exit_signal.markup,
+                            )
+                        )
+                    skip_text = _message_to_log_text(exit_signal.message, markup=exit_signal.markup)
+                    self._logsink.emit(
+                        level=_LEVEL_TO_LOG_SEVERITY["info"],
+                        message=f"skipped: {skip_text}",
+                        details=None,
+                    )
+                    return
                 except BaseException as exc:
                     failure_message, failure_markup = _resolve_step_message(
                         s.failure_override, failure_msg, message, default_markup=markup

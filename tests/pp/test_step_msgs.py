@@ -797,3 +797,210 @@ class TestModuleLevelStepSkip:
         # Then the kwarg message appears in the rendered output
         text = out.export_text()
         assert "nothing to compile" in text
+
+
+class TestStepFail:
+    """`Step.fail()` exits the block with failure outcome."""
+
+    def test_fail_exits_the_block(self, make_recording_emitter: RecordingEmitterFactory) -> None:
+        """Verify fail() ends the with-block immediately; code after the call does not run."""
+        # Given an emitter
+        e, _, _ = make_recording_emitter()
+        after_fail_ran = False
+
+        # When fail() is called inside the block
+        with e.step("compiling") as s:
+            s.fail("aborted")
+            after_fail_ran = True  # should be unreachable
+
+        # Then code after fail() did not execute and the block ended normally
+        assert after_fail_ran is False
+
+    def test_fail_renders_error_header(
+        self, make_recording_emitter: RecordingEmitterFactory
+    ) -> None:
+        """Verify fail() replaces the spinner with an error-marker completion header."""
+        # Given an emitter
+        e, out, _ = make_recording_emitter()
+
+        # When fail() is called inside the block
+        with e.step("compiling") as s:
+            s.fail("aborted after 17 files")
+
+        # Then the failure message appears with the error marker on the recorded output
+        text = out.export_text()
+        assert "aborted after 17 files" in text
+        assert "✗" in text  # default unicode error marker
+
+    def test_fail_writes_failed_log_line(
+        self,
+        make_recording_emitter: RecordingEmitterFactory,
+        tmp_path: Path,
+    ) -> None:
+        """Verify fail() records a `failed:` line in the logfile."""
+        # Given an emitter with a logfile
+        logfile = tmp_path / "run.log"
+        e, _, _ = make_recording_emitter(logfile=logfile)
+
+        # When fail() is called
+        with e.step("compiling") as s:
+            s.fail("aborted")
+
+        # Then the logfile contains the failed: line
+        contents = logfile.read_text()
+        assert "failed: aborted" in contents
+
+    def test_fail_with_exception_attaches_traceback_to_log(
+        self,
+        make_recording_emitter: RecordingEmitterFactory,
+        tmp_path: Path,
+    ) -> None:
+        """Verify fail(exception=e) attaches the exception type/message as a logfile continuation line."""
+        # Given an emitter with a logfile and a real exception to attach
+        logfile = tmp_path / "run.log"
+        e, _, _ = make_recording_emitter(logfile=logfile)
+
+        # When the block catches an exception and calls fail(exception=...)
+        err_msg = "bad input"
+        with e.step("compiling") as s:
+            try:
+                raise ValueError(err_msg)  # noqa: TRY301
+            except ValueError as caught:
+                s.fail("compilation failed", exception=caught)
+
+        # Then the logfile contains the exception type and message as a continuation
+        contents = logfile.read_text()
+        assert "failed: compilation failed" in contents
+        assert "ValueError" in contents
+        assert "bad input" in contents
+
+    def test_fail_in_ephemeral_prints_visible_error_line(
+        self, make_recording_emitter: RecordingEmitterFactory
+    ) -> None:
+        """Verify fail() in ephemeral mode surfaces a fresh error line on stderr after wiping."""
+        # Given an emitter with recording stderr in ephemeral mode
+        e, _, err = make_recording_emitter()
+
+        # When fail() is called inside an ephemeral step
+        with e.step("warming caches", ephemeral=True) as s:
+            s.fail("cache priming failed")
+
+        # Then a visible error line lands on stderr
+        err_text = err.export_text()
+        assert "cache priming failed" in err_text
+        assert "✗" in err_text  # default unicode error marker
+
+    def test_fail_markup_parses_tags(self, make_recording_emitter: RecordingEmitterFactory) -> None:
+        """Verify fail(markup=True) parses Rich markup in the message."""
+        # Given an emitter
+        e, out, _ = make_recording_emitter()
+
+        # When fail() is called with markup-containing message and markup=True
+        with e.step("compiling") as s:
+            s.fail("[bold]aborted[/]", markup=True)
+
+        # Then the rendered output contains the message text but not the literal markup tags
+        text = out.export_text()
+        assert "aborted" in text
+        assert "[bold]" not in text
+
+    def test_fail_requires_message(self, make_recording_emitter: RecordingEmitterFactory) -> None:
+        """Verify fail() without a message argument is a TypeError."""
+        # Given an emitter
+        e, _, _ = make_recording_emitter()
+
+        # When fail() is called without a message
+        # Then a TypeError is raised
+        with pytest.raises(TypeError), e.step("compiling") as s:
+            s.fail()  # type: ignore[call-arg]
+
+
+class TestStepSkip:
+    """`Step.skip()` exits the block with skip outcome."""
+
+    def test_skip_exits_the_block(self, make_recording_emitter: RecordingEmitterFactory) -> None:
+        """Verify skip() ends the with-block immediately; code after the call does not run."""
+        # Given an emitter
+        e, _, _ = make_recording_emitter()
+        after_skip_ran = False
+
+        # When skip() is called inside the block
+        with e.step("warming caches") as s:
+            s.skip("already warm")
+            after_skip_ran = True  # should be unreachable
+
+        # Then code after skip() did not execute
+        assert after_skip_ran is False
+
+    def test_skip_renders_info_header_no_checkmark(
+        self, make_recording_emitter: RecordingEmitterFactory
+    ) -> None:
+        """Verify skip() replaces the spinner with an info-styled completion (no checkmark)."""
+        # Given an emitter
+        e, out, _ = make_recording_emitter()
+
+        # When skip() is called inside the block
+        with e.step("warming caches") as s:
+            s.skip("already warm")
+
+        # Then the skip message appears without the success checkmark
+        text = out.export_text()
+        assert "already warm" in text
+        assert "✓" not in text  # default unicode success marker
+
+    def test_skip_writes_skipped_log_line(
+        self,
+        make_recording_emitter: RecordingEmitterFactory,
+        tmp_path: Path,
+    ) -> None:
+        """Verify skip() records a `skipped:` line in the logfile."""
+        # Given an emitter with a logfile
+        logfile = tmp_path / "run.log"
+        e, _, _ = make_recording_emitter(logfile=logfile)
+
+        # When skip() is called
+        with e.step("warming caches") as s:
+            s.skip("already warm")
+
+        # Then the logfile contains the skipped: line
+        contents = logfile.read_text()
+        assert "skipped: already warm" in contents
+
+    def test_skip_in_ephemeral_wipes_no_extra_output(
+        self, make_recording_emitter: RecordingEmitterFactory
+    ) -> None:
+        """Verify skip() in ephemeral mode wipes everything and prints no extra line."""
+        # Given an emitter with recording streams
+        e, _, err = make_recording_emitter()
+
+        # When skip() is called inside an ephemeral step
+        with e.step("warming caches", ephemeral=True) as s:
+            s.skip("already warm")
+
+        # Then no extra stderr error line is produced (skip is not an error)
+        err_text = err.export_text()
+        assert "already warm" not in err_text
+
+    def test_skip_markup_parses_tags(self, make_recording_emitter: RecordingEmitterFactory) -> None:
+        """Verify skip(markup=True) parses Rich markup in the message."""
+        # Given an emitter
+        e, out, _ = make_recording_emitter()
+
+        # When skip() is called with markup-containing message
+        with e.step("warming caches") as s:
+            s.skip("[bold]already warm[/]", markup=True)
+
+        # Then the rendered output contains the message text but not the literal tags
+        text = out.export_text()
+        assert "already warm" in text
+        assert "[bold]" not in text
+
+    def test_skip_requires_message(self, make_recording_emitter: RecordingEmitterFactory) -> None:
+        """Verify skip() without a message argument is a TypeError."""
+        # Given an emitter
+        e, _, _ = make_recording_emitter()
+
+        # When skip() is called without a message
+        # Then a TypeError is raised
+        with pytest.raises(TypeError), e.step("warming caches") as s:
+            s.skip()  # type: ignore[call-arg]
