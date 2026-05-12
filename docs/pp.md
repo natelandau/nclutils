@@ -265,85 +265,94 @@ with pp.step("running migrations") as s:
 
 On exit the spinner stops, the marker (`✓` or `✗`) is rendered, and any sub-items remain on screen so the final output is a static record of what happened.
 
-For transient progress that shouldn't clutter the final transcript, pass `ephemeral=True`. The spinner and sub-items are wiped on success; on failure only the red X surfaces:
+For transient progress that shouldn't clutter the final transcript, pass `ephemeral=True`. The spinner and sub-items are wiped on success, leaving no trace on the console. If the block calls `s.fail()`, a fresh error line still surfaces on stderr after the wipe (see [Failing a step](#failing-a-step)):
 
 ```python
 with pp.step("warming caches", ephemeral=True) as s:
     warm_cache()
     s.sub("cache populated")
-# success leaves no trace; failure still prints "✗ warming caches"
+# success leaves no trace
 ```
 
 > [!WARNING]
 > `pp.step()` cannot nest. Rich's `Live` doesn't stack, so nesting silently corrupts the parent's display. `pp` raises `RuntimeError` when you try.
 
-### Customizing the success and failure messages
+### Customizing the success message
 
-By default `step()` reuses the original message for both success and failure. To show different text on completion, pass `success_msg` and/or `failure_msg`:
+By default `step()` reuses the original message on success. To show different text, pass `success_msg`:
 
 ```python
 with pp.step(
     "compiling sources",
     success_msg="compiled 42 files in 1.2s",
-    failure_msg="compilation aborted",
 ) as s:
     s.sub("api.py")
     s.sub("cli.py")
 ```
 
-On success the spinner resolves to `✓ compiled 42 files in 1.2s`; on failure to `✗ compilation aborted`. Either kwarg can be omitted independently, and the omitted side falls back to the original message. The single `markup=` flag covers all three messages.
+On success the spinner resolves to `✓ compiled 42 files in 1.2s`. The override message is also recorded in the `succeeded:` logfile line so the audit trail matches what the user saw.
 
-The override messages are also recorded in the logfile (`succeeded: ...` / `failed: ...`) so the audit trail matches what the user saw.
-
-> [!NOTE]
-> When `ephemeral=True`, the success branch wipes the screen as usual; `success_msg` is still recorded in the logfile. The failure branch surfaces `failure_msg` on stderr if provided, otherwise the original message.
-
-### Updating the completion message from inside the block
-
-When the success or failure text depends on work done inside the block (a count, a duration, the name of the item that failed), call `s.set_success()` or `s.set_failure()` on the yielded `Step`:
+When the success text depends on work done inside the block (a count, a duration, an output path), call `s.set_success_msg()` from inside the block:
 
 ```python
 with pp.step("compiling sources") as s:
     processed = []
-    try:
-        for path in sources:
-            compile_one(path)
-            processed.append(path)
-            s.sub(path.name)
-    except CompileError:
-        s.set_failure(f"aborted after {len(processed)} of {len(sources)} files")
-        raise
-    s.set_success(f"compiled {len(processed)} files")
+    for path in sources:
+        compile_one(path)
+        processed.append(path)
+        s.sub(path.name)
+    s.set_success_msg(f"compiled {len(processed)} files")
 ```
 
-The setter wins over the matching `success_msg` / `failure_msg` kwarg, which wins over the original message. Each setter takes its own `markup=` flag (defaults to `False`), so per-call escaping is independent of the `step(markup=...)` flag. The setter value also appears in the `succeeded:` / `failed:` logfile lines.
+The setter wins over the `success_msg` kwarg, which wins over the original message. Each takes its own `markup=` flag.
 
-`set_success()` is a no-op when the block raises; `set_failure()` is a no-op when the block returns normally.
+### Failing a step
 
-### Marking a step as skipped
-
-Some steps neither succeed nor fail: there was nothing to do, a precondition wasn't met, or the work was intentionally bypassed. Call `s.set_skipped()` from inside the block to render the completion with info-level styling (no checkmark, no error glyph) and log a `skipped:` line instead of `succeeded:`:
+When the work didn't succeed, call `s.fail(message)` from inside the block. This exits the `with` block immediately, replaces the spinner with an error marker, and writes a `failed:` line to the logfile:
 
 ```python
 with pp.step("compiling sources") as s:
-    if not sources:
-        s.set_skipped("no source files found")
-        return
     for path in sources:
+        if not path.exists():
+            s.fail(f"missing source: {path}")  # exits here
         compile_one(path)
+    s.set_success_msg(f"compiled {len(sources)} files")
 ```
 
-Pass the message inline, or pre-set it with `skip_msg=` and call `set_skipped()` with no arguments:
+Code after `s.fail(...)` inside the block does not run. To attach an exception's type and message to the `failed:` log line, pass `exception=`:
 
 ```python
-with pp.step("warming caches", skip_msg="caches already warm") as s:
+with pp.step("compiling sources") as s:
+    try:
+        compile_all(sources)
+    except CompileError as e:
+        s.fail("compilation aborted", exception=e)
+```
+
+> [!NOTE]
+> `s.fail()` is the only way to render the failure marker. An uncaught exception inside `step()` propagates through cleanly with no marker and no log line, leaving the original message visible (no spinner) and any sub-items intact. The caller owns error reporting in that path.
+
+When `ephemeral=True`, `s.fail()` still surfaces a fresh error line on stderr after wiping the spinner, so failures are never silently hidden:
+
+```python
+with pp.step("warming caches", ephemeral=True) as s:
+    if not cache_target_reachable():
+        s.fail("cache target unreachable")
+# stderr shows: ✗ cache target unreachable
+```
+
+### Skipping a step
+
+When the work the step describes did not run (nothing to do, preconditions unmet, intentional bypass), call `s.skip(message)`. This exits the `with` block immediately, replaces the spinner with an info-styled completion (no checkmark, no error glyph), and writes a `skipped:` line to the logfile:
+
+```python
+with pp.step("warming caches") as s:
     if cache.is_warm():
-        s.set_skipped()
-        return
+        s.skip("caches already warm")  # exits here
     warm_cache()
 ```
 
-`set_skipped()` (or the `skip_msg` kwarg) is a no-op until `set_skipped()` actually fires; without that call the block follows the success path as usual. The failure path takes precedence: if the block raises after `set_skipped()`, the step renders as failed. The setter value, kwarg, and original message follow the same precedence as the success path (setter > kwarg > original).
+Code after `s.skip(...)` does not run. Skip is not an error; in ephemeral mode it wipes the spinner with no extra console output.
 
 ## File logging
 
