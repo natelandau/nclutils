@@ -1,3 +1,9 @@
+## v3.3.1 (2026-05-11)
+
+### Fix
+
+- **sh**: strip trailing newlines and add properties
+
 ## v3.3.0 (2026-05-11)
 
 ### Feat
