@@ -55,7 +55,7 @@ from nclutils.strings import (
     camel_case, kebab_case, pascal_case, separator_case, snake_case,
     deburr, list_words, split_camel_case, strip_ansi,
     pad, pad_start, pad_end,
-    random_string, int_to_emoji,
+    random_string, int_to_emoji, human_size,
 )
 from nclutils.text import replace_in_file, ensure_lines_in_file
 from nclutils.utils import (
@@ -125,6 +125,7 @@ A task → module lookup. When you are about to write code for one of these, rea
 | Strip ANSI escape sequences                        | `nclutils.strings.strip_ansi(text)`                                                                     | Useful after capturing terminal output.                                              |
 | Tokenize into words                                | `nclutils.strings.list_words(text)`                                                                     | Preserves contractions. Custom regex pattern accepted.                               |
 | Pad / left-pad / right-pad a string                | `nclutils.strings.pad` / `pad_start` / `pad_end`                                                        | Multi-char `chars` repeats and truncates to fit.                                     |
+| Format a byte count for humans                     | `nclutils.strings.human_size(size_bytes, *, decimals=1)`                                                | Base 1024, units `B`/`KB`/`MB`/`GB`/`TB`/`PB`/`EB`/`ZB`/`YB`. Negatives keep sign.   |
 | Current UTC time as ISO-8601 string                | `nclutils.utils.iso_timestamp()`                                                                        | `"2026-05-04T18:32:01Z"`. Pass `microseconds=True` for sub-second precision.         |
 | Format an existing datetime as ISO-8601            | `nclutils.utils.format_iso_timestamp(dt)`                                                               | Converts to UTC; naive datetimes are treated as local.                               |
 | Filename-safe random ID                            | `nclutils.utils.new_uid(bits=64)`                                                                       | Base-36, case-insensitive, no hyphens. Uses `random.SystemRandom`.                   |

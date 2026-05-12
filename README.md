@@ -80,7 +80,7 @@ The larger modules have their own documentation pages. Smaller modules are liste
 | `nclutils.net`     | Lightweight network reachability check.                                                                                                                           | _(inline below)_                                 |
 | `nclutils.pp`      | Rich-based console output, verbosity gates, file logger.                                                                                                          | [docs/pp.md](docs/pp.md)                         |
 | `nclutils.sh`      | Run commands via subprocess; returns `CompletedCommand`, raises typed errors (`ShellCommandError` hierarchy). Includes `run_command`, `run_interactive`, `which`. | [docs/shell_commands.md](docs/shell_commands.md) |
-| `nclutils.strings` | Case conversions, padding, tokenizing, normalization.                                                                                                             | [docs/strings.md](docs/strings.md)               |
+| `nclutils.strings` | Case conversions, padding, tokenizing, normalization, human-readable byte formatting.                                                                             | [docs/strings.md](docs/strings.md)               |
 | `nclutils.text`    | In-place file edits.                                                                                                                                              | _(inline below)_                                 |
 | `nclutils.utils`   | Timestamps, unique IDs, Python version check.                                                                                                                     | [docs/utils.md](docs/utils.md)                   |
 

@@ -125,6 +125,24 @@ from nclutils.strings import random_string
 random_string(10)  # e.g. "AbCdEfGhIj"
 ```
 
+### `human_size`
+
+Format a byte count as a human-readable string. Picks the largest of `B`, `KB`, `MB`, `GB`, `TB`, `PB`, `EB`, `ZB`, `YB` at which the value falls below the next 1024-multiple, and renders with one decimal place by default. Bytes are always rendered as integers; the `decimals` kwarg controls precision for the rest. Negative inputs keep their sign, which is handy for byte-count diffs.
+
+```python
+from nclutils.strings import human_size
+
+human_size(512)              # "512 B"
+human_size(1536)             # "1.5 KB"
+human_size(1024 ** 4)        # "1.0 TB"
+human_size(1024 ** 5)        # "1.0 PB"
+human_size(1024 ** 8)        # "1.0 YB"
+human_size(1536, decimals=2) # "1.50 KB"
+human_size(-1536)            # "-1.5 KB"
+```
+
+Values past YB stay on the YB unit rather than rolling over, so `human_size(1024 ** 9)` returns `"1024.0 YB"`. Uses base 1024 with traditional unit labels (`KB`, `MB`, etc.); if your context requires strict IEC labeling (`KiB`, `MiB`), format the value yourself.
+
 ### `int_to_emoji`
 
 Render integers 0–10 as keycap emoji. Numbers outside that range come back as plain strings, optionally wrapped in Markdown code formatting.
@@ -169,5 +187,6 @@ Padding:
 
 Misc:
 
+- `human_size(size_bytes, *, decimals=1)`. Format a byte count as `B`/`KB`/`MB`/`GB`/`TB`/`PB`/`EB`/`ZB`/`YB`. Base 1024.
 - `int_to_emoji(num, *, markdown=False, images=False)`. Render 0–10 as keycap emoji.
 - `random_string(length)`. Random ASCII letter string (not cryptographically secure).
