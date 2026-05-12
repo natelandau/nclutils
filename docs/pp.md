@@ -298,6 +298,28 @@ The override messages are also recorded in the logfile (`succeeded: ...` / `fail
 > [!NOTE]
 > When `ephemeral=True`, the success branch wipes the screen as usual; `success_msg` is still recorded in the logfile. The failure branch surfaces `failure_msg` on stderr if provided, otherwise the original message.
 
+### Updating the completion message from inside the block
+
+When the success or failure text depends on work done inside the block (a count, a duration, the name of the item that failed), call `s.set_success()` or `s.set_failure()` on the yielded `Step`:
+
+```python
+with pp.step("compiling sources") as s:
+    processed = []
+    try:
+        for path in sources:
+            compile_one(path)
+            processed.append(path)
+            s.sub(path.name)
+    except CompileError:
+        s.set_failure(f"aborted after {len(processed)} of {len(sources)} files")
+        raise
+    s.set_success(f"compiled {len(processed)} files")
+```
+
+The setter wins over the matching `success_msg` / `failure_msg` kwarg, which wins over the original message. Each setter takes its own `markup=` flag (defaults to `False`), so per-call escaping is independent of the `step(markup=...)` flag. The setter value also appears in the `succeeded:` / `failed:` logfile lines.
+
+`set_success()` is a no-op when the block raises; `set_failure()` is a no-op when the block returns normally.
+
 ## File logging
 
 Pass `logfile=` to write a parallel record of every emission to disk:

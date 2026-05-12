@@ -15,7 +15,7 @@ import time
 import traceback as _traceback
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from rich.console import Console
 from rich.live import Live
@@ -161,7 +161,9 @@ def _ascii_required(console: Console) -> bool:
     return result
 
 
-def _ascii_substitute_marker(console: Console, marker: str, level_name: str | None = None) -> str:
+def _ascii_substitute_marker(
+    console: Console, marker: str, level_name: LevelName | None = None
+) -> str:
     """Swap the default unicode marker for its ASCII fallback when the console can't encode it.
 
     A user-supplied override marker won't equal any default and passes through
@@ -181,7 +183,19 @@ def _ascii_substitute_marker(console: Console, marker: str, level_name: str | No
     return marker
 
 
-_LEVEL_NAMES: tuple[str, ...] = tuple(_DEFAULT_STYLES)
+# Closed set of level keys used by _DEFAULT_STYLES, _DEFAULT_MARKERS, theme lookup, and log-severity routing.
+LevelName = Literal["info", "success", "warning", "error", "critical", "debug", "trace", "dryrun"]
+
+_LEVEL_NAMES: tuple[LevelName, ...] = (
+    "info",
+    "success",
+    "warning",
+    "error",
+    "critical",
+    "debug",
+    "trace",
+    "dryrun",
+)
 
 _LEVEL_TO_LOG_SEVERITY: dict[str, int] = {
     "trace": LogLevel.TRACE,
@@ -433,6 +447,21 @@ def _print_level(  # noqa: PLR0913
         )
 
 
+def _resolve_step_message(
+    override: tuple[str | RenderableType, bool] | None,
+    msg_kwarg: str | RenderableType | None,
+    default_message: str | RenderableType,
+    *,
+    default_markup: bool,
+) -> tuple[str | RenderableType, bool]:
+    """Pick the effective (message, markup) for a step completion."""
+    if override is not None:
+        return override
+    if msg_kwarg is not None:
+        return msg_kwarg, default_markup
+    return default_message, default_markup
+
+
 @dataclass(frozen=True, slots=True)
 class _StepCompletion:
     """Completion state recorded by `step()` and rendered by `Step.__rich_console__`.
@@ -442,7 +471,7 @@ class _StepCompletion:
     in scope when `step()` decides success/failure).
     """
 
-    level_name: str
+    level_name: LevelName
     message: str | RenderableType
     style: str
     marker: str
@@ -468,6 +497,36 @@ class Step:
         self._subs: list[Text] = []
         self._logsink: _LogSink | None = logsink
         self._completion: _StepCompletion | None = None
+        self.success_override: tuple[str | RenderableType, bool] | None = None
+        self.failure_override: tuple[str | RenderableType, bool] | None = None
+
+    def set_success(self, message: str | RenderableType, *, markup: bool = False) -> None:
+        """Override the success header from inside the `step()` block.
+
+        Takes precedence over the `success_msg` kwarg on `step()`. No effect
+        if the block raises.
+
+        Args:
+            message: Replacement success header. Strings are escaped unless
+                `markup=True`; `Text` keeps its own styling; other Rich
+                renderables pass through.
+            markup: When True, parses Rich markup in a `str` `message`.
+        """
+        self.success_override = (message, markup)
+
+    def set_failure(self, message: str | RenderableType, *, markup: bool = False) -> None:
+        """Override the failure header from inside the `step()` block.
+
+        Takes precedence over the `failure_msg` kwarg on `step()`. No effect
+        if the block completes normally.
+
+        Args:
+            message: Replacement failure header. Strings are escaped unless
+                `markup=True`; `Text` keeps its own styling; other Rich
+                renderables pass through.
+            markup: When True, parses Rich markup in a `str` `message`.
+        """
+        self.failure_override = (message, markup)
 
     def set_completion(self, completion: _StepCompletion) -> None:
         """Record completion state so __rich_console__ rebuilds the header with ASCII fallback.
@@ -790,7 +849,7 @@ class Emitter:
         if logfmt is not None:
             self._logsink.set_format(logfmt)
 
-    def _resolve(self, level_name: str) -> tuple[str, str, str]:
+    def _resolve(self, level_name: LevelName) -> tuple[str, str, str]:
         """Return (style, detail_style, marker) for `level_name` after applying overrides.
 
         Every field uses `is not None` rather than truthiness so that empty-string
@@ -810,7 +869,7 @@ class Emitter:
 
     def _resolve_with_overrides(
         self,
-        level_name: str,
+        level_name: LevelName,
         *,
         style: str | None,
         detail_style: str | None,
@@ -844,7 +903,7 @@ class Emitter:
     def _emit_log_record(
         self,
         *,
-        level_name: str,
+        level_name: LevelName,
         log_body: str,
         tag: str | None,
         details: list[Any] | None,
@@ -1469,18 +1528,6 @@ class Emitter:
         error_style, _, error_marker = self._resolve("error")
 
         log_text = _message_to_log_text(message, markup=markup)
-        success_text = (
-            _message_to_log_text(success_msg, markup=markup)
-            if success_msg is not None
-            else log_text
-        )
-        failure_text = (
-            _message_to_log_text(failure_msg, markup=markup)
-            if failure_msg is not None
-            else log_text
-        )
-        success_message = success_msg if success_msg is not None else message
-        failure_message = failure_msg if failure_msg is not None else message
 
         self._logsink.emit(
             level=_LEVEL_TO_LOG_SEVERITY["info"],
@@ -1490,12 +1537,22 @@ class Emitter:
 
         s = Step(message, header_style=info_style, logsink=self._logsink, markup=markup)
         failed_exc: BaseException | None = None
+        # Pre-seed both branches with the original message so the finally
+        # block always has a defined value to log, even on paths static
+        # analysis can't prove (exception during _resolve_step_message, etc.).
+        success_message: str | RenderableType = message
+        success_markup: bool = markup
+        failure_message: str | RenderableType = message
+        failure_markup: bool = markup
         try:
             with Live(s, console=self.console, refresh_per_second=12.5, transient=ephemeral):
                 try:
                     yield s
                 except BaseException as exc:
                     failed_exc = exc
+                    failure_message, failure_markup = _resolve_step_message(
+                        s.failure_override, failure_msg, message, default_markup=markup
+                    )
                     if not ephemeral:
                         # Defer header construction to Step.__rich_console__ so
                         # ASCII marker substitution sees the live console encoding.
@@ -1505,10 +1562,13 @@ class Emitter:
                                 message=failure_message,
                                 style=error_style,
                                 marker=error_marker,
-                                markup=markup,
+                                markup=failure_markup,
                             )
                         )
                     raise
+                success_message, success_markup = _resolve_step_message(
+                    s.success_override, success_msg, message, default_markup=markup
+                )
                 if not ephemeral:
                     s.set_completion(
                         _StepCompletion(
@@ -1516,12 +1576,13 @@ class Emitter:
                             message=success_message,
                             style=success_style,
                             marker=success_marker,
-                            markup=markup,
+                            markup=success_markup,
                         )
                     )
         finally:
             self._active_step = False
             if failed_exc is not None:
+                failure_text = _message_to_log_text(failure_message, markup=failure_markup)
                 self._logsink.emit(
                     level=_LEVEL_TO_LOG_SEVERITY["error"],
                     message=f"failed: {failure_text}",
@@ -1531,6 +1592,7 @@ class Emitter:
                     # Pass the original renderable (not the plain-text strip) so styling/markup is preserved.
                     self.error(failure_message)
             else:
+                success_text = _message_to_log_text(success_message, markup=success_markup)
                 self._logsink.emit(
                     level=_LEVEL_TO_LOG_SEVERITY["info"],
                     message=f"succeeded: {success_text}",
