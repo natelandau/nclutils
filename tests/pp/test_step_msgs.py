@@ -337,3 +337,224 @@ class TestMarkupAppliesToOverrides:
         text = out.export_text()
         assert "aborted" in text
         assert "[bold]" not in text
+
+
+class TestSetSuccessFromBlock:
+    """`Step.set_success()` updates the success header from inside the block."""
+
+    def test_set_success_replaces_header(
+        self, make_recording_emitter: RecordingEmitterFactory
+    ) -> None:
+        """Verify set_success() applied inside the block replaces the success header."""
+        # Given an emitter
+        e, out, _ = make_recording_emitter()
+
+        # When the block computes a result and applies it via set_success
+        with e.step("compiling") as s:
+            count = 42
+            s.set_success(f"compiled {count} files")
+
+        # Then the dynamic message appears in the rendered output
+        text = out.export_text()
+        assert "compiled 42 files" in text
+
+    def test_set_success_overrides_kwarg(
+        self, make_recording_emitter: RecordingEmitterFactory
+    ) -> None:
+        """Verify set_success() takes precedence over the success_msg kwarg."""
+        # Given an emitter with a kwarg-provided success_msg
+        e, out, _ = make_recording_emitter()
+
+        # When set_success() overrides it from inside the block
+        with e.step("compiling", success_msg="kwarg wins?") as s:
+            s.set_success("setter wins")
+
+        # Then the setter's message appears and the kwarg's does not
+        text = out.export_text()
+        assert "setter wins" in text
+        assert "kwarg wins" not in text
+
+    def test_set_success_in_logfile(
+        self,
+        make_recording_emitter: RecordingEmitterFactory,
+        tmp_path: Path,
+    ) -> None:
+        """Verify set_success() value is recorded in the succeeded: log line."""
+        # Given an emitter with a logfile
+        logfile = tmp_path / "run.log"
+        e, _, _ = make_recording_emitter(logfile=logfile)
+
+        # When set_success() is used inside the block
+        with e.step("compiling") as s:
+            s.set_success("compiled 42 files")
+
+        # Then the logfile records the setter message
+        contents = logfile.read_text()
+        assert "succeeded: compiled 42 files" in contents
+
+    def test_set_success_markup_parses_tags(
+        self, make_recording_emitter: RecordingEmitterFactory
+    ) -> None:
+        """Verify set_success(markup=True) parses Rich markup in the message."""
+        # Given an emitter
+        e, out, _ = make_recording_emitter()
+
+        # When the setter is invoked with markup=True
+        with e.step("compiling") as s:
+            s.set_success("[bold]all done[/]", markup=True)
+
+        # Then the rendered output contains the message text without literal tags
+        text = out.export_text()
+        assert "all done" in text
+        assert "[bold]" not in text
+
+    def test_set_success_accepts_renderable(
+        self, make_recording_emitter: RecordingEmitterFactory
+    ) -> None:
+        """Verify set_success() accepts an arbitrary Rich renderable."""
+        # Given an emitter
+        e, out, _ = make_recording_emitter()
+
+        # When a Padding renderable is supplied
+        with e.step("compiling") as s:
+            s.set_success(Padding("compiled 42 files", (0, 1)))
+
+        # Then the renderable's text appears in the rendered output
+        text = out.export_text()
+        assert "compiled 42 files" in text
+
+    def test_set_success_ignored_on_failure(
+        self, make_recording_emitter: RecordingEmitterFactory
+    ) -> None:
+        """Verify set_success() has no effect when the block raises."""
+        # Given an emitter
+        e, out, _ = make_recording_emitter()
+        err_msg = "boom"
+
+        # When set_success() is called and then an exception is raised
+        with pytest.raises(RuntimeError, match=err_msg), e.step("compiling") as s:
+            s.set_success("compiled 42 files")
+            raise RuntimeError(err_msg)
+
+        # Then the success setter value does not surface in the failure output
+        text = out.export_text()
+        assert "compiled 42 files" not in text
+
+
+class TestSetFailureFromBlock:
+    """`Step.set_failure()` updates the failure header from inside the block."""
+
+    def test_set_failure_replaces_header(
+        self, make_recording_emitter: RecordingEmitterFactory
+    ) -> None:
+        """Verify set_failure() applied inside the block replaces the failure header."""
+        # Given an emitter
+        e, out, _ = make_recording_emitter()
+        err_msg = "boom"
+
+        # When the block sets a contingent failure message before raising
+        with pytest.raises(RuntimeError, match=err_msg), e.step("compiling") as s:
+            s.set_failure("failed after 17 files")
+            raise RuntimeError(err_msg)
+
+        # Then the dynamic failure message appears in the rendered output
+        text = out.export_text()
+        assert "failed after 17 files" in text
+
+    def test_set_failure_overrides_kwarg(
+        self, make_recording_emitter: RecordingEmitterFactory
+    ) -> None:
+        """Verify set_failure() takes precedence over the failure_msg kwarg."""
+        # Given an emitter with a kwarg-provided failure_msg
+        e, out, _ = make_recording_emitter()
+        err_msg = "boom"
+
+        # When set_failure() overrides it from inside the block
+        with (
+            pytest.raises(RuntimeError, match=err_msg),
+            e.step("compiling", failure_msg="kwarg failure") as s,
+        ):
+            s.set_failure("setter failure")
+            raise RuntimeError(err_msg)
+
+        # Then the setter's message appears and the kwarg's does not
+        text = out.export_text()
+        assert "setter failure" in text
+        assert "kwarg failure" not in text
+
+    def test_set_failure_in_logfile(
+        self,
+        make_recording_emitter: RecordingEmitterFactory,
+        tmp_path: Path,
+    ) -> None:
+        """Verify set_failure() value is recorded in the failed: log line."""
+        # Given an emitter with a logfile
+        logfile = tmp_path / "run.log"
+        e, _, _ = make_recording_emitter(logfile=logfile)
+        err_msg = "boom"
+
+        # When set_failure() is used and the block raises
+        with pytest.raises(RuntimeError, match=err_msg), e.step("compiling") as s:
+            s.set_failure("failed after 17 files")
+            raise RuntimeError(err_msg)
+
+        # Then the logfile records the setter message
+        contents = logfile.read_text()
+        assert "failed: failed after 17 files" in contents
+
+    def test_set_failure_ephemeral_surfaces_on_stderr(
+        self, make_recording_emitter: RecordingEmitterFactory
+    ) -> None:
+        """Verify set_failure() under ephemeral=True surfaces on stderr."""
+        # Given an emitter wired to recording stderr
+        e, _, err = make_recording_emitter()
+        err_msg = "boom"
+
+        # When an ephemeral step sets a failure message and raises
+        with (
+            pytest.raises(RuntimeError, match=err_msg),
+            e.step("warming caches", ephemeral=True) as s,
+        ):
+            s.set_failure("cache priming failed at item 17")
+            raise RuntimeError(err_msg)
+
+        # Then the setter's failure message appears on stderr
+        text = err.export_text()
+        assert "cache priming failed at item 17" in text
+
+    def test_set_failure_markup_parses_tags(
+        self, make_recording_emitter: RecordingEmitterFactory
+    ) -> None:
+        """Verify set_failure(markup=True) parses Rich markup in the message."""
+        # Given an emitter
+        e, out, _ = make_recording_emitter()
+        err_msg = "boom"
+
+        # When set_failure() is invoked with markup=True before raising
+        with pytest.raises(RuntimeError, match=err_msg), e.step("compiling") as s:
+            s.set_failure("[bold]aborted hard[/]", markup=True)
+            raise RuntimeError(err_msg)
+
+        # Then the rendered output contains the message text without literal tags
+        text = out.export_text()
+        assert "aborted hard" in text
+        assert "[bold]" not in text
+
+    def test_set_failure_ignored_on_success(
+        self,
+        make_recording_emitter: RecordingEmitterFactory,
+        tmp_path: Path,
+    ) -> None:
+        """Verify set_failure() has no effect when the block completes normally."""
+        # Given an emitter with logfile
+        logfile = tmp_path / "run.log"
+        e, out, _ = make_recording_emitter(logfile=logfile)
+
+        # When set_failure() is called but the block succeeds
+        with e.step("compiling") as s:
+            s.set_failure("would-be failure")
+
+        # Then the failure setter value does not surface in success output or log
+        text = out.export_text()
+        assert "would-be failure" not in text
+        assert "would-be failure" not in logfile.read_text()

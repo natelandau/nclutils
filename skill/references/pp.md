@@ -150,18 +150,22 @@ with pp.step("running migrations") as s:
         s.sub(f"applied {m.name}")
 ```
 
-The `Step` object yielded has one public method:
+The `Step` object yielded has three public methods:
 
 ```python
 Step.sub(text: str | Text, *, markup: bool = False) -> None
+Step.set_success(message: str | RenderableType, *, markup: bool = False) -> None
+Step.set_failure(message: str | RenderableType, *, markup: bool = False) -> None
 ```
 
-Appends a sub-item beneath the spinner. Strings are escaped by default; `markup=True` parses Rich markup. A `Text` instance keeps its own styling. Each sub-item is also written to the logfile (indented continuation line at `INFO`).
+`sub()` appends a sub-item beneath the spinner. Strings are escaped by default; `markup=True` parses Rich markup. A `Text` instance keeps its own styling. Each sub-item is also written to the logfile (indented continuation line at `INFO`).
+
+`set_success()` / `set_failure()` update the completion header from inside the block when the text depends on work done there (a count, a duration, the item that failed). Setter wins over the matching kwarg, which wins over the original message. Each setter has its own `markup=` flag. The setter value also appears in the `succeeded:` / `failed:` log line. `set_success()` is ignored if the block raises; `set_failure()` is ignored if it returns normally.
 
 On exit, the spinner resolves to `✓` (success) or `✗` (failure) and any sub-items remain on screen. Exceptions inside the block (including `SystemExit` and `KeyboardInterrupt`) re-raise after marking failure.
 
-- `ephemeral=True` wipes the spinner AND sub-items on success; on failure the red X surfaces (and `failure_msg` if set).
-- `success_msg=` and `failure_msg=` override the resolved text; either can be omitted independently. The single `markup=` flag covers all three messages.
+- `ephemeral=True` wipes the spinner AND sub-items on success; on failure the red X surfaces (and `failure_msg` / `set_failure()` value if set).
+- `success_msg=` and `failure_msg=` override the resolved text; either can be omitted independently. The `step(markup=...)` flag covers all three messages, but setters carry their own per-call `markup=` flag.
 - **`pp.step()` CANNOT NEST.** Rich's `Live` cannot stack — `pp` raises `RuntimeError` on nested entry on the same emitter. Use `s.sub("...")` for nested progress lines instead.
 
 ## Configuration
