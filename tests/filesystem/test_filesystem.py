@@ -217,7 +217,7 @@ def test_directory_tree(temp_directory: Path, capsys: pytest.CaptureFixture) -> 
     assert "├── 📂 " in output
     assert "│   ├── 📄" in output
     assert "│   └── 📄" in output
-    assert "(0 bytes)" in output
+    assert "(0 B)" in output
 
 
 def test_clean_directory(temp_directory: Path) -> None:

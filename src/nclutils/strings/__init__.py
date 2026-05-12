@@ -3,6 +3,7 @@
 from .strings import (
     camel_case,
     deburr,
+    human_size,
     int_to_emoji,
     kebab_case,
     list_words,
@@ -20,6 +21,7 @@ from .strings import (
 __all__ = [
     "camel_case",
     "deburr",
+    "human_size",
     "int_to_emoji",
     "kebab_case",
     "list_words",

@@ -154,7 +154,7 @@ Raises `ValueError` if `depth < 1`.
 directory_tree(directory: Path, *, show_hidden: bool = False) -> rich.tree.Tree
 ```
 
-Build a `rich.tree.Tree` of `directory`'s contents. Subdirectories sorted before files; within each group, lowercase name order. Dotfiles excluded unless `show_hidden=True`. Files show their size via `rich.filesize.decimal`.
+Build a `rich.tree.Tree` of `directory`'s contents. Subdirectories sorted before files; within each group, lowercase name order. Dotfiles excluded unless `show_hidden=True`. Files show their size via `nclutils.strings.human_size` (SI base 1000, e.g. `"1.5 kB"`).
 
 ```python
 from nclutils import pp

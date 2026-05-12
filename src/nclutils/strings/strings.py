@@ -80,6 +80,9 @@ RE_APOS = re.compile(RS_APOS)
 RS_LATIN1 = re.compile(r"[\xc0-\xff]")
 ANSI_CHARS = re.compile(r"(\x9B|\x1B\[)[0-?]*[ -\/]*[@-~]")
 
+_BYTES_PER_UNIT = 1000
+_SIZE_UNITS = ("B", "kB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB")
+
 
 def camel_case(text: str) -> str:
     """Converts `text` to camel case.
@@ -135,6 +138,48 @@ def kebab_case(text: str) -> str:
     return "-".join(
         word.lower() for word in list_words(deburr(text), strip_apostrophes=True) if word
     )
+
+
+def human_size(size_bytes: float, *, decimals: int = 1) -> str:
+    """Format a byte count as a human-readable string with appropriate unit.
+
+    Uses SI decimal units (base 1000): ``B``, ``kB``, ``MB``, ..., ``YB``. Bytes
+    always render as integers since fractional bytes are not meaningful; larger units
+    honor ``decimals``. Negative inputs keep their sign so the helper is usable for
+    byte deltas. Values above 1000 YB stay on the YB unit rather than rolling over.
+
+    Args:
+        size_bytes (float): Number of bytes to format. Accepts ints, floats, and negatives.
+        decimals (int): Decimal places for units above bytes. Defaults to 1.
+
+    Returns:
+        str: Formatted string with value and unit, e.g. ``"1.5 kB"``.
+
+    Examples:
+        >>> assert human_size(0) == "0 B"
+        >>> assert human_size(512) == "512 B"
+        >>> assert human_size(1000) == "1.0 kB"
+        >>> assert human_size(1500) == "1.5 kB"
+        >>> assert human_size(1000 ** 4) == "1.0 TB"
+        >>> assert human_size(1000 ** 5) == "1.0 PB"
+        >>> assert human_size(1000 ** 8) == "1.0 YB"
+        >>> assert human_size(1000 ** 9) == "1000.0 YB"
+        >>> assert human_size(1500, decimals=2) == "1.50 kB"
+        >>> assert human_size(-1500) == "-1.5 kB"
+    """
+    sign = "-" if size_bytes < 0 else ""
+    value = abs(size_bytes)
+
+    if value < _BYTES_PER_UNIT:
+        return f"{sign}{value:.0f} B"
+
+    for unit in _SIZE_UNITS[1:-1]:
+        value /= _BYTES_PER_UNIT
+        if value < _BYTES_PER_UNIT:
+            return f"{sign}{value:.{decimals}f} {unit}"
+
+    value /= _BYTES_PER_UNIT
+    return f"{sign}{value:.{decimals}f} {_SIZE_UNITS[-1]}"
 
 
 def int_to_emoji(num: int, *, markdown: bool = False, images: bool = False) -> str:

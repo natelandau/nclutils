@@ -10,12 +10,12 @@ import subprocess
 import sys
 import threading
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from ._streaming import pump_pipe
 from .errors import (
-    CompletedCommand,
     ShellCommandFailedError,
     ShellCommandNotFoundError,
     ShellCommandTimeoutError,
@@ -25,6 +25,44 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
 logger = logging.getLogger("nclutils.sh")
+
+
+@dataclass(frozen=True, slots=True)
+class CompletedCommand:
+    """The full record of a finished subprocess invocation.
+
+    Returned from :func:`run_command` on success and exposed as ``.result`` on
+    :class:`ShellCommandFailedError` / :class:`ShellCommandTimeoutError`.
+    Trailing newlines on ``stdout`` and ``stderr`` are stripped; embedded
+    newlines between lines are preserved.
+    """
+
+    argv: tuple[str, ...]
+    returncode: int
+    stdout: str
+    stderr: str
+    duration: float
+    cwd: Path | None
+
+    @property
+    def ok(self) -> bool:
+        """Return True when the command exited with status 0."""
+        return self.returncode == 0
+
+    @property
+    def command_line(self) -> str:
+        """Return ``argv`` rendered with :func:`shlex.join` so it can be pasted into a shell."""
+        return shlex.join(self.argv)
+
+    @property
+    def stdout_lines(self) -> list[str]:
+        """Return ``stdout`` split into lines. Recomputed on each access; bind locally to iterate twice."""
+        return self.stdout.splitlines()
+
+    @property
+    def stderr_lines(self) -> list[str]:
+        """Return ``stderr`` split into lines. Recomputed on each access; bind locally to iterate twice."""
+        return self.stderr.splitlines()
 
 
 def which(cmd: str) -> Path | None:

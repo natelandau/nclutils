@@ -8,12 +8,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from rich.console import Console
-from rich.filesize import decimal
 from rich.markup import escape
 from rich.progress import Progress, TaskID
 from rich.text import Text
 from rich.tree import Tree
 
+from nclutils.strings import human_size
 from nclutils.utils import new_timestamp_uid
 
 logger = logging.getLogger(__name__)
@@ -472,7 +472,7 @@ def directory_tree(directory: Path, *, show_hidden: bool = False) -> Tree:
                 text_filename.highlight_regex(r"\..*$", "bold red")
                 text_filename.stylize(f"link file://{path}")
                 file_size = path.stat().st_size
-                text_filename.append(f" ({decimal(file_size)})", "blue")
+                text_filename.append(f" ({human_size(file_size)})", "blue")
                 icon = "📄 "
                 tree.add(Text(icon) + text_filename)
 

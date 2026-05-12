@@ -60,6 +60,7 @@ If text is already at or beyond `length`, returned unchanged. Multi-char `chars`
 
 ## Misc
 
+- `human_size(size_bytes, *, decimals=1)` — format a byte count with the largest fitting unit (`B`, `kB`, `MB`, `GB`, `TB`, `PB`, `EB`, `ZB`, `YB`). SI base 1000. Bytes always render as integers; `decimals` controls precision for larger units. Negative inputs keep their sign. Values past YB stay on `YB` rather than rolling over (`human_size(1000 ** 9) == "1000.0 YB"`).
 - `random_string(length)` — random ASCII letter string. Uses `random.choice`, NOT cryptographically secure. For secure IDs, use `nclutils.utils.new_uid`.
 - `int_to_emoji(num, *, markdown=False, images=False)` — render 0–10 as keycap emoji.
     - Default: Discord `:name:` codes (`:one:`, `:keycap_ten:`).
@@ -90,6 +91,7 @@ pad_start(text: str, length: int, chars: str = " ") -> str
 pad_end(text: str, length: int, chars: str = " ") -> str
 
 # Misc
+human_size(size_bytes: float, *, decimals: int = 1) -> str
 int_to_emoji(num: int, *, markdown: bool = False, images: bool = False) -> str
 random_string(length: int) -> str
 ```
