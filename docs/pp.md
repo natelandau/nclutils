@@ -265,7 +265,7 @@ with pp.step("running migrations") as s:
 
 On exit the spinner stops, the marker (`✓` or `✗`) is rendered, and any sub-items remain on screen so the final output is a static record of what happened.
 
-For transient progress that shouldn't clutter the final transcript, pass `ephemeral=True`. The spinner and sub-items are wiped on success, leaving no trace on the console. If the block calls `s.fail()`, a fresh error line still surfaces on stderr after the wipe (see [Failing a step](#failing-a-step)):
+For transient progress that shouldn't clutter the final transcript, pass `ephemeral=True`. The spinner and sub-items are wiped on success, leaving no trace on the console. If the block calls `s.fail()`, a fresh error line still surfaces on stderr after the wipe:
 
 ```python
 with pp.step("warming caches", ephemeral=True) as s:
@@ -353,6 +353,13 @@ with pp.step("warming caches") as s:
 ```
 
 Code after `s.skip(...)` does not run. Skip is not an error; in ephemeral mode it wipes the spinner with no extra console output.
+
+```python
+with pp.step("warming caches", ephemeral=True) as s:
+    if cache.is_warm():
+        s.skip("caches already warm")
+# wipes with no console output
+```
 
 ## File logging
 
