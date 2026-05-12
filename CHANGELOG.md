@@ -1,3 +1,9 @@
+## v3.4.1 (2026-05-12)
+
+### Fix
+
+- **pp**: rework step() outcome control for manual fail/skip (#46)
+
 ## v3.4.0 (2026-05-12)
 
 ### Feat
