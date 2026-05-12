@@ -304,14 +304,13 @@ class TestStepLifecycle:
     def test_ephemeral_failure_emits_error_to_stderr(
         self, make_recording_emitter: RecordingEmitterFactory
     ) -> None:
-        """Verify ephemeral failure clears the spinner but surfaces an error on stderr."""
+        """Verify ephemeral fail() clears the spinner but surfaces an error on stderr."""
         # Given a default Emitter wired to recording consoles
         e, _, err = make_recording_emitter()
 
-        # When an ephemeral step body raises
-        err_msg = "boom"
-        with pytest.raises(RuntimeError, match=err_msg), e.step("compiling", ephemeral=True):
-            raise RuntimeError(err_msg)
+        # When an ephemeral step calls fail()
+        with e.step("compiling", ephemeral=True) as s:
+            s.fail("compiling")
 
         # Then an error with the step message lands on stderr with the default error marker
         err_text = err.export_text()

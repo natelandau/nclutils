@@ -1,4 +1,4 @@
-"""Tests for step() success_msg and failure_msg kwargs."""
+"""Tests for step() success_msg kwarg and outcome-control APIs."""
 
 from __future__ import annotations
 
@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 
 import pytest
 from rich.padding import Padding
-from rich.text import Text
 
 from nclutils.pp import emitter as pp_emitter
 
@@ -65,45 +64,6 @@ class TestStepSuccessMsg:
         assert "compiled 42 files" in text
 
 
-class TestStepFailureMsg:
-    """`failure_msg` swaps the error header text on exception."""
-
-    def test_failure_msg_replaces_header_on_exception(
-        self, make_recording_emitter: RecordingEmitterFactory
-    ) -> None:
-        """Verify failure_msg appears in place of the original message on exception."""
-        # Given an emitter wired to a recording console
-        e, out, _ = make_recording_emitter()
-        err_msg = "boom"
-
-        # When step() raises with a failure_msg override
-        with (
-            pytest.raises(RuntimeError, match=err_msg),
-            e.step("compiling", failure_msg="compilation aborted"),
-        ):
-            raise RuntimeError(err_msg)
-
-        # Then the failure_msg appears in the rendered output
-        text = out.export_text()
-        assert "compilation aborted" in text
-
-    def test_failure_msg_default_keeps_original(
-        self, make_recording_emitter: RecordingEmitterFactory
-    ) -> None:
-        """Verify omitting failure_msg preserves current behavior (original message kept)."""
-        # Given an emitter wired to a recording console
-        e, out, _ = make_recording_emitter()
-        err_msg = "boom"
-
-        # When step() raises without override kwargs
-        with pytest.raises(RuntimeError, match=err_msg), e.step("compiling"):
-            raise RuntimeError(err_msg)
-
-        # Then the original message appears in the failure line
-        text = out.export_text()
-        assert "compiling" in text
-
-
 class TestStepLogfile:
     """Override messages are recorded in the logfile lifecycle records."""
 
@@ -124,28 +84,6 @@ class TestStepLogfile:
         # Then the logfile records the override message in the succeeded: line
         contents = logfile.read_text()
         assert "succeeded: compiled 42 files" in contents
-
-    def test_failure_msg_in_logfile(
-        self,
-        make_recording_emitter: RecordingEmitterFactory,
-        tmp_path: Path,
-    ) -> None:
-        """Verify the failed: line in the logfile uses failure_msg when provided."""
-        # Given an emitter with a logfile
-        logfile = tmp_path / "run.log"
-        e, _, _ = make_recording_emitter(logfile=logfile)
-        err_msg = "boom"
-
-        # When step() raises with an override
-        with (
-            pytest.raises(RuntimeError, match=err_msg),
-            e.step("compiling", failure_msg="compilation aborted"),
-        ):
-            raise RuntimeError(err_msg)
-
-        # Then the logfile records the override message in the failed: line
-        contents = logfile.read_text()
-        assert "failed: compilation aborted" in contents
 
     def test_success_default_logs_original_message(
         self,
@@ -187,73 +125,6 @@ class TestEphemeralStepInteraction:
         contents = logfile.read_text()
         assert "succeeded: caches warm" in contents
 
-    def test_ephemeral_failure_displays_failure_msg(
-        self,
-        make_recording_emitter: RecordingEmitterFactory,
-    ) -> None:
-        """Verify ephemeral failure surfaces failure_msg on stderr."""
-        # Given an emitter wired to recording stderr
-        e, _, err = make_recording_emitter()
-        err_msg = "boom"
-
-        # When step() raises in ephemeral mode with a failure_msg
-        with (
-            pytest.raises(RuntimeError, match=err_msg),
-            e.step(
-                "warming caches",
-                ephemeral=True,
-                failure_msg="cache priming failed",
-            ),
-        ):
-            raise RuntimeError(err_msg)
-
-        # Then the failure_msg appears in the surfaced error output
-        text = err.export_text()
-        assert "cache priming failed" in text
-
-    def test_ephemeral_failure_default_surfaces_original(
-        self,
-        make_recording_emitter: RecordingEmitterFactory,
-    ) -> None:
-        """Verify ephemeral failure falls back to the original message on stderr without override."""
-        # Given an emitter wired to recording stderr
-        e, _, err = make_recording_emitter()
-        err_msg = "boom"
-
-        # When step() raises in ephemeral mode without a failure_msg
-        with (
-            pytest.raises(RuntimeError, match=err_msg),
-            e.step("warming caches", ephemeral=True),
-        ):
-            raise RuntimeError(err_msg)
-
-        # Then the original message appears in the surfaced error output
-        text = err.export_text()
-        assert "warming caches" in text
-
-    def test_ephemeral_failure_preserves_failure_msg_styling(
-        self,
-        make_recording_emitter: RecordingEmitterFactory,
-    ) -> None:
-        """Verify ephemeral failure preserves Rich markup styling in failure_msg."""
-        # Given an emitter wired to recording stderr
-        e, _, err = make_recording_emitter()
-        err_msg = "boom"
-
-        # When step() raises ephemerally with a styled failure_msg
-        styled = Text("cache priming failed", style="bold red")
-        with (
-            pytest.raises(RuntimeError, match=err_msg),
-            e.step("warming", ephemeral=True, failure_msg=styled),
-        ):
-            raise RuntimeError(err_msg)
-
-        # Then the styled fragment appears in the recorded HTML output with styling preserved
-        html = err.export_html()
-        assert "cache priming failed" in html
-        # The styling marker should be present (red color or bold weight)
-        assert "color: " in html or "font-weight" in html
-
 
 class TestModuleLevelStep:
     """Module-level `step()` forwards override kwargs to the default emitter."""
@@ -276,31 +147,9 @@ class TestModuleLevelStep:
         text = out.export_text()
         assert "compiled 42 files" in text
 
-    def test_module_step_accepts_failure_msg(
-        self,
-        make_recording_emitter: RecordingEmitterFactory,
-        isolated_default: None,
-    ) -> None:
-        """Verify the module-level step() forwards failure_msg to the default emitter."""
-        # Given the default emitter is replaced with a recording one
-        e, out, _ = make_recording_emitter()
-        pp_emitter.set_default(e)
-        err_msg = "boom"
-
-        # When the module-level step() raises with a failure_msg override
-        with (
-            pytest.raises(RuntimeError, match=err_msg),
-            pp_emitter.step("compiling", failure_msg="compilation aborted"),
-        ):
-            raise RuntimeError(err_msg)
-
-        # Then the override message appears in the rendered output
-        text = out.export_text()
-        assert "compilation aborted" in text
-
 
 class TestMarkupAppliesToOverrides:
-    """`markup=True` parses Rich markup in success_msg and failure_msg."""
+    """`markup=True` parses Rich markup in success_msg."""
 
     def test_markup_true_parses_success_msg(
         self, make_recording_emitter: RecordingEmitterFactory
@@ -318,482 +167,388 @@ class TestMarkupAppliesToOverrides:
         assert "compiled all" in text
         assert "[bold]" not in text
 
-    def test_markup_true_parses_failure_msg(
+
+class TestSetSuccessMsgFromBlock:
+    """`Step.set_success_msg()` updates the success header from inside the block."""
+
+    def test_set_success_msg_replaces_header(
         self, make_recording_emitter: RecordingEmitterFactory
     ) -> None:
-        """Verify markup=True parses Rich markup tags in failure_msg."""
-        # Given an emitter
-        e, out, _ = make_recording_emitter()
-        err_msg = "boom"
-
-        # When step() raises with a markup-containing override and markup=True
-        with (
-            pytest.raises(RuntimeError, match=err_msg),
-            e.step("compiling", failure_msg="[bold]aborted[/]", markup=True),
-        ):
-            raise RuntimeError(err_msg)
-
-        # Then the rendered output contains the message text but not the literal markup tags
-        text = out.export_text()
-        assert "aborted" in text
-        assert "[bold]" not in text
-
-
-class TestSetSuccessFromBlock:
-    """`Step.set_success()` updates the success header from inside the block."""
-
-    def test_set_success_replaces_header(
-        self, make_recording_emitter: RecordingEmitterFactory
-    ) -> None:
-        """Verify set_success() applied inside the block replaces the success header."""
+        """Verify set_success_msg() applied inside the block replaces the success header."""
         # Given an emitter
         e, out, _ = make_recording_emitter()
 
-        # When the block computes a result and applies it via set_success
+        # When the block computes a result and applies it via set_success_msg
         with e.step("compiling") as s:
             count = 42
-            s.set_success(f"compiled {count} files")
+            s.set_success_msg(f"compiled {count} files")
 
         # Then the dynamic message appears in the rendered output
         text = out.export_text()
         assert "compiled 42 files" in text
 
-    def test_set_success_overrides_kwarg(
+    def test_set_success_msg_overrides_kwarg(
         self, make_recording_emitter: RecordingEmitterFactory
     ) -> None:
-        """Verify set_success() takes precedence over the success_msg kwarg."""
+        """Verify set_success_msg() takes precedence over the success_msg kwarg."""
         # Given an emitter with a kwarg-provided success_msg
         e, out, _ = make_recording_emitter()
 
-        # When set_success() overrides it from inside the block
+        # When set_success_msg() overrides it from inside the block
         with e.step("compiling", success_msg="kwarg wins?") as s:
-            s.set_success("setter wins")
+            s.set_success_msg("setter wins")
 
         # Then the setter's message appears and the kwarg's does not
         text = out.export_text()
         assert "setter wins" in text
         assert "kwarg wins" not in text
 
-    def test_set_success_in_logfile(
+    def test_set_success_msg_in_logfile(
         self,
         make_recording_emitter: RecordingEmitterFactory,
         tmp_path: Path,
     ) -> None:
-        """Verify set_success() value is recorded in the succeeded: log line."""
+        """Verify set_success_msg() value is recorded in the succeeded: log line."""
         # Given an emitter with a logfile
         logfile = tmp_path / "run.log"
         e, _, _ = make_recording_emitter(logfile=logfile)
 
-        # When set_success() is used inside the block
+        # When set_success_msg() is used inside the block
         with e.step("compiling") as s:
-            s.set_success("compiled 42 files")
+            s.set_success_msg("compiled 42 files")
 
         # Then the logfile records the setter message
         contents = logfile.read_text()
         assert "succeeded: compiled 42 files" in contents
 
-    def test_set_success_markup_parses_tags(
+    def test_set_success_msg_markup_parses_tags(
         self, make_recording_emitter: RecordingEmitterFactory
     ) -> None:
-        """Verify set_success(markup=True) parses Rich markup in the message."""
+        """Verify set_success_msg(markup=True) parses Rich markup in the message."""
         # Given an emitter
         e, out, _ = make_recording_emitter()
 
         # When the setter is invoked with markup=True
         with e.step("compiling") as s:
-            s.set_success("[bold]all done[/]", markup=True)
+            s.set_success_msg("[bold]all done[/]", markup=True)
 
         # Then the rendered output contains the message text without literal tags
         text = out.export_text()
         assert "all done" in text
         assert "[bold]" not in text
 
-    def test_set_success_accepts_renderable(
+    def test_set_success_msg_accepts_renderable(
         self, make_recording_emitter: RecordingEmitterFactory
     ) -> None:
-        """Verify set_success() accepts an arbitrary Rich renderable."""
+        """Verify set_success_msg() accepts an arbitrary Rich renderable."""
         # Given an emitter
         e, out, _ = make_recording_emitter()
 
         # When a Padding renderable is supplied
         with e.step("compiling") as s:
-            s.set_success(Padding("compiled 42 files", (0, 1)))
+            s.set_success_msg(Padding("compiled 42 files", (0, 1)))
 
         # Then the renderable's text appears in the rendered output
         text = out.export_text()
         assert "compiled 42 files" in text
 
-    def test_set_success_ignored_on_failure(
+
+class TestStepFail:
+    """`Step.fail()` exits the block with failure outcome."""
+
+    def test_fail_exits_the_block(self, make_recording_emitter: RecordingEmitterFactory) -> None:
+        """Verify fail() ends the with-block immediately; code after the call does not run."""
+        # Given an emitter
+        e, _, _ = make_recording_emitter()
+        after_fail_ran = False
+
+        # When fail() is called inside the block
+        with e.step("compiling") as s:
+            s.fail("aborted")
+            after_fail_ran = True  # should be unreachable
+
+        # Then code after fail() did not execute and the block ended normally
+        assert after_fail_ran is False
+
+    def test_fail_renders_error_header(
         self, make_recording_emitter: RecordingEmitterFactory
     ) -> None:
-        """Verify set_success() has no effect when the block raises."""
+        """Verify fail() replaces the spinner with an error-marker completion header."""
         # Given an emitter
         e, out, _ = make_recording_emitter()
-        err_msg = "boom"
 
-        # When set_success() is called and then an exception is raised
-        with pytest.raises(RuntimeError, match=err_msg), e.step("compiling") as s:
-            s.set_success("compiled 42 files")
-            raise RuntimeError(err_msg)
+        # When fail() is called inside the block
+        with e.step("compiling") as s:
+            s.fail("aborted after 17 files")
 
-        # Then the success setter value does not surface in the failure output
+        # Then the failure message appears with the error marker on the recorded output
         text = out.export_text()
-        assert "compiled 42 files" not in text
+        assert "aborted after 17 files" in text
+        assert "✗" in text  # default unicode error marker
 
-
-class TestSetFailureFromBlock:
-    """`Step.set_failure()` updates the failure header from inside the block."""
-
-    def test_set_failure_replaces_header(
-        self, make_recording_emitter: RecordingEmitterFactory
-    ) -> None:
-        """Verify set_failure() applied inside the block replaces the failure header."""
-        # Given an emitter
-        e, out, _ = make_recording_emitter()
-        err_msg = "boom"
-
-        # When the block sets a contingent failure message before raising
-        with pytest.raises(RuntimeError, match=err_msg), e.step("compiling") as s:
-            s.set_failure("failed after 17 files")
-            raise RuntimeError(err_msg)
-
-        # Then the dynamic failure message appears in the rendered output
-        text = out.export_text()
-        assert "failed after 17 files" in text
-
-    def test_set_failure_overrides_kwarg(
-        self, make_recording_emitter: RecordingEmitterFactory
-    ) -> None:
-        """Verify set_failure() takes precedence over the failure_msg kwarg."""
-        # Given an emitter with a kwarg-provided failure_msg
-        e, out, _ = make_recording_emitter()
-        err_msg = "boom"
-
-        # When set_failure() overrides it from inside the block
-        with (
-            pytest.raises(RuntimeError, match=err_msg),
-            e.step("compiling", failure_msg="kwarg failure") as s,
-        ):
-            s.set_failure("setter failure")
-            raise RuntimeError(err_msg)
-
-        # Then the setter's message appears and the kwarg's does not
-        text = out.export_text()
-        assert "setter failure" in text
-        assert "kwarg failure" not in text
-
-    def test_set_failure_in_logfile(
+    def test_fail_writes_failed_log_line(
         self,
         make_recording_emitter: RecordingEmitterFactory,
         tmp_path: Path,
     ) -> None:
-        """Verify set_failure() value is recorded in the failed: log line."""
+        """Verify fail() records a `failed:` line in the logfile."""
+        # Given an emitter with a logfile
+        logfile = tmp_path / "run.log"
+        e, _, _ = make_recording_emitter(logfile=logfile)
+
+        # When fail() is called
+        with e.step("compiling") as s:
+            s.fail("aborted")
+
+        # Then the logfile contains the failed: line
+        contents = logfile.read_text()
+        assert "failed: aborted" in contents
+
+    def test_fail_with_exception_attaches_traceback_to_log(
+        self,
+        make_recording_emitter: RecordingEmitterFactory,
+        tmp_path: Path,
+    ) -> None:
+        """Verify fail(exception=e) attaches the exception type/message as a logfile continuation line."""
+        # Given an emitter with a logfile and a real exception to attach
+        logfile = tmp_path / "run.log"
+        e, _, _ = make_recording_emitter(logfile=logfile)
+
+        # When the block catches an exception and calls fail(exception=...)
+        err_msg = "bad input"
+        with e.step("compiling") as s:
+            try:
+                raise ValueError(err_msg)
+            except ValueError as caught:
+                s.fail("compilation failed", exception=caught)
+
+        # Then the logfile contains the exception type and message as a continuation
+        contents = logfile.read_text()
+        assert "failed: compilation failed" in contents
+        assert "ValueError" in contents
+        assert "bad input" in contents
+
+    def test_fail_in_ephemeral_prints_visible_error_line(
+        self, make_recording_emitter: RecordingEmitterFactory
+    ) -> None:
+        """Verify fail() in ephemeral mode surfaces a fresh error line on stderr after wiping."""
+        # Given an emitter with recording stderr in ephemeral mode
+        e, _, err = make_recording_emitter()
+
+        # When fail() is called inside an ephemeral step
+        with e.step("warming caches", ephemeral=True) as s:
+            s.fail("cache priming failed")
+
+        # Then a visible error line lands on stderr
+        err_text = err.export_text()
+        assert "cache priming failed" in err_text
+        assert "✗" in err_text  # default unicode error marker
+
+    def test_fail_markup_parses_tags(self, make_recording_emitter: RecordingEmitterFactory) -> None:
+        """Verify fail(markup=True) parses Rich markup in the message."""
+        # Given an emitter
+        e, out, _ = make_recording_emitter()
+
+        # When fail() is called with markup-containing message and markup=True
+        with e.step("compiling") as s:
+            s.fail("[bold]aborted[/]", markup=True)
+
+        # Then the rendered output contains the message text but not the literal markup tags
+        text = out.export_text()
+        assert "aborted" in text
+        assert "[bold]" not in text
+
+    def test_fail_requires_message(self, make_recording_emitter: RecordingEmitterFactory) -> None:
+        """Verify fail() without a message argument is a TypeError."""
+        # Given an emitter
+        e, _, _ = make_recording_emitter()
+
+        # When fail() is called without a message
+        # Then a TypeError is raised
+        with pytest.raises(TypeError), e.step("compiling") as s:
+            s.fail()  # type: ignore[call-arg]
+
+
+class TestStepSkip:
+    """`Step.skip()` exits the block with skip outcome."""
+
+    def test_skip_exits_the_block(self, make_recording_emitter: RecordingEmitterFactory) -> None:
+        """Verify skip() ends the with-block immediately; code after the call does not run."""
+        # Given an emitter
+        e, _, _ = make_recording_emitter()
+        after_skip_ran = False
+
+        # When skip() is called inside the block
+        with e.step("warming caches") as s:
+            s.skip("already warm")
+            after_skip_ran = True  # should be unreachable
+
+        # Then code after skip() did not execute
+        assert after_skip_ran is False
+
+    def test_skip_renders_info_header_no_checkmark(
+        self, make_recording_emitter: RecordingEmitterFactory
+    ) -> None:
+        """Verify skip() replaces the spinner with an info-styled completion (no checkmark)."""
+        # Given an emitter
+        e, out, _ = make_recording_emitter()
+
+        # When skip() is called inside the block
+        with e.step("warming caches") as s:
+            s.skip("already warm")
+
+        # Then the skip message appears without the success checkmark
+        text = out.export_text()
+        assert "already warm" in text
+        assert "✓" not in text  # default unicode success marker
+
+    def test_skip_writes_skipped_log_line(
+        self,
+        make_recording_emitter: RecordingEmitterFactory,
+        tmp_path: Path,
+    ) -> None:
+        """Verify skip() records a `skipped:` line in the logfile."""
+        # Given an emitter with a logfile
+        logfile = tmp_path / "run.log"
+        e, _, _ = make_recording_emitter(logfile=logfile)
+
+        # When skip() is called
+        with e.step("warming caches") as s:
+            s.skip("already warm")
+
+        # Then the logfile contains the skipped: line
+        contents = logfile.read_text()
+        assert "skipped: already warm" in contents
+
+    def test_skip_in_ephemeral_wipes_no_extra_output(
+        self, make_recording_emitter: RecordingEmitterFactory
+    ) -> None:
+        """Verify skip() in ephemeral mode wipes everything and prints no extra line."""
+        # Given an emitter with recording streams
+        e, _, err = make_recording_emitter()
+
+        # When skip() is called inside an ephemeral step
+        with e.step("warming caches", ephemeral=True) as s:
+            s.skip("already warm")
+
+        # Then no extra stderr error line is produced (skip is not an error)
+        err_text = err.export_text()
+        assert "already warm" not in err_text
+
+    def test_skip_markup_parses_tags(self, make_recording_emitter: RecordingEmitterFactory) -> None:
+        """Verify skip(markup=True) parses Rich markup in the message."""
+        # Given an emitter
+        e, out, _ = make_recording_emitter()
+
+        # When skip() is called with markup-containing message
+        with e.step("warming caches") as s:
+            s.skip("[bold]already warm[/]", markup=True)
+
+        # Then the rendered output contains the message text but not the literal tags
+        text = out.export_text()
+        assert "already warm" in text
+        assert "[bold]" not in text
+
+    def test_skip_requires_message(self, make_recording_emitter: RecordingEmitterFactory) -> None:
+        """Verify skip() without a message argument is a TypeError."""
+        # Given an emitter
+        e, _, _ = make_recording_emitter()
+
+        # When skip() is called without a message
+        # Then a TypeError is raised
+        with pytest.raises(TypeError), e.step("warming caches") as s:
+            s.skip()  # type: ignore[call-arg]
+
+
+class TestStepUncaughtException:
+    """An uncaught exception inside step() propagates cleanly with no marker and no log line."""
+
+    def test_uncaught_exception_propagates(
+        self, make_recording_emitter: RecordingEmitterFactory
+    ) -> None:
+        """Verify an unhandled exception inside the block still propagates to the caller."""
+        # Given an emitter
+        e, _, _ = make_recording_emitter()
+        err_msg = "boom"
+
+        # When the block raises and nothing catches it
+        # Then the exception is re-raised by the context manager
+        with pytest.raises(RuntimeError, match=err_msg), e.step("compiling"):
+            raise RuntimeError(err_msg)
+
+    def test_uncaught_exception_writes_no_log_line(
+        self,
+        make_recording_emitter: RecordingEmitterFactory,
+        tmp_path: Path,
+    ) -> None:
+        """Verify step() writes no failed:/succeeded:/skipped: line on an uncaught exception."""
         # Given an emitter with a logfile
         logfile = tmp_path / "run.log"
         e, _, _ = make_recording_emitter(logfile=logfile)
         err_msg = "boom"
 
-        # When set_failure() is used and the block raises
-        with pytest.raises(RuntimeError, match=err_msg), e.step("compiling") as s:
-            s.set_failure("failed after 17 files")
+        # When the block raises
+        with pytest.raises(RuntimeError, match=err_msg), e.step("compiling"):
             raise RuntimeError(err_msg)
 
-        # Then the logfile records the setter message
+        # Then the logfile has the `starting:` line but no completion line
         contents = logfile.read_text()
-        assert "failed: failed after 17 files" in contents
+        assert "starting: compiling" in contents
+        assert "failed:" not in contents
+        assert "succeeded:" not in contents
+        assert "skipped:" not in contents
 
-    def test_set_failure_ephemeral_surfaces_on_stderr(
+    def test_uncaught_exception_renders_no_error_marker(
         self, make_recording_emitter: RecordingEmitterFactory
     ) -> None:
-        """Verify set_failure() under ephemeral=True surfaces on stderr."""
-        # Given an emitter wired to recording stderr
+        """Verify the rendered output contains no error marker glyph on uncaught exception."""
+        # Given an emitter
+        e, out, _ = make_recording_emitter()
+        err_msg = "boom"
+
+        # When the block raises
+        with pytest.raises(RuntimeError, match=err_msg), e.step("compiling"):
+            raise RuntimeError(err_msg)
+
+        # Then no failure marker appears in the rendered output
+        text = out.export_text()
+        assert "✗" not in text  # unicode error marker
+        assert "compiling" in text  # original message still visible (neutralized header)
+
+    def test_uncaught_exception_ephemeral_emits_nothing_extra(
+        self, make_recording_emitter: RecordingEmitterFactory
+    ) -> None:
+        """Verify ephemeral=True wipes everything and emits no fresh stderr line on uncaught exception."""
+        # Given an emitter
         e, _, err = make_recording_emitter()
         err_msg = "boom"
 
-        # When an ephemeral step sets a failure message and raises
+        # When an ephemeral step's body raises
         with (
             pytest.raises(RuntimeError, match=err_msg),
-            e.step("warming caches", ephemeral=True) as s,
+            e.step("warming caches", ephemeral=True),
         ):
-            s.set_failure("cache priming failed at item 17")
             raise RuntimeError(err_msg)
 
-        # Then the setter's failure message appears on stderr
-        text = err.export_text()
-        assert "cache priming failed at item 17" in text
+        # Then no fresh error line is produced on stderr (caller owns error reporting)
+        err_text = err.export_text()
+        assert "warming caches" not in err_text
 
-    def test_set_failure_markup_parses_tags(
+    def test_subitems_remain_visible_after_uncaught_exception(
         self, make_recording_emitter: RecordingEmitterFactory
     ) -> None:
-        """Verify set_failure(markup=True) parses Rich markup in the message."""
+        """Verify sub-items added before the exception remain in the non-ephemeral output."""
         # Given an emitter
         e, out, _ = make_recording_emitter()
         err_msg = "boom"
 
-        # When set_failure() is invoked with markup=True before raising
+        # When sub-items are added then the block raises
         with pytest.raises(RuntimeError, match=err_msg), e.step("compiling") as s:
-            s.set_failure("[bold]aborted hard[/]", markup=True)
+            s.sub("src/a.py")
+            s.sub("src/b.py")
             raise RuntimeError(err_msg)
 
-        # Then the rendered output contains the message text without literal tags
+        # Then the sub-items appear in the rendered output
         text = out.export_text()
-        assert "aborted hard" in text
-        assert "[bold]" not in text
-
-    def test_set_failure_ignored_on_success(
-        self,
-        make_recording_emitter: RecordingEmitterFactory,
-        tmp_path: Path,
-    ) -> None:
-        """Verify set_failure() has no effect when the block completes normally."""
-        # Given an emitter with logfile
-        logfile = tmp_path / "run.log"
-        e, out, _ = make_recording_emitter(logfile=logfile)
-
-        # When set_failure() is called but the block succeeds
-        with e.step("compiling") as s:
-            s.set_failure("would-be failure")
-
-        # Then the failure setter value does not surface in success output or log
-        text = out.export_text()
-        assert "would-be failure" not in text
-        assert "would-be failure" not in logfile.read_text()
-
-
-class TestStepSkipMsg:
-    """`skip_msg` kwarg supplies the default text used when `set_skipped()` fires."""
-
-    def test_skip_msg_displays_when_set_skipped_called_no_args(
-        self, make_recording_emitter: RecordingEmitterFactory
-    ) -> None:
-        """Verify skip_msg kwarg supplies the header when set_skipped() is called without args."""
-        # Given an emitter wired to a recording console
-        e, out, _ = make_recording_emitter()
-
-        # When step() runs and set_skipped() fires with no message
-        with e.step("compiling", skip_msg="nothing to compile") as s:
-            s.set_skipped()
-
-        # Then the kwarg message appears in the rendered output
-        text = out.export_text()
-        assert "nothing to compile" in text
-
-    def test_skip_msg_falls_back_to_original_message(
-        self, make_recording_emitter: RecordingEmitterFactory
-    ) -> None:
-        """Verify set_skipped() with no kwarg/arg uses the original step message."""
-        # Given an emitter and a step with no skip_msg
-        e, out, _ = make_recording_emitter()
-
-        # When set_skipped() fires without overrides
-        with e.step("compiling") as s:
-            s.set_skipped()
-
-        # Then the original message appears in the rendered output
-        text = out.export_text()
-        assert "compiling" in text
-
-    def test_skip_msg_records_skipped_in_logfile(
-        self,
-        make_recording_emitter: RecordingEmitterFactory,
-        tmp_path: Path,
-    ) -> None:
-        """Verify the logfile records a `skipped:` line when the step is skipped."""
-        # Given an emitter with a logfile
-        logfile = tmp_path / "run.log"
-        e, _, _ = make_recording_emitter(logfile=logfile)
-
-        # When the block marks itself skipped with a kwarg message
-        with e.step("compiling", skip_msg="nothing to compile") as s:
-            s.set_skipped()
-
-        # Then the logfile records the skipped: line with the kwarg message
-        contents = logfile.read_text()
-        assert "skipped: nothing to compile" in contents
-        # And it should not record a succeeded: or failed: line
-        assert "succeeded:" not in contents
-        assert "failed:" not in contents
-
-    def test_skip_msg_kwarg_alone_does_not_trigger_skip(
-        self,
-        make_recording_emitter: RecordingEmitterFactory,
-        tmp_path: Path,
-    ) -> None:
-        """Verify skip_msg kwarg without set_skipped() leaves the step on the success path."""
-        # Given an emitter with a logfile and a skip_msg kwarg
-        logfile = tmp_path / "run.log"
-        e, out, _ = make_recording_emitter(logfile=logfile)
-
-        # When the block exits normally without calling set_skipped()
-        with e.step("compiling", skip_msg="would skip"):
-            pass
-
-        # Then the step records as succeeded and skip_msg does not surface
-        contents = logfile.read_text()
-        assert "succeeded: compiling" in contents
-        assert "skipped:" not in contents
-        assert "would skip" not in out.export_text()
-
-
-class TestSetSkippedFromBlock:
-    """`Step.set_skipped()` marks the step as skipped from inside the block."""
-
-    def test_set_skipped_with_message_replaces_header(
-        self, make_recording_emitter: RecordingEmitterFactory
-    ) -> None:
-        """Verify set_skipped("msg") applied inside the block replaces the completion header."""
-        # Given an emitter
-        e, out, _ = make_recording_emitter()
-
-        # When the block decides to skip with an inline message
-        with e.step("compiling") as s:
-            s.set_skipped("no source files found")
-
-        # Then the inline message appears in the rendered output
-        text = out.export_text()
-        assert "no source files found" in text
-
-    def test_set_skipped_overrides_kwarg(
-        self, make_recording_emitter: RecordingEmitterFactory
-    ) -> None:
-        """Verify set_skipped(message) takes precedence over the skip_msg kwarg."""
-        # Given an emitter with a kwarg-provided skip_msg
-        e, out, _ = make_recording_emitter()
-
-        # When set_skipped() overrides it from inside the block
-        with e.step("compiling", skip_msg="kwarg skip") as s:
-            s.set_skipped("setter skip")
-
-        # Then the setter's message appears and the kwarg's does not
-        text = out.export_text()
-        assert "setter skip" in text
-        assert "kwarg skip" not in text
-
-    def test_set_skipped_in_logfile(
-        self,
-        make_recording_emitter: RecordingEmitterFactory,
-        tmp_path: Path,
-    ) -> None:
-        """Verify set_skipped() message is recorded in the `skipped:` log line."""
-        # Given an emitter with a logfile
-        logfile = tmp_path / "run.log"
-        e, _, _ = make_recording_emitter(logfile=logfile)
-
-        # When set_skipped() is used inside the block
-        with e.step("compiling") as s:
-            s.set_skipped("no source files found")
-
-        # Then the logfile records the setter message under `skipped:`
-        contents = logfile.read_text()
-        assert "skipped: no source files found" in contents
-
-    def test_set_skipped_uses_info_styling_not_success(
-        self, make_recording_emitter: RecordingEmitterFactory
-    ) -> None:
-        """Verify the skipped completion does not use the success checkmark marker."""
-        # Given an emitter
-        e, out, _ = make_recording_emitter()
-
-        # When the block marks itself skipped
-        with e.step("compiling") as s:
-            s.set_skipped("no source files")
-
-        # Then the rendered output does not contain the success marker glyph
-        text = out.export_text()
-        assert "no source files" in text
-        # Success glyph (unicode or ASCII fallback) must not appear
-        assert "✓" not in text
-        assert "+ no source files" not in text
-
-    def test_set_skipped_markup_parses_tags(
-        self, make_recording_emitter: RecordingEmitterFactory
-    ) -> None:
-        """Verify set_skipped(markup=True) parses Rich markup in the message."""
-        # Given an emitter
-        e, out, _ = make_recording_emitter()
-
-        # When the setter is invoked with markup=True
-        with e.step("compiling") as s:
-            s.set_skipped("[bold]nothing to do[/]", markup=True)
-
-        # Then the rendered output contains the message text without literal tags
-        text = out.export_text()
-        assert "nothing to do" in text
-        assert "[bold]" not in text
-
-    def test_set_skipped_accepts_renderable(
-        self, make_recording_emitter: RecordingEmitterFactory
-    ) -> None:
-        """Verify set_skipped() accepts an arbitrary Rich renderable."""
-        # Given an emitter
-        e, out, _ = make_recording_emitter()
-
-        # When a Padding renderable is supplied
-        with e.step("compiling") as s:
-            s.set_skipped(Padding("no work to do", (0, 1)))
-
-        # Then the renderable's text appears in the rendered output
-        text = out.export_text()
-        assert "no work to do" in text
-
-    def test_set_skipped_ignored_on_failure(
-        self,
-        make_recording_emitter: RecordingEmitterFactory,
-        tmp_path: Path,
-    ) -> None:
-        """Verify set_skipped() has no effect when the block raises (failure path wins)."""
-        # Given an emitter with a logfile
-        logfile = tmp_path / "run.log"
-        e, _, _ = make_recording_emitter(logfile=logfile)
-        err_msg = "boom"
-
-        # When set_skipped() is called and then an exception is raised
-        with pytest.raises(RuntimeError, match=err_msg), e.step("compiling") as s:
-            s.set_skipped("would skip")
-            raise RuntimeError(err_msg)
-
-        # Then the logfile records `failed:`, not `skipped:`
-        contents = logfile.read_text()
-        assert "failed: compiling" in contents
-        assert "skipped:" not in contents
-
-    def test_set_skipped_ephemeral_clears_console_but_logs(
-        self,
-        make_recording_emitter: RecordingEmitterFactory,
-        tmp_path: Path,
-    ) -> None:
-        """Verify ephemeral skip wipes the console output but records skipped: in logfile."""
-        # Given an emitter with logfile and an ephemeral step
-        logfile = tmp_path / "run.log"
-        e, out, _ = make_recording_emitter(logfile=logfile)
-
-        # When the block marks itself skipped under ephemeral=True
-        with e.step("warming caches", ephemeral=True, skip_msg="caches already warm") as s:
-            s.set_skipped()
-
-        # Then the console is clean of skip text (ephemeral wipes the marker)
-        # but the logfile records the skip
-        assert "caches already warm" not in out.export_text()
-        assert "skipped: caches already warm" in logfile.read_text()
-
-
-class TestModuleLevelStepSkip:
-    """Module-level `step()` forwards `skip_msg` to the default emitter."""
-
-    def test_module_step_accepts_skip_msg(
-        self,
-        make_recording_emitter: RecordingEmitterFactory,
-        isolated_default: None,
-    ) -> None:
-        """Verify the module-level step() forwards skip_msg to the default emitter."""
-        # Given the default emitter is replaced with a recording one
-        e, out, _ = make_recording_emitter()
-        pp_emitter.set_default(e)
-
-        # When the module-level step() runs and the block calls set_skipped()
-        with pp_emitter.step("compiling", skip_msg="nothing to compile") as s:
-            s.set_skipped()
-
-        # Then the kwarg message appears in the rendered output
-        text = out.export_text()
-        assert "nothing to compile" in text
+        assert "src/a.py" in text
+        assert "src/b.py" in text

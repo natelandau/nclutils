@@ -1,6 +1,6 @@
 # Pretty Printing
 
-Themed console output and file logging for Python CLI scripts. A thin layer over [Rich](https://github.com/Textualize/rich) that gives you `info` / `success` / `warning` / `error` / `debug` / `trace` / `dryrun` calls, a spinner-driven `step()` context manager, and an optional parallel logfile.
+Themed console output and a parallel logfile for Python CLI scripts. A thin layer over [Rich](https://github.com/Textualize/rich) that gives you `info` / `success` / `warning` / `error` / `debug` / `trace` / `dryrun` calls, a spinner-driven `step()` context manager, automatic stdout/stderr routing, and per-level markers.
 
 ```python
 from nclutils import pp
@@ -15,9 +15,7 @@ pp.warning("API rate limit at 80%")
 ! API rate limit at 80%
 ```
 
-## What it owns
-
-`pp` handles the four things that grow out of `print()` in any non-trivial CLI script: the verbosity gates (`--verbose` / `--quiet`), the stdout/stderr split, Rich-markup escaping for untrusted input, and a preset theme.
+`pp` handles the four things that grow out of `print()` in any non-trivial CLI script: `--verbose` / `--quiet` gating, stdout/stderr routing, Rich-markup escaping for untrusted input, and a consistent theme.
 
 ## Quick start
 
@@ -25,33 +23,86 @@ pp.warning("API rate limit at 80%")
 import time
 from nclutils import pp
 
-pp.configure(verbosity=pp.Verbosity.DEBUG)
-
 pp.info("starting build")
 
 with pp.step("compiling sources") as s:
     time.sleep(0.5)
-    s.sub("compiling src/api.py")
-    s.sub("compiling src/cli.py")
+    s.sub("src/api.py")
+    s.sub("src/cli.py")
 
 pp.success("build complete", details=["artifact: dist/app-1.4.2.tar.gz"])
 ```
 
-The `pp.step()` block shows a live spinner with sub-items beneath it. On success it turns into a green checkmark; on any exception (including `SystemExit` and `KeyboardInterrupt`) it turns into a red X and the exception re-raises.
+`pp.step()` shows a live spinner while the body runs. On natural completion it resolves to a green checkmark, and the sub-items remain on screen. `pp.success(..., details=[...])` renders the details as a small tree beneath the message.
 
 ## Output levels
 
-Every level routes through the same shape: `pp.func(message, details=[...])`. `details` is optional. Items render as a tree beneath the message. Non-final items are prefixed with `├─` and the final item with `└─`, matching `pp.step()`'s sub-item layout. Multi-line renderables (Tables, JSON, multi-line `Pretty` outputs) get a `│ ` continuation pipe under non-final positions and a blank gutter under the final position. String items are colored with the level's `detail_style`; Rich markup is escaped by default so user-supplied strings can't inject styling. Non-strings are auto-rendered with Rich (dicts, dataclasses, and arbitrary objects via `Pretty`; `JSON` / `Syntax` / `Table` pass through unchanged).
-
-For example, this call:
+Every level method routes through the same shape:
 
 ```python
-from nclutils import pp
-
-pp.success("deployed", details=["build #1742", "rollout 100%", "duration: 3.2s"])
+pp.func(message, *, details=None, markup=False, tag=None, right_tag=None, exception=False)
 ```
 
-renders as:
+| Function      | Stream | Marker                       | Gated by                   |
+| ------------- | ------ | ---------------------------- | -------------------------- |
+| `pp.info`     | stdout | (none)                       | `quiet` suppresses         |
+| `pp.success`  | stdout | `✓`                          | `quiet` suppresses         |
+| `pp.warning`  | stderr | `!`                          | always renders             |
+| `pp.error`    | stderr | `✗`                          | always renders             |
+| `pp.critical` | stderr | `‼`                          | always renders             |
+| `pp.dryrun`   | stdout | `~ [dry-run]`                | always renders             |
+| `pp.debug`    | stdout | `›`                          | shown at `DEBUG` or higher |
+| `pp.trace`    | stdout | `·`                          | shown at `TRACE`           |
+| `pp.header`   | stdout | (rule line)                  | `quiet` suppresses         |
+| `pp.step`     | stdout | spinner, then outcome marker | always renders             |
+
+`pp.critical` is severity-only and does not raise. Use it for "the world is broken" notices that warrant more visual weight than `pp.error`.
+
+`pp.header()` draws a `Console.rule()` with an optional centered title to break long output into scannable sections:
+
+```python
+pp.header("phase 1: download")
+# ... work ...
+pp.header("phase 2: process")
+```
+
+### Wiring up `--verbose` and `--quiet`
+
+`pp.Verbosity` is an `IntEnum` with `INFO`, `DEBUG`, `TRACE`, so a `-v` count flag maps cleanly:
+
+```python
+import argparse
+from nclutils import pp
+
+parser = argparse.ArgumentParser()
+parser.add_argument("-v", "--verbose", action="count", default=0)
+parser.add_argument("-q", "--quiet", action="store_true")
+args = parser.parse_args()
+
+pp.configure(verbosity=args.verbose, quiet=args.quiet)
+```
+
+The two flags are independent:
+
+- `verbosity` only gates `debug` and `trace`. The default is `INFO`. Out-of-range integers are clamped, so `-vvvvv` is safe.
+- `quiet=True` suppresses `info`, `success`, `header`, and `kv`. Warnings, errors, dry-run notices, and step lifecycle still render.
+
+Combining `--verbose --quiet` is reasonable: debug output without the routine info chatter.
+
+`pp.configure()` is a partial update. Fields you don't pass are left alone, so you can call it as many times as you like:
+
+```python
+pp.configure(verbosity=pp.Verbosity.DEBUG)
+pp.configure(quiet=True)   # verbosity still DEBUG
+```
+
+## Detail trees
+
+Pass `details=[...]` to render items as a tree beneath the message. Non-final items are prefixed with `├─`, the final item with `└─`:
+
+```python
+pp.success("deployed", details=["build #1742", "rollout 100%", "duration: 3.2s"])
+```
 
 ```text
 ✓ deployed
@@ -60,50 +111,42 @@ renders as:
   └─ duration: 3.2s
 ```
 
-The `├─` and `└─` glyphs are styled via the `sub.pipe` theme key (the same key `pp.step()` uses for its sub-item connectors), so retuning that one entry restyles every tree connector across the API.
+String items are escaped by default and colored with the level's `detail_style`. Multi-line renderables (Tables, JSON, multi-line `Pretty` outputs) get a `│ ` continuation pipe under non-final positions and a blank gutter under the final position. Non-strings auto-render with Rich: dicts, dataclasses, and arbitrary objects go through `Pretty`; `JSON` / `Syntax` / `Table` pass through unchanged.
+
+```python
+from rich.json import JSON
+
+pp.debug("got response", details=[response_dict])
+pp.debug("raw payload", details=[JSON(resp.text)])
+```
+
+The connector glyphs share the `sub.pipe` Rich theme key (the same one `pp.step()` uses for its sub-items), so retuning that one entry restyles every tree connector across the API.
 
 > [!NOTE]
-> Tree connectors appear in stdout/stderr only. In logfile records, each detail item becomes its own log record at the parent's severity with the detail text in the standard `%(message)s` field, prefixed by two spaces; the file does not contain `├─`, `└─`, or `│` characters.
+> Tree connectors appear in stdout/stderr only. In logfile records, each detail item becomes its own log record at the parent's severity with the detail text in the standard `%(message)s` field, prefixed by two spaces. The file does not contain `├─`, `└─`, or `│` characters.
 
-Pass `markup=True` to opt into Rich markup parsing for `message` and any string `details` items in that call:
+## Markup and escaping
+
+Strings passed to any level method are Rich-markup-escaped by default. `[red]` in a message renders literally, not as styling. Pass `markup=True` to opt into parsing:
 
 ```python
 from rich.text import Text
 from nclutils import pp
 
 pp.info("Found [bold]42[/] matches", markup=True)
-pp.info(Text.from_markup("Found [bold]42[/] matches"))  # Text instances always keep their styling
+pp.info(Text.from_markup("Found [bold]42[/] matches"))   # Text instances always keep their styling
 ```
 
-Use `markup=True` when _you_ control the string. When the message comes from arbitrary input (file paths, exception messages, JSON snippets), keep the default escape so brackets in the input can't accidentally render as styling or raise `MarkupError`.
+Use `markup=True` only when you control the string. For arbitrary input (file paths, exception messages, JSON snippets), keep the default escape so brackets can't accidentally render as styling or raise `MarkupError`.
 
-| Function      | Stream | Marker                   | Gated by                   |
-| ------------- | ------ | ------------------------ | -------------------------- |
-| `pp.info`     | stdout | (none)                   | `quiet` suppresses         |
-| `pp.success`  | stdout | `✓`                      | `quiet` suppresses         |
-| `pp.warning`  | stderr | `!`                      | always renders             |
-| `pp.error`    | stderr | `✗`                      | always renders             |
-| `pp.critical` | stderr | `‼`                      | always renders             |
-| `pp.dryrun`   | stdout | `~ [dry-run]`            | always renders             |
-| `pp.debug`    | stdout | `›`                      | shown at `DEBUG` or higher |
-| `pp.trace`    | stdout | `·`                      | shown at `TRACE`           |
-| `pp.header`   | stdout | (rule line)              | `quiet` suppresses         |
-| `pp.step`     | stdout | spinner, then `✓` or `✗` | always renders             |
+## Per-call tags
 
-`pp.critical` is severity-only and does not raise. Use it for "the world is broken" notices that warrant a more emphatic visual than `pp.error`.
-
-Every level method (`info`, `success`, `warning`, `error`, `critical`, `dryrun`, `debug`, `trace`) accepts the optional `tag=` and `right_tag=` kwargs documented in [Per-call tags](#per-call-tags) below.
-
-### Per-call tags
-
-Every level method accepts `tag=` and `right_tag=` for one-off metadata that doesn't warrant a theme change:
+Every level method accepts `tag=` and `right_tag=` for one-off metadata:
 
 ```python
 pp.info("saved", tag="api", right_tag="200ms")
 pp.error("upload failed", tag="uploader")
 ```
-
-Renders:
 
 ```text
 [api] saved                                                            200ms
@@ -112,16 +155,16 @@ Renders:
 
 `tag` is dim text rendered between the marker and the message. It is recorded inline in the logfile (`[api] saved`) so file consumers see the same metadata that appeared on the console.
 
-`right_tag` is dim text right-aligned to the console width on the first line only. It is **presentation-only** and is never written to the logfile.
+`right_tag` is dim text right-aligned to the console width on the first line only. It is presentation-only and is never written to the logfile.
 
-When `right_tag` is passed to `pp.debug` or `pp.trace`, the caller's value replaces the auto-elapsed `[+s.fffs]` marker on the console; the logfile still records the elapsed timing so the audit trail is preserved.
+When `right_tag` is passed to `pp.debug` or `pp.trace`, the caller's value replaces the auto-elapsed `[+s.fffs]` marker on the console. The logfile still records the elapsed timing so the audit trail is preserved.
 
 `pp.dryrun` combines a caller-supplied `tag` with its built-in `[dry-run]` marker on both the console and the logfile, with the caller's tag rendered first (`[deploy] [dry-run] would push`).
 
 > [!NOTE]
 > The caller is responsible for Rich-markup-escaping any `[`, `]`, or other reserved characters in `tag` and `right_tag`. Pass plain ASCII tags or pre-escaped strings.
 
-### Exceptions and tracebacks
+## Tracebacks
 
 Every level method accepts an `exception=` kwarg. Pass an exception instance to render a styled Rich Traceback below the message:
 
@@ -152,36 +195,14 @@ except UploadError:
 
 Outside an `except` block, `exception=True` is a silent no-op (matches the behavior of `logging.exception()`).
 
-Pass `show_locals=True` for verbose dumps that include each frame's local variables. Rich handles its own glyph fallbacks based on console encoding, so the traceback renders cleanly on terminals that can't display box-drawing characters.
-
-The formatted traceback is also written to the logfile as continuation lines under the parent record at the same severity, so a level filter drops the traceback alongside its message.
+Pass `show_locals=True` for verbose dumps that include each frame's local variables. The formatted traceback is also written to the logfile as continuation lines under the parent record at the same severity, so a level filter drops the traceback alongside its message.
 
 > [!NOTE]
-> `exception=` is accepted on every level method (`info`, `success`, `warning`, `error`, `critical`, `debug`, `trace`, `dryrun`). It is not supported on `header()` or `step()`, both of which already manage their own exception display.
-
-You can pass Rich renderables in `details` to get syntax-aware output, which is especially useful at `debug` / `trace`:
-
-```python
-from rich.json import JSON
-from nclutils import pp
-
-pp.debug("got response", details=[response_dict])
-pp.debug("raw payload", details=[JSON(resp.text)])
-```
-
-`pp.header()` draws a `Console.rule()` with an optional centered title to break long output into scannable sections:
-
-```python
-from nclutils import pp
-
-pp.header("phase 1: download")
-# ... work ...
-pp.header("phase 2: process")
-```
+> `exception=` is accepted on every level method (`info`, `success`, `warning`, `error`, `critical`, `debug`, `trace`, `dryrun`). It is not supported on `header()` or `step()`, both of which manage their own outcome display. For `step()`, use `s.fail(message, exception=...)` instead.
 
 ## Key/value blocks
 
-`pp.kv()` renders aligned key/value pairs as a clean section block, which is handy for status summaries and final-state output:
+`pp.kv()` renders aligned key/value pairs as a clean section block, useful for status summaries and final-state output:
 
 ```python
 pp.header("Build Status")
@@ -202,7 +223,7 @@ pp.kv({
   Duration: 3.2s
 ```
 
-Keys are padded automatically, so you don't need to pre-align them. Pass a `list[tuple[str, Any]]` when you need duplicate keys or want to control ordering explicitly:
+Keys are padded automatically. Pass a `list[tuple[str, Any]]` when you need duplicate keys or want explicit ordering:
 
 ```python
 pp.kv([
@@ -212,47 +233,14 @@ pp.kv([
 ])
 ```
 
-The default `indent=2` and `separator=": "` work for typical CLI output. Pass `markup=True` to parse Rich markup in string values; keys are always escaped (treated as identifiers).
+`indent=2` and `separator=": "` are the defaults. Pass `markup=True` to parse Rich markup in string values. Keys are always escaped (treated as identifiers). Non-string, non-renderable values pass through `str()`. Rich renderables (Tables, JSON, etc.) render below the key, indented to the value column.
 
 > [!NOTE]
 > `pp.kv()` is suppressed on the console by `quiet=True`, the same as `pp.info()` and `pp.success()`. Each pair is still recorded as one INFO record in the logfile (or one record per visual line for multi-line values), so the audit trail stays complete even under quiet.
 
-Non-string, non-renderable values pass through `str()`. Rich renderables (Tables, JSON, etc.) render below the key, indented to the value column.
-
-## Wiring up `--verbose` and `--quiet`
-
-`pp.Verbosity` is an `IntEnum` with three levels (`INFO`, `DEBUG`, `TRACE`), so a `-v` count flag maps cleanly:
-
-```python
-import argparse
-from nclutils import pp
-
-parser = argparse.ArgumentParser()
-parser.add_argument("-v", "--verbose", action="count", default=0)
-parser.add_argument("-q", "--quiet", action="store_true")
-args = parser.parse_args()
-
-pp.configure(verbosity=args.verbose, quiet=args.quiet)
-```
-
-Out-of-range integers are clamped, so `-vvvvv` is safe.
-
-The two flags are independent gates:
-
-- `verbosity` only gates `debug` and `trace`. The default is `INFO`.
-- `quiet=True` suppresses `info`, `success`, and `header`. Warnings, errors, dry-run notices, and steps still render.
-- `--verbose --quiet` is a sensible combination: you get debug output without the routine info chatter.
-
-`pp.configure()` is a partial update. Fields you don't pass are left alone. Call it as many times as you like:
-
-```python
-pp.configure(verbosity=pp.Verbosity.DEBUG)
-pp.configure(quiet=True)         # verbosity still DEBUG
-```
-
 ## The `step()` context manager
 
-`pp.step()` renders a Rich `Live` spinner that updates while your code runs, then resolves to a success or failure marker:
+`pp.step()` renders a Rich `Live` spinner while the body runs, then resolves to one of four outcomes:
 
 ```python
 from nclutils import pp
@@ -263,87 +251,101 @@ with pp.step("running migrations") as s:
         s.sub(f"applied {migration.name}")
 ```
 
-On exit the spinner stops, the marker (`✓` or `✗`) is rendered, and any sub-items remain on screen so the final output is a static record of what happened.
+| Trigger                                  | Outcome                                                                                                                          |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Block exits naturally                    | Green `✓` marker. The success line keeps the original `message` (or whatever `success_msg=` / `s.set_success_msg()` set).        |
+| `s.fail(msg)` called inside the block    | Red `✗` marker, `failed:` logfile entry. The block exits early; code after `s.fail()` does not run.                              |
+| `s.skip(msg)` called inside the block    | Info-styled completion (no checkmark, no error glyph), `skipped:` logfile entry. The block exits early.                          |
+| Any other exception escapes the block    | Exception propagates to the caller. No marker, no log line. The spinner is replaced with a static line so it doesn't stay frozen on screen; sub-items remain. The caller owns error reporting. |
 
-For transient progress that shouldn't clutter the final transcript, pass `ephemeral=True`. The spinner and sub-items are wiped on success; on failure only the red X surfaces:
+Sub-items added via `s.sub()` render beneath the spinner during the step and remain on screen beneath the final completion line.
+
+For transient progress that shouldn't clutter the final transcript, pass `ephemeral=True`. The spinner and sub-items are wiped on natural completion or `s.skip()`, leaving no console trace. `s.fail()` still surfaces a fresh `✗ message` line on stderr after wiping, so failures aren't silently hidden.
 
 ```python
 with pp.step("warming caches", ephemeral=True) as s:
     warm_cache()
     s.sub("cache populated")
-# success leaves no trace; failure still prints "✗ warming caches"
+# success leaves no trace
 ```
 
 > [!WARNING]
 > `pp.step()` cannot nest. Rich's `Live` doesn't stack, so nesting silently corrupts the parent's display. `pp` raises `RuntimeError` when you try.
 
-### Customizing the success and failure messages
+### Customizing the success message
 
-By default `step()` reuses the original message for both success and failure. To show different text on completion, pass `success_msg` and/or `failure_msg`:
+By default `step()` reuses the original message on success. To show different text, pass `success_msg`:
 
 ```python
 with pp.step(
     "compiling sources",
     success_msg="compiled 42 files in 1.2s",
-    failure_msg="compilation aborted",
 ) as s:
     s.sub("api.py")
     s.sub("cli.py")
 ```
 
-On success the spinner resolves to `✓ compiled 42 files in 1.2s`; on failure to `✗ compilation aborted`. Either kwarg can be omitted independently, and the omitted side falls back to the original message. The single `markup=` flag covers all three messages.
+The success line resolves to `✓ compiled 42 files in 1.2s`. The override is also recorded in the `succeeded:` logfile entry.
 
-The override messages are also recorded in the logfile (`succeeded: ...` / `failed: ...`) so the audit trail matches what the user saw.
-
-> [!NOTE]
-> When `ephemeral=True`, the success branch wipes the screen as usual; `success_msg` is still recorded in the logfile. The failure branch surfaces `failure_msg` on stderr if provided, otherwise the original message.
-
-### Updating the completion message from inside the block
-
-When the success or failure text depends on work done inside the block (a count, a duration, the name of the item that failed), call `s.set_success()` or `s.set_failure()` on the yielded `Step`:
+When the success text depends on work done inside the block (a count, a duration, an output path), call `s.set_success_msg()`:
 
 ```python
 with pp.step("compiling sources") as s:
     processed = []
-    try:
-        for path in sources:
-            compile_one(path)
-            processed.append(path)
-            s.sub(path.name)
-    except CompileError:
-        s.set_failure(f"aborted after {len(processed)} of {len(sources)} files")
-        raise
-    s.set_success(f"compiled {len(processed)} files")
+    for path in sources:
+        compile_one(path)
+        processed.append(path)
+        s.sub(path.name)
+    s.set_success_msg(f"compiled {len(processed)} files")
 ```
 
-The setter wins over the matching `success_msg` / `failure_msg` kwarg, which wins over the original message. Each setter takes its own `markup=` flag (defaults to `False`), so per-call escaping is independent of the `step(markup=...)` flag. The setter value also appears in the `succeeded:` / `failed:` logfile lines.
+The setter wins over the `success_msg` kwarg, which wins over the original message. Each takes its own `markup=` flag. `s.set_success_msg()` does not exit the block; it just records the message for natural completion.
 
-`set_success()` is a no-op when the block raises; `set_failure()` is a no-op when the block returns normally.
+### Failing a step
 
-### Marking a step as skipped
-
-Some steps neither succeed nor fail: there was nothing to do, a precondition wasn't met, or the work was intentionally bypassed. Call `s.set_skipped()` from inside the block to render the completion with info-level styling (no checkmark, no error glyph) and log a `skipped:` line instead of `succeeded:`:
+Call `s.fail(message)` inside the block to render the failure marker and exit early. Code after the call doesn't run:
 
 ```python
 with pp.step("compiling sources") as s:
-    if not sources:
-        s.set_skipped("no source files found")
-        return
     for path in sources:
+        if not path.exists():
+            s.fail(f"missing source: {path}")   # exits here
         compile_one(path)
+    s.set_success_msg(f"compiled {len(sources)} files")
 ```
 
-Pass the message inline, or pre-set it with `skip_msg=` and call `set_skipped()` with no arguments:
+To attach an exception's type and message to the `failed:` log line, pass `exception=`:
 
 ```python
-with pp.step("warming caches", skip_msg="caches already warm") as s:
+with pp.step("compiling sources") as s:
+    try:
+        compile_all(sources)
+    except CompileError as e:
+        s.fail("compilation aborted", exception=e)
+```
+
+> [!NOTE]
+> `s.fail()` is the only way to render the failure marker. An uncaught exception inside `step()` propagates through cleanly with no marker and no log line, leaving the original message visible (no spinner) and any sub-items intact. The caller owns error reporting in that path.
+
+### Skipping a step
+
+Call `s.skip(message)` when the work didn't run (nothing to do, preconditions unmet, intentional bypass). Skip is not an error: the completion renders with info-level styling (no checkmark, no error glyph) and the logfile records a `skipped:` line:
+
+```python
+with pp.step("warming caches") as s:
     if cache.is_warm():
-        s.set_skipped()
-        return
+        s.skip("caches already warm")   # exits here
     warm_cache()
 ```
 
-`set_skipped()` (or the `skip_msg` kwarg) is a no-op until `set_skipped()` actually fires; without that call the block follows the success path as usual. The failure path takes precedence: if the block raises after `set_skipped()`, the step renders as failed. The setter value, kwarg, and original message follow the same precedence as the success path (setter > kwarg > original).
+In ephemeral mode, skip wipes the spinner with no extra output:
+
+```python
+with pp.step("warming caches", ephemeral=True) as s:
+    if cache.is_warm():
+        s.skip("caches already warm")
+# wipes with no console output
+```
 
 ## File logging
 
@@ -375,30 +377,30 @@ Produces `run.log`:
 2026-05-04 14:32:01.236 | INFO     | succeeded: compile assets
 ```
 
-Console rendering and file rendering are independent. The console ignores `loglevel`; the file ignores `quiet` and `verbosity`. Every level method writes to the file before checking its console gate, so the logfile remains a complete audit trail.
+Console and file rendering are independent. The console ignores `loglevel`; the file ignores `quiet` and `verbosity`. Every level method writes to the file before checking its console gate, so the logfile is a complete audit trail.
 
 ### What gets logged
 
-| Emission                      | Logged at                         | Notes                                                                                                  |
-| ----------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `info` / `success` / `dryrun` | `INFO` (20)                       | `success`/`dryrun` aren't real severities. `dryrun` keeps `[dry-run]` inline.                          |
-| `debug`                       | `DEBUG` (10)                      | `[+s.fffs]` elapsed tag inlined into message.                                                          |
-| `trace`                       | `TRACE` (5)                       | Custom level registered with stdlib `logging` at import.                                               |
-| `warning`                     | `WARNING` (30)                    |                                                                                                        |
-| `error`                       | `ERROR` (40)                      |                                                                                                        |
-| `critical`                    | `CRITICAL` (50)                   | Severity-only and does not raise.                                                                      |
-| `step()` lifecycle            | `INFO` start, `INFO`/`ERROR` exit | `ephemeral=True` does not suppress file output.                                                        |
-| `Step.sub()`                  | `INFO`                            | Indented continuation, written immediately.                                                            |
-| `kv()`                        | `INFO` (20)                       | One INFO record per pair; one per visual line for multi-line values. Recorded even under `quiet=True`. |
-| `header()`                    | (not logged)                      | Console-only structural sugar.                                                                         |
+| Emission                      | Logged at                     | Notes                                                                                                  |
+| ----------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `info` / `success` / `dryrun` | `INFO` (20)                   | `success`/`dryrun` aren't real severities. `dryrun` keeps `[dry-run]` inline.                          |
+| `debug`                       | `DEBUG` (10)                  | `[+s.fffs]` elapsed tag inlined into message.                                                          |
+| `trace`                       | `TRACE` (5)                   | Custom level registered with stdlib `logging` at import.                                               |
+| `warning`                     | `WARNING` (30)                |                                                                                                        |
+| `error`                       | `ERROR` (40)                  |                                                                                                        |
+| `critical`                    | `CRITICAL` (50)               | Severity-only and does not raise.                                                                      |
+| `step()` lifecycle            | `INFO` start, outcome at exit | `succeeded:` / `failed:` / `skipped:` line at exit. Uncaught exceptions write only the `starting:` line. |
+| `Step.sub()`                  | `INFO`                        | Indented continuation, written immediately.                                                            |
+| `kv()`                        | `INFO` (20)                   | One INFO record per pair; one per visual line for multi-line values. Recorded even under `quiet=True`. |
+| `header()`                    | (not logged)                  | Console-only structural sugar.                                                                         |
 
-Filtering with `loglevel=pp.LogLevel.WARNING` drops every `info` / `success` / `dryrun` / `debug` / `trace` emission and its detail continuations as a unit. `LogLevel` is severity-shaped, not emission-shaped, so there's no way to "log only successes."
+Filtering with `loglevel=pp.LogLevel.WARNING` drops every `info` / `success` / `dryrun` / `debug` / `trace` emission and its detail continuations together. `LogLevel` filters by severity, not by emission type, so there's no way to "log only successes."
 
 ### What's not included
 
-The logfile is for CLI audit and diagnostic capture. It does not ship rotation, JSON output, syslog, or multi-process safety. If you need those, run `pp` on top of your own preconfigured `logging.Logger`, or use external rotation (`logrotate`, `savelog`).
+The logfile is for CLI audit and diagnostic capture. It doesn't ship rotation, JSON output, syslog, or multi-process safety. If you need those, run `pp` on top of your own preconfigured `logging.Logger`, or use external rotation (`logrotate`, `savelog`).
 
-## Customizing the theme
+## Theming
 
 The seven output levels (`info`, `success`, `warning`, `error`, `debug`, `trace`, `dryrun`) each expose three things you can override: the main message style, the indented detail style, and the marker glyph. Override any combination in a `Theme`:
 
@@ -408,7 +410,7 @@ from nclutils import pp
 pp.configure(
     theme=pp.Theme(
         success=pp.Level(style="cyan", marker="🎉 "),
-        warning=pp.Level(marker=""),  # hide the warning marker entirely
+        warning=pp.Level(marker=""),   # hide the warning marker entirely
     ),
 )
 
@@ -420,8 +422,6 @@ Anything you don't set keeps its default. `pp.Level(style="cyan")` only changes 
 Successive `pp.configure(theme=...)` calls accumulate at the field level:
 
 ```python
-from nclutils import pp
-
 pp.configure(theme=pp.Theme(success=pp.Level(style="blue", marker="🎉 ")))
 pp.configure(theme=pp.Theme(success=pp.Level(detail_style="navy")))
 # success now has style="blue", detail_style="navy", marker="🎉 "
@@ -435,44 +435,29 @@ The horizontal rule under `pp.header()` and the `[dry-run]` tag are not customiz
 
 ### ASCII fallback
 
-When the console's encoding can't produce the default unicode glyphs (e.g. `LANG=C`, `PYTHONIOENCODING=ascii`, or a Windows host whose code page rejects box-drawing characters), `pp` automatically falls back to an ASCII-only rendering. Detection is automatic, there is no flag to set:
+When the console's encoding can't produce the default unicode glyphs (`LANG=C`, `PYTHONIOENCODING=ascii`, or a Windows host whose code page rejects box-drawing characters), `pp` falls back to ASCII automatically. Detection is automatic; there is no flag to set.
 
 - Detail tree connectors (`├─`, `└─`, `│`) collapse to a simple `- ` prefix on every line, with continuation lines aligned under the value column.
 - `pp.step()` sub-items render with the same `- ` prefix instead of tree connectors.
 - Default level markers fall back per the table below.
 
-| Level    | Unicode | ASCII    |
-| -------- | ------- | -------- |
-| info     | (none)  | (none)   |
-| success  | `✓`     | `+`      |
-| warning  | `!`     | `!`      |
-| error    | `✗`     | `x`      |
-| critical | `‼`     | `!!`     |
-| debug    | `›`     | `>`      |
-| trace    | `·`     | `.`      |
-| dryrun   | `~`     | `~`      |
+| Level    | Unicode | ASCII |
+| -------- | ------- | ----- |
+| info     | (none)  | (none)|
+| success  | `✓`     | `+`   |
+| warning  | `!`     | `!`   |
+| error    | `✗`     | `x`   |
+| critical | `‼`     | `!!`  |
+| debug    | `›`     | `>`   |
+| trace    | `·`     | `.`   |
+| dryrun   | `~`     | `~`   |
 
 User-supplied `pp.Theme(level=pp.Level(marker=...))` markers are always respected verbatim, even on ASCII consoles. The fallback only triggers when a level still has its built-in default marker.
 
 > [!NOTE]
 > Detection probes `console.encoding` at render time and chooses the rendering path per call. To force one path or the other, build your own `Console` with the desired encoding and pass it via `pp.configure(console=...)` or `pp.Emitter(console=...)`.
 
-## Reaching the underlying consoles
-
-When you need to render a Rich object (`Table`, `Syntax`, `Panel`, …) on the same stream the level functions write to, use the `pp.console()` and `pp.err_console()` accessors:
-
-```python
-from rich.table import Table
-from nclutils import pp
-
-table = Table("name", "status")
-table.add_row("api", "ok")
-pp.console().print(table)
-
-pp.err_console().print("[bold red]fatal[/]")
-```
-
-## Library use: isolated emitters
+## Library use and testing
 
 The module-level functions delegate to a shared default `Emitter`. If you're writing a library that needs its own output configuration without trampling its host CLI's settings, instantiate an `Emitter` directly:
 
@@ -485,6 +470,19 @@ logger.debug("only this emitter's verbosity matters here")
 ```
 
 Each `Emitter` owns its own `verbosity`, `quiet`, `console`, `err_console`, and logfile. Nothing leaks across instances.
+
+When you need to render a Rich object (`Table`, `Syntax`, `Panel`, etc.) on the same stream the level functions write to, use `pp.console()` and `pp.err_console()`:
+
+```python
+from rich.table import Table
+from nclutils import pp
+
+table = Table("name", "status")
+table.add_row("api", "ok")
+pp.console().print(table)
+
+pp.err_console().print("[bold red]fatal[/]")
+```
 
 For tests, swap in a recording console so you can assert on output:
 
@@ -520,14 +518,59 @@ finally:
 
 Every name below is available on the `pp` namespace (`from nclutils import pp`) and from `nclutils.pp` directly (e.g. `from nclutils.pp import info`).
 
-- `info`, `success`, `warning`, `error`, `critical`, `dryrun`, `debug`, `trace`, `header`. Output functions. Every level function accepts `tag=` / `right_tag=` (see [Per-call tags](#per-call-tags)) and `exception=` / `show_locals=` (see [Exceptions and tracebacks](#exceptions-and-tracebacks)).
-- `kv(items, *, indent=2, separator=": ", markup=False)`. Render aligned key/value blocks (see [Key/value blocks](#keyvalue-blocks)).
-- `step(message, *, ephemeral=False)`. Spinner context manager.
-- `configure(*, verbosity=None, quiet=None, console=None, err_console=None, theme=None, logfile=None, loglevel=None, logfmt=None)`. Partial update of the default emitter.
-- `Emitter`. Instantiate directly for isolated configuration.
-- `Theme`, `Level`. Per-level style and marker overrides. Pass `Theme(success=Level(...))` to `configure()` or `Emitter()`.
-- `Verbosity`. `IntEnum` with `INFO`, `DEBUG`, `TRACE`.
-- `LogLevel`. `IntEnum` aligned with stdlib `logging` (`TRACE=5`, `DEBUG=10`, …, `CRITICAL=50`). Used as the `loglevel=` filter cutoff for the logfile.
-- `THEME`. The Rich `Theme` used by default consoles, in case you build your own.
-- `console()`, `err_console()`. Return the default emitter's stdout / stderr `Console` for direct Rich rendering. Re-resolves on each call.
-- `get_default()`, `set_default(emitter)`. Read or replace the shared default emitter.
+### Output functions
+
+`info`, `success`, `warning`, `error`, `critical`, `dryrun`, `debug`, `trace`. Every level method accepts:
+
+- `message`: the body text. Strings are escaped unless `markup=True`. Rich renderables pass through unchanged.
+- `details=None`: optional iterable rendered as a tree beneath the message.
+- `markup=False`: parse Rich markup in `message` and string `details` items.
+- `tag=None` / `right_tag=None`: see [Per-call tags](#per-call-tags).
+- `exception=False` / `show_locals=False`: see [Tracebacks](#tracebacks).
+- `style=None` / `detail_style=None` / `marker=None`: per-call overrides of the level's theme.
+
+### Structural output
+
+```python
+header(message="", *, align="center", markup=False, **kwargs) -> None    # **kwargs forwarded to Console.rule()
+kv(items, *, indent=2, separator=": ", markup=False) -> None
+```
+
+### `step()` context manager
+
+```python
+step(message, *, ephemeral=False, markup=False, success_msg=None) -> Generator[Step]
+```
+
+The yielded `Step` object has four public methods:
+
+```python
+Step.sub(text, *, markup=False) -> None
+Step.set_success_msg(message, *, markup=False) -> None
+Step.fail(message, *, exception=False, markup=False) -> NoReturn
+Step.skip(message, *, markup=False) -> NoReturn
+```
+
+- `s.sub()`: append a sub-item beneath the spinner. Persists beneath the completion line in non-ephemeral mode.
+- `s.set_success_msg()`: override the success header. Does NOT exit the block; applied at natural completion. Ignored if the block exits via `fail()`, `skip()`, or an uncaught exception.
+- `s.fail()`: exit the block with a failure outcome (renders `✗`, writes `failed:` to the logfile). Pass `exception=` to attach exception details. Code after the call doesn't run.
+- `s.skip()`: exit the block with a skip outcome (info-styled completion, `skipped:` log line). Code after the call doesn't run.
+
+### Configuration
+
+```python
+configure(*, verbosity=None, quiet=None, console=None, err_console=None,
+          theme=None, logfile=None, loglevel=None, logfmt=None) -> None
+```
+
+Partial update of the shared default emitter. Fields you don't pass are left alone.
+
+### Emitter and supporting types
+
+- `Emitter(*, verbosity=Verbosity.INFO, quiet=False, console=None, err_console=None, theme=None, logfile=None, loglevel=LogLevel.INFO, logfmt=None)`: instantiate directly for isolated configuration. Same kwargs as `configure()`, but with positive defaults instead of `None`.
+- `Theme`, `Level`: per-level style and marker overrides. Pass `Theme(success=Level(...))` to `configure()` or `Emitter()`.
+- `Verbosity`: `IntEnum` with `INFO`, `DEBUG`, `TRACE`.
+- `LogLevel`: `IntEnum` aligned with stdlib `logging` (`TRACE=5`, `DEBUG=10`, …, `CRITICAL=50`). Used as the `loglevel=` filter cutoff for the logfile.
+- `THEME`: the Rich `Theme` used by default consoles, in case you build your own.
+- `console()`, `err_console()`: return the default emitter's stdout / stderr `Console` for direct Rich rendering. Re-resolves on each call.
+- `get_default()`, `set_default(emitter)`: read or replace the shared default emitter.

@@ -481,13 +481,16 @@ class TestStepLifecycleInLogfile:
     def test_step_failure_writes_starting_and_failed_with_continuation(
         self, tmp_path: Path
     ) -> None:
-        """Verify a failing step writes 'starting:' then 'failed:' at ERROR with the exception as a continuation."""
+        """Verify a step calling fail(exception=) writes 'starting:' then 'failed:' at ERROR with the exception as a continuation."""
         path = tmp_path / "run.log"
         e = Emitter(logfile=path)
 
         msg = "boom"
-        with pytest.raises(RuntimeError, match=msg), e.step("flaky thing"):
-            raise RuntimeError(msg)
+        with e.step("flaky thing") as s:
+            try:
+                raise RuntimeError(msg)
+            except RuntimeError as caught:
+                s.fail("flaky thing", exception=caught)
 
         lines = path.read_text(encoding="utf-8").splitlines()
         assert any("starting: flaky thing" in line and "INFO" in line for line in lines)

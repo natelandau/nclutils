@@ -15,7 +15,7 @@ import time
 import traceback as _traceback
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, NoReturn
 
 from rich.console import Console
 from rich.live import Live
@@ -462,6 +462,31 @@ def _resolve_step_message(
     return default_message, default_markup
 
 
+class _StepExit(BaseException):
+    """Internal control-flow signal raised by `Step.fail()` / `Step.skip()`.
+
+    Subclasses `BaseException` (not `Exception`) so a stray `except Exception:`
+    inside the step body does not swallow it. `Emitter.step()` catches it
+    specifically and dispatches to the matching outcome path.
+    """
+
+    __slots__ = ("exception", "markup", "message", "outcome")
+
+    def __init__(
+        self,
+        outcome: Literal["failure", "skip"],
+        message: str | RenderableType,
+        *,
+        markup: bool,
+        exception: BaseException | bool = False,
+    ) -> None:
+        super().__init__(outcome, message)
+        self.outcome = outcome
+        self.message = message
+        self.markup = markup
+        self.exception = exception
+
+
 @dataclass(frozen=True, slots=True)
 class _StepCompletion:
     """Completion state recorded by `step()` and rendered by `Step.__rich_console__`.
@@ -497,16 +522,15 @@ class Step:
         self._subs: list[Text] = []
         self._logsink: _LogSink | None = logsink
         self._completion: _StepCompletion | None = None
-        self.success_override: tuple[str | RenderableType, bool] | None = None
-        self.failure_override: tuple[str | RenderableType, bool] | None = None
-        self.skip_override: tuple[str | RenderableType, bool] | None = None
-        self.is_skipped: bool = False
+        self.success_msg_override: tuple[str | RenderableType, bool] | None = None
 
-    def set_success(self, message: str | RenderableType, *, markup: bool = False) -> None:
+    def set_success_msg(self, message: str | RenderableType, *, markup: bool = False) -> None:
         """Override the success header from inside the `step()` block.
 
-        Takes precedence over the `success_msg` kwarg on `step()`. No effect
-        if the block raises.
+        Does NOT exit. Recorded and applied when the block exits normally.
+        Takes precedence over the `success_msg=` kwarg on `step()`.
+        Ignored if the block exits via `fail()`, `skip()`, or an uncaught
+        exception.
 
         Args:
             message: Replacement success header. Strings are escaped unless
@@ -514,48 +538,54 @@ class Step:
                 renderables pass through.
             markup: When True, parses Rich markup in a `str` `message`.
         """
-        self.success_override = (message, markup)
+        self.success_msg_override = (message, markup)
 
-    def set_failure(self, message: str | RenderableType, *, markup: bool = False) -> None:
-        """Override the failure header from inside the `step()` block.
+    def fail(
+        self,
+        message: str | RenderableType,
+        *,
+        exception: BaseException | bool = False,
+        markup: bool = False,
+    ) -> NoReturn:
+        """End the step with a failure outcome.
 
-        Takes precedence over the `failure_msg` kwarg on `step()`. No effect
-        if the block completes normally.
+        Renders the error marker on the spinner line in place, writes a
+        `failed:` line to the logfile, and exits the `with` block. Code after
+        the call inside the block does not execute. Pass `exception=` to attach
+        the exception type/message (or active traceback when `True`) as a
+        logfile continuation line.
 
         Args:
-            message: Replacement failure header. Strings are escaped unless
+            message: Failure header text. Strings are escaped unless
                 `markup=True`; `Text` keeps its own styling; other Rich
                 renderables pass through.
+            exception: Optional exception to attach to the `failed:` log line.
+                Pass an instance, or `True` from inside an `except` block to
+                grab `sys.exc_info()`. Defaults to `False` (nothing attached).
             markup: When True, parses Rich markup in a `str` `message`.
         """
-        self.failure_override = (message, markup)
+        raise _StepExit("failure", message, markup=markup, exception=exception)  # noqa: EM101  # first positional arg is the discriminant, not an error message
 
-    def set_skipped(
+    def skip(
         self,
-        message: str | RenderableType | None = None,
+        message: str | RenderableType,
         *,
         markup: bool = False,
-    ) -> None:
-        """Mark the step as skipped instead of succeeded on normal block exit.
+    ) -> NoReturn:
+        """End the step with a skip outcome.
 
-        Use when the work the step describes did not run (for example, nothing
-        to do, preconditions unmet) but the situation is not an error. The
-        completion header renders with info-level styling and no checkmark, and
-        the logfile records a `skipped:` line instead of `succeeded:`.
-
-        If `message` is omitted, the header falls back to the `skip_msg`
-        kwarg on `step()`, then to the original step message. Has no effect
-        if the block raises (the failure path takes precedence).
+        Use when the work the step describes did not run (nothing to do,
+        preconditions unmet) but the situation is not an error. Renders an
+        info-styled completion header (no checkmark, no error glyph), writes a
+        `skipped:` line to the logfile, and exits the `with` block.
 
         Args:
-            message: Optional replacement header. Strings are escaped unless
+            message: Skip header text. Strings are escaped unless
                 `markup=True`; `Text` keeps its own styling; other Rich
                 renderables pass through.
             markup: When True, parses Rich markup in a `str` `message`.
         """
-        self.is_skipped = True
-        if message is not None:
-            self.skip_override = (message, markup)
+        raise _StepExit("skip", message, markup=markup)  # noqa: EM101  # first positional arg is the discriminant, not an error message
 
     def set_completion(self, completion: _StepCompletion) -> None:
         """Record completion state so __rich_console__ rebuilds the header with ASCII fallback.
@@ -1505,36 +1535,31 @@ class Emitter:
         ephemeral: bool = False,
         markup: bool = False,
         success_msg: str | RenderableType | None = None,
-        failure_msg: str | RenderableType | None = None,
-        skip_msg: str | RenderableType | None = None,
     ) -> Generator[Step]:
         """Show a spinner while the block runs, then a completion marker.
 
-        On success, prints the customized (or default) success marker followed
-        by the message in the success style. On any exception (including
-        typer.Exit), prints the error marker then re-raises. Sub-items added
-        via `Step.sub()` render beneath the spinner during the step and remain
-        on screen beneath the final marker.
+        On natural completion, prints the success marker followed by the
+        message in the success style. Sub-items added via `Step.sub()` render
+        beneath the spinner during the step and remain on screen beneath the
+        final marker. Calling `s.fail(msg)` or `s.skip(msg)` from inside the
+        block exits early via an internal sentinel and renders the
+        corresponding outcome; see `Step.fail` and `Step.skip` for details.
+
+        An uncaught exception inside the block propagates to the caller with
+        no failure marker, no error styling, and no `failed:` log line. The
+        spinner is neutralized so Live does not freeze on screen, but the
+        caller owns error reporting. To attach a marker and log line for a
+        recoverable failure, catch the exception and call `s.fail(...)`.
 
         When `ephemeral` is True the spinner and sub-items are cleared from the
-        console on completion. Success leaves no trace; failure prints only the
-        error marker so errors are not silently hidden.
-
-        The block can opt the step into a third "skipped" outcome by calling
-        `Step.set_skipped()` from inside the `with`. A skipped step renders
-        with info-level styling (no checkmark) and writes a `skipped:` line to
-        the logfile instead of `succeeded:`. The `skip_msg` kwarg supplies the
-        default header text for that outcome and only takes effect when
-        `set_skipped()` fires (it does not trigger the skip path on its own).
+        console on completion. Natural success leaves no trace; `s.fail()`
+        prints a visible error line on stderr after wiping.
 
         `success_msg` overrides the success-state header; defaults to the
-        original `message` styled as success. `failure_msg` overrides the
-        failure-state header; defaults to the original `message` styled as
-        error. `skip_msg` overrides the skipped-state header; defaults to the
-        original `message`. Any side may be omitted independently. The single
-        `markup=` flag covers all message kwargs. The succeeded:/failed:/skipped:
-        log lines also use the override messages when provided so the audit
-        trail matches what the user saw on the console.
+        original `message` styled as success. The `markup=` flag applies to
+        both `message` and `success_msg`. The succeeded: log line also uses
+        the override message when provided so the audit trail matches what
+        the user saw on the console.
 
         Args:
             message: Title shown next to the spinner. Strings are escaped by
@@ -1545,15 +1570,14 @@ class Emitter:
             markup: When True, parses Rich markup in a `str` `message`
                 instead of escaping.
             success_msg: Optional message to display on success in place of
-                the original `message`. Falls back to `message` when None.
-            failure_msg: Optional message to display on failure in place of
-                the original `message`. Falls back to `message` when None.
-            skip_msg: Optional message to display on skip in place of the
-                original `message`. Only used when `Step.set_skipped()` is
-                called from inside the block. Falls back to `message` when None.
+                the original `message`. Falls back to `message` when None,
+                and is overridden by `set_success_msg()` called from inside
+                the block.
 
         Yields:
-            A `Step` whose `sub()` method appends sub-items beneath the spinner.
+            A `Step` whose `sub()` method appends sub-items beneath the spinner,
+            and whose `fail()`/`skip()`/`set_success_msg()` methods control the
+            outcome.
 
         Raises:
             RuntimeError: If called inside another `step()` on the same emitter;
@@ -1579,62 +1603,82 @@ class Emitter:
             with Live(s, console=self.console, refresh_per_second=12.5, transient=ephemeral):
                 try:
                     yield s
-                except BaseException as exc:
-                    failure_message, failure_markup = _resolve_step_message(
-                        s.failure_override, failure_msg, message, default_markup=markup
-                    )
+                except _StepExit as exit_signal:
+                    if exit_signal.outcome == "failure":
+                        if not ephemeral:
+                            s.set_completion(
+                                _StepCompletion(
+                                    level_name="error",
+                                    message=exit_signal.message,
+                                    style=error_style,
+                                    marker=error_marker,
+                                    markup=exit_signal.markup,
+                                )
+                            )
+                        failure_text = _message_to_log_text(
+                            exit_signal.message, markup=exit_signal.markup
+                        )
+                        log_details = _format_exception_for_logfile(exit_signal.exception)
+                        self._logsink.emit(
+                            level=_LEVEL_TO_LOG_SEVERITY["error"],
+                            message=f"failed: {failure_text}",
+                            details=log_details,
+                        )
+                        if ephemeral:
+                            self.error(exit_signal.message, markup=exit_signal.markup)
+                        return
+                    # skip outcome: we've already written our own log line, so we
+                    # return out of `with Live(...)` instead of falling through to
+                    # the natural success bookkeeping below.
                     if not ephemeral:
-                        # Defer header construction to Step.__rich_console__ so
-                        # ASCII marker substitution sees the live console encoding.
                         s.set_completion(
                             _StepCompletion(
-                                level_name="error",
-                                message=failure_message,
-                                style=error_style,
-                                marker=error_marker,
-                                markup=failure_markup,
+                                level_name="info",
+                                message=exit_signal.message,
+                                style=info_style,
+                                marker=info_marker,
+                                markup=exit_signal.markup,
                             )
                         )
-                    failure_text = _message_to_log_text(failure_message, markup=failure_markup)
+                    skip_text = _message_to_log_text(exit_signal.message, markup=exit_signal.markup)
                     self._logsink.emit(
-                        level=_LEVEL_TO_LOG_SEVERITY["error"],
-                        message=f"failed: {failure_text}",
-                        details=[f"{type(exc).__name__}: {exc}"],
+                        level=_LEVEL_TO_LOG_SEVERITY["info"],
+                        message=f"skipped: {skip_text}",
+                        details=None,
                     )
-                    if ephemeral:
-                        # Pass the original renderable (not the plain-text strip) so styling/markup is preserved.
-                        self.error(failure_message)
+                    return
+                except BaseException:
+                    # Caller-owned failure reporting: step() never auto-captures
+                    # exceptions. Replace the spinner with a plain static line so
+                    # Live doesn't freeze the spinner glyph on screen, then
+                    # propagate. No marker. No log line.
+                    if not ephemeral:
+                        s.set_completion(
+                            _StepCompletion(
+                                level_name="info",
+                                message=message,
+                                style=info_style,
+                                marker="",
+                                markup=markup,
+                            )
+                        )
                     raise
-                if s.is_skipped:
-                    outcome_level: LevelName = "info"
-                    outcome_style = info_style
-                    outcome_marker = info_marker
-                    outcome_override = s.skip_override
-                    outcome_kwarg = skip_msg
-                    log_verb = "skipped"
-                else:
-                    outcome_level = "success"
-                    outcome_style = success_style
-                    outcome_marker = success_marker
-                    outcome_override = s.success_override
-                    outcome_kwarg = success_msg
-                    log_verb = "succeeded"
                 outcome_message, outcome_markup = _resolve_step_message(
-                    outcome_override, outcome_kwarg, message, default_markup=markup
+                    s.success_msg_override, success_msg, message, default_markup=markup
                 )
                 if not ephemeral:
                     s.set_completion(
                         _StepCompletion(
-                            level_name=outcome_level,
+                            level_name="success",
                             message=outcome_message,
-                            style=outcome_style,
-                            marker=outcome_marker,
+                            style=success_style,
+                            marker=success_marker,
                             markup=outcome_markup,
                         )
                     )
             self._logsink.emit(
-                level=_LEVEL_TO_LOG_SEVERITY[outcome_level],
-                message=f"{log_verb}: {_message_to_log_text(outcome_message, markup=outcome_markup)}",
+                level=_LEVEL_TO_LOG_SEVERITY["success"],
+                message=f"succeeded: {_message_to_log_text(outcome_message, markup=outcome_markup)}",
                 details=None,
             )
         finally:
@@ -2013,20 +2057,17 @@ def step(
     ephemeral: bool = False,
     markup: bool = False,
     success_msg: str | RenderableType | None = None,
-    failure_msg: str | RenderableType | None = None,
-    skip_msg: str | RenderableType | None = None,
 ) -> Generator[Step]:
     """Run a spinner-driven step on the default emitter.
 
-    See `Emitter.step` for `message`/`markup`/`success_msg`/`failure_msg`/`skip_msg` semantics.
+    See `Emitter.step` for `message`/`markup`/`success_msg` semantics and the
+    outcome-resolution contract.
     """
     with _default.step(
         message,
         ephemeral=ephemeral,
         markup=markup,
         success_msg=success_msg,
-        failure_msg=failure_msg,
-        skip_msg=skip_msg,
     ) as s:
         yield s
 

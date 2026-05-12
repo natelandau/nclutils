@@ -88,9 +88,9 @@ except UploadError:
 
 Outside an `except` block, `exception=True` is a silent no-op (matches `logging.exception()`). Pass `show_locals=True` for verbose dumps that include each frame's locals.
 
-`exception=` is accepted on every level method. `header()` and `step()` do NOT accept it — they manage their own exception display.
+`exception=` is accepted on every level method. `header()` and `step()` do NOT accept it. They manage their own exception display.
 
-## `pp.header()` — section rule
+## `pp.header()`: section rule
 
 ```python
 header(
@@ -104,12 +104,12 @@ header(
 
 `**kwargs` is forwarded to `Console.rule()`. Common ones:
 
-- `characters=` — glyph for the rule line (e.g. `"="`, `"-"`).
-- `style=` — Rich style for the line. Defaults to `"header.rule"` if you don't override.
+- `characters=`: glyph for the rule line (e.g. `"="`, `"-"`).
+- `style=`: Rich style for the line. Defaults to `"header.rule"` if you don't override.
 
-Unlike level methods, `message` is `str | Text` only (Console.rule has no meaning for a `Table` or `Panel` inline in a rule). Suppressed when `quiet=True`. NOT logged to the logfile — header is console-only structural sugar.
+Unlike level methods, `message` is `str | Text` only (Console.rule has no meaning for a `Table` or `Panel` inline in a rule). Suppressed when `quiet=True`. NOT logged to the logfile. Header is console-only structural sugar.
 
-## `pp.kv()` — aligned key/value block
+## `pp.kv()`: aligned key/value block
 
 ```python
 kv(
@@ -129,7 +129,7 @@ Renders aligned pairs. Keys are padded to the widest key's width; padded width =
 
 `pp.kv()` is suppressed on console by `quiet=True` (same as `pp.info`), but each pair is recorded as an `INFO` record in the logfile regardless. Multi-line values produce one log record per visual line, aligned with the key column. `markup=True` parses markup in string values; keys are always escaped.
 
-## `pp.step()` — spinner context manager
+## `pp.step()`: spinner context manager
 
 ```python
 @contextmanager
@@ -139,8 +139,6 @@ def step(
     ephemeral: bool = False,
     markup: bool = False,
     success_msg: str | RenderableType | None = None,
-    failure_msg: str | RenderableType | None = None,
-    skip_msg: str | RenderableType | None = None,
 ) -> Generator[Step]
 ```
 
@@ -155,23 +153,28 @@ The `Step` object yielded has four public methods:
 
 ```python
 Step.sub(text: str | Text, *, markup: bool = False) -> None
-Step.set_success(message: str | RenderableType, *, markup: bool = False) -> None
-Step.set_failure(message: str | RenderableType, *, markup: bool = False) -> None
-Step.set_skipped(message: str | RenderableType | None = None, *, markup: bool = False) -> None
+Step.set_success_msg(message: str | RenderableType, *, markup: bool = False) -> None
+Step.fail(message: str | RenderableType, *, exception: BaseException | bool = False, markup: bool = False) -> NoReturn
+Step.skip(message: str | RenderableType, *, markup: bool = False) -> NoReturn
 ```
 
 `sub()` appends a sub-item beneath the spinner. Strings are escaped by default; `markup=True` parses Rich markup. A `Text` instance keeps its own styling. Each sub-item is also written to the logfile (indented continuation line at `INFO`).
 
-`set_success()` / `set_failure()` update the completion header from inside the block when the text depends on work done there (a count, a duration, the item that failed). Setter wins over the matching kwarg, which wins over the original message. Each setter has its own `markup=` flag. The setter value also appears in the `succeeded:` / `failed:` log line. `set_success()` is ignored if the block raises; `set_failure()` is ignored if it returns normally.
+Outcome resolution:
 
-`set_skipped()` opts the step into a third outcome: the block did not run, but it didn't fail either (nothing to do, precondition unmet, intentional bypass). The completion header uses info-level styling (no checkmark) and the logfile records a `skipped:` line. The `message` argument is optional: if omitted, falls back to `skip_msg=` kwarg, then to the original step message. Ignored if the block raises (failure path wins).
+- Block exits normally → success outcome. Header uses `set_success_msg()` if called from inside the block, else the `success_msg=` kwarg, else the original `message`. Logfile records `succeeded: …`.
+- `s.fail(msg)` → exits the block, replaces the spinner with an error marker, writes `failed: …` to the logfile. Pass `exception=e` to attach the exception's type/message as a logfile continuation line. Code after the call inside the block does not execute.
+- `s.skip(msg)` → exits the block, replaces the spinner with an info-styled header (no checkmark), writes `skipped: …` to the logfile. Code after the call inside the block does not execute.
+- Any other exception escapes → propagates cleanly. No marker, no log line. The spinner is replaced with a plain static line so it does not stay frozen on screen; sub-items remain visible.
 
-On exit, the spinner resolves to `✓` (success), `✗` (failure), or the info-styled message (skipped). Any sub-items remain on screen. Exceptions inside the block (including `SystemExit` and `KeyboardInterrupt`) re-raise after marking failure.
+`set_success_msg()` is the dynamic counterpart to `success_msg=`: use it when the success text depends on work done inside the block (a count, a duration, an output path). The setter wins over the kwarg, which wins over the original message. Each carries its own `markup=` flag.
 
-- `ephemeral=True` wipes the spinner AND sub-items on success/skip; on failure the red X surfaces (and `failure_msg` / `set_failure()` value if set). Skip text still records in the logfile when ephemeral.
-- `success_msg=` / `failure_msg=` / `skip_msg=` override the resolved text; any can be omitted independently. The `step(markup=...)` flag covers all message kwargs, but setters carry their own per-call `markup=` flag.
-- `skip_msg=` alone does NOT trigger the skip outcome — `set_skipped()` must be called from inside the block to opt in. Without that call, the block follows the success path normally.
-- **`pp.step()` CANNOT NEST.** Rich's `Live` cannot stack — `pp` raises `RuntimeError` on nested entry on the same emitter. Use `s.sub("...")` for nested progress lines instead.
+`fail()` and `skip()` exit via an internal `BaseException` subclass, so a stray `except Exception:` inside the step body does not swallow them. Both require a message argument.
+
+- `ephemeral=True` wipes the spinner AND sub-items on success/skip with no extra console output. `s.fail()` still surfaces a fresh `✗ message` error line on stderr after the wipe so failures are not silently hidden. An uncaught exception in ephemeral mode leaves no console trace, the caller owns error reporting.
+- `success_msg=` overrides the success header at the call site; `set_success_msg()` overrides it dynamically from inside the block. The setter wins.
+- The `step(markup=...)` flag applies to `message` and `success_msg=`. Each setter (`set_success_msg`, `fail`, `skip`) carries its own per-call `markup=` flag.
+- **`pp.step()` CANNOT NEST.** Rich's `Live` cannot stack, `pp` raises `RuntimeError` on nested entry on the same emitter. Use `s.sub("...")` for nested progress lines instead.
 
 ## Configuration
 
@@ -189,7 +192,7 @@ configure(
 ) -> None
 ```
 
-Partial update of the shared default emitter. Fields you don't pass are left alone — passing `logfile=None` is a NO-OP, not a way to disable the logfile. To stop logging, build a fresh emitter: `pp.set_default(pp.Emitter())`.
+Partial update of the shared default emitter. Fields you don't pass are left alone. Passing `logfile=None` is a NO-OP, not a way to disable the logfile. To stop logging, build a fresh emitter: `pp.set_default(pp.Emitter())`.
 
 ```python
 pp.configure(
@@ -289,9 +292,9 @@ Field semantics:
 - `Level.marker=""` (empty string) is a REAL value meaning "no marker". Only `None` falls back to the default. Same for empty-string `style`/`detail_style`.
 - `Theme.<level> = None` keeps that level's defaults entirely.
 
-Successive `pp.configure(theme=...)` calls ACCUMULATE at the field level — overrides are not reset between calls. To fully reset, build a fresh emitter: `pp.set_default(pp.Emitter())`.
+Successive `pp.configure(theme=...)` calls ACCUMULATE at the field level. Overrides are not reset between calls. To fully reset, build a fresh emitter: `pp.set_default(pp.Emitter())`.
 
-**Not themable.** The `pp.header()` rule, the `[dry-run]` tag, and the tree connector glyphs (`├─` / `└─` / `│`). Connectors share the `sub.pipe` Rich theme key for STYLE only — to change the connector glyph itself, build a custom `Console(theme=...)`.
+**Not themable.** The `pp.header()` rule, the `[dry-run]` tag, and the tree connector glyphs (`├─` / `└─` / `│`). Connectors share the `sub.pipe` Rich theme key for STYLE only. To change the connector glyph itself, build a custom `Console(theme=...)`.
 
 Default styles (read-only, from source):
 
@@ -308,7 +311,7 @@ Default styles (read-only, from source):
 
 ## ASCII fallback
 
-`pp` probes `console.encoding` once per encoding (memoized in `_ASCII_REQUIRED_CACHE`) and falls back to ASCII when unicode glyphs can't render (e.g. `LANG=C`, `PYTHONIOENCODING=ascii`, Windows code-page rejection). Tree connectors collapse to `- `; default markers map per the table above. User-supplied `Theme(level=Level(marker=...))` markers are ALWAYS respected verbatim, ASCII or not — only built-in defaults get substituted.
+`pp` probes `console.encoding` once per encoding (memoized in `_ASCII_REQUIRED_CACHE`) and falls back to ASCII when unicode glyphs can't render (e.g. `LANG=C`, `PYTHONIOENCODING=ascii`, Windows code-page rejection). Tree connectors collapse to `- `; default markers map per the table above. User-supplied `Theme(level=Level(marker=...))` markers are ALWAYS respected verbatim, ASCII or not. Only built-in defaults get substituted.
 
 ## File logging
 
@@ -370,7 +373,7 @@ pp.console().print(table)
 pp.err_console().print("[bold red]fatal[/]")
 ```
 
-`pp.console()` and `pp.err_console()` re-resolve on each call — they read from the current default emitter, so `set_default()` swaps take effect immediately.
+`pp.console()` and `pp.err_console()` re-resolve on each call, reading from the current default emitter, so `set_default()` swaps take effect immediately.
 
 ## API reference (signatures only)
 
@@ -388,13 +391,13 @@ dryrun(message, *, details=None, markup=False, style=None, detail_style=None, ma
 # Structural output
 header(message="", *, align="center", markup=False, **kwargs) -> None  # **kwargs forwarded to Console.rule()
 kv(items, *, indent=2, separator=": ", markup=False) -> None
-step(message, *, ephemeral=False, markup=False, success_msg=None, failure_msg=None, skip_msg=None) -> Generator[Step]
+step(message, *, ephemeral=False, markup=False, success_msg=None) -> Generator[Step]
 
 # Step API
 Step.sub(text, *, markup=False) -> None
-Step.set_success(message, *, markup=False) -> None
-Step.set_failure(message, *, markup=False) -> None
-Step.set_skipped(message=None, *, markup=False) -> None
+Step.set_success_msg(message, *, markup=False) -> None
+Step.fail(message, *, exception=False, markup=False) -> NoReturn
+Step.skip(message, *, markup=False) -> NoReturn
 
 # Configuration
 configure(*, verbosity=None, quiet=None, console=None, err_console=None, theme=None, logfile=None, loglevel=None, logfmt=None) -> None
