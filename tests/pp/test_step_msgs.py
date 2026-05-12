@@ -168,85 +168,85 @@ class TestMarkupAppliesToOverrides:
         assert "[bold]" not in text
 
 
-class TestSetSuccessFromBlock:
-    """`Step.set_success()` updates the success header from inside the block."""
+class TestSetSuccessMsgFromBlock:
+    """`Step.set_success_msg()` updates the success header from inside the block."""
 
-    def test_set_success_replaces_header(
+    def test_set_success_msg_replaces_header(
         self, make_recording_emitter: RecordingEmitterFactory
     ) -> None:
-        """Verify set_success() applied inside the block replaces the success header."""
+        """Verify set_success_msg() applied inside the block replaces the success header."""
         # Given an emitter
         e, out, _ = make_recording_emitter()
 
-        # When the block computes a result and applies it via set_success
+        # When the block computes a result and applies it via set_success_msg
         with e.step("compiling") as s:
             count = 42
-            s.set_success(f"compiled {count} files")
+            s.set_success_msg(f"compiled {count} files")
 
         # Then the dynamic message appears in the rendered output
         text = out.export_text()
         assert "compiled 42 files" in text
 
-    def test_set_success_overrides_kwarg(
+    def test_set_success_msg_overrides_kwarg(
         self, make_recording_emitter: RecordingEmitterFactory
     ) -> None:
-        """Verify set_success() takes precedence over the success_msg kwarg."""
+        """Verify set_success_msg() takes precedence over the success_msg kwarg."""
         # Given an emitter with a kwarg-provided success_msg
         e, out, _ = make_recording_emitter()
 
-        # When set_success() overrides it from inside the block
+        # When set_success_msg() overrides it from inside the block
         with e.step("compiling", success_msg="kwarg wins?") as s:
-            s.set_success("setter wins")
+            s.set_success_msg("setter wins")
 
         # Then the setter's message appears and the kwarg's does not
         text = out.export_text()
         assert "setter wins" in text
         assert "kwarg wins" not in text
 
-    def test_set_success_in_logfile(
+    def test_set_success_msg_in_logfile(
         self,
         make_recording_emitter: RecordingEmitterFactory,
         tmp_path: Path,
     ) -> None:
-        """Verify set_success() value is recorded in the succeeded: log line."""
+        """Verify set_success_msg() value is recorded in the succeeded: log line."""
         # Given an emitter with a logfile
         logfile = tmp_path / "run.log"
         e, _, _ = make_recording_emitter(logfile=logfile)
 
-        # When set_success() is used inside the block
+        # When set_success_msg() is used inside the block
         with e.step("compiling") as s:
-            s.set_success("compiled 42 files")
+            s.set_success_msg("compiled 42 files")
 
         # Then the logfile records the setter message
         contents = logfile.read_text()
         assert "succeeded: compiled 42 files" in contents
 
-    def test_set_success_markup_parses_tags(
+    def test_set_success_msg_markup_parses_tags(
         self, make_recording_emitter: RecordingEmitterFactory
     ) -> None:
-        """Verify set_success(markup=True) parses Rich markup in the message."""
+        """Verify set_success_msg(markup=True) parses Rich markup in the message."""
         # Given an emitter
         e, out, _ = make_recording_emitter()
 
         # When the setter is invoked with markup=True
         with e.step("compiling") as s:
-            s.set_success("[bold]all done[/]", markup=True)
+            s.set_success_msg("[bold]all done[/]", markup=True)
 
         # Then the rendered output contains the message text without literal tags
         text = out.export_text()
         assert "all done" in text
         assert "[bold]" not in text
 
-    def test_set_success_accepts_renderable(
+    def test_set_success_msg_accepts_renderable(
         self, make_recording_emitter: RecordingEmitterFactory
     ) -> None:
-        """Verify set_success() accepts an arbitrary Rich renderable."""
+        """Verify set_success_msg() accepts an arbitrary Rich renderable."""
         # Given an emitter
         e, out, _ = make_recording_emitter()
 
         # When a Padding renderable is supplied
         with e.step("compiling") as s:
-            s.set_success(Padding("compiled 42 files", (0, 1)))
+            s.set_success_msg(Padding("compiled 42 files", (0, 1)))
 
         # Then the renderable's text appears in the rendered output
         text = out.export_text()

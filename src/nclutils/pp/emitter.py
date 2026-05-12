@@ -522,13 +522,15 @@ class Step:
         self._subs: list[Text] = []
         self._logsink: _LogSink | None = logsink
         self._completion: _StepCompletion | None = None
-        self.success_override: tuple[str | RenderableType, bool] | None = None
+        self.success_msg_override: tuple[str | RenderableType, bool] | None = None
 
-    def set_success(self, message: str | RenderableType, *, markup: bool = False) -> None:
+    def set_success_msg(self, message: str | RenderableType, *, markup: bool = False) -> None:
         """Override the success header from inside the `step()` block.
 
-        Takes precedence over the `success_msg` kwarg on `step()`. No effect
-        if the block raises.
+        Does NOT exit. Recorded and applied when the block exits normally.
+        Takes precedence over the `success_msg=` kwarg on `step()`.
+        Ignored if the block exits via `fail()`, `skip()`, or an uncaught
+        exception.
 
         Args:
             message: Replacement success header. Strings are escaped unless
@@ -536,7 +538,7 @@ class Step:
                 renderables pass through.
             markup: When True, parses Rich markup in a `str` `message`.
         """
-        self.success_override = (message, markup)
+        self.success_msg_override = (message, markup)
 
     def fail(
         self,
@@ -1554,10 +1556,10 @@ class Emitter:
         prints a visible error line on stderr after wiping.
 
         `success_msg` overrides the success-state header; defaults to the
-        original `message` styled as success. The single `markup=` flag covers
-        all message kwargs. The succeeded: log line also uses the override
-        message when provided so the audit trail matches what the user saw on
-        the console.
+        original `message` styled as success. The `markup=` flag applies to
+        both `message` and `success_msg`. The succeeded: log line also uses
+        the override message when provided so the audit trail matches what
+        the user saw on the console.
 
         Args:
             message: Title shown next to the spinner. Strings are escaped by
@@ -1568,10 +1570,14 @@ class Emitter:
             markup: When True, parses Rich markup in a `str` `message`
                 instead of escaping.
             success_msg: Optional message to display on success in place of
-                the original `message`. Falls back to `message` when None.
+                the original `message`. Falls back to `message` when None,
+                and is overridden by `set_success_msg()` called from inside
+                the block.
 
         Yields:
-            A `Step` whose `sub()` method appends sub-items beneath the spinner.
+            A `Step` whose `sub()` method appends sub-items beneath the spinner,
+            and whose `fail()`/`skip()`/`set_success_msg()` methods control the
+            outcome.
 
         Raises:
             RuntimeError: If called inside another `step()` on the same emitter;
@@ -1658,7 +1664,7 @@ class Emitter:
                         )
                     raise
                 outcome_message, outcome_markup = _resolve_step_message(
-                    s.success_override, success_msg, message, default_markup=markup
+                    s.success_msg_override, success_msg, message, default_markup=markup
                 )
                 if not ephemeral:
                     s.set_completion(
