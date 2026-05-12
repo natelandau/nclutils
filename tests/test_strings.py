@@ -22,17 +22,17 @@ def test_random_string() -> None:
         (0, "0 B"),
         (1, "1 B"),
         (512, "512 B"),
-        (1023, "1023 B"),
-        (1024, "1.0 KB"),
-        (1536, "1.5 KB"),
-        (1024 * 1024, "1.0 MB"),
-        (1024**3, "1.0 GB"),
-        (1024**4, "1.0 TB"),
-        (1024**5, "1.0 PB"),
-        (1024**6, "1.0 EB"),
-        (1024**7, "1.0 ZB"),
-        (1024**8, "1.0 YB"),
-        (1024**9, "1024.0 YB"),
+        (999, "999 B"),
+        (1000, "1.0 kB"),
+        (1500, "1.5 kB"),
+        (1000**2, "1.0 MB"),
+        (1000**3, "1.0 GB"),
+        (1000**4, "1.0 TB"),
+        (1000**5, "1.0 PB"),
+        (1000**6, "1.0 EB"),
+        (1000**7, "1.0 ZB"),
+        (1000**8, "1.0 YB"),
+        (1000**9, "1000.0 YB"),
     ],
 )
 def test_human_size_default_decimals(size_bytes: int, expected: str) -> None:
@@ -42,16 +42,16 @@ def test_human_size_default_decimals(size_bytes: int, expected: str) -> None:
     # When formatting with defaults
     result = human_size(size_bytes)
 
-    # Then the value uses the largest unit below 1024 of the next
+    # Then the value uses the largest unit below 1000 of the next
     assert result == expected
 
 
 @pytest.mark.parametrize(
     ("size_bytes", "decimals", "expected"),
     [
-        (1536, 0, "2 KB"),
-        (1536, 2, "1.50 KB"),
-        (1536, 4, "1.5000 KB"),
+        (1500, 0, "2 kB"),
+        (1500, 2, "1.50 kB"),
+        (1500, 4, "1.5000 kB"),
         (999, 3, "999 B"),
     ],
 )
@@ -70,8 +70,8 @@ def test_human_size_custom_decimals(size_bytes: int, decimals: int, expected: st
     ("size_bytes", "expected"),
     [
         (-1, "-1 B"),
-        (-1536, "-1.5 KB"),
-        (-(1024**3), "-1.0 GB"),
+        (-1500, "-1.5 kB"),
+        (-(1000**3), "-1.0 GB"),
     ],
 )
 def test_human_size_negative_values(size_bytes: int, expected: str) -> None:
@@ -90,7 +90,7 @@ def test_human_size_accepts_float() -> None:
     # Given a fractional byte count
 
     # When formatting it
-    result = human_size(2048.5)
+    result = human_size(2000.5)
 
     # Then it is divided into the appropriate unit
-    assert result == "2.0 KB"
+    assert result == "2.0 kB"
