@@ -88,9 +88,9 @@ except UploadError:
 
 Outside an `except` block, `exception=True` is a silent no-op (matches `logging.exception()`). Pass `show_locals=True` for verbose dumps that include each frame's locals.
 
-`exception=` is accepted on every level method. `header()` and `step()` do NOT accept it — they manage their own exception display.
+`exception=` is accepted on every level method. `header()` and `step()` do NOT accept it. They manage their own exception display.
 
-## `pp.header()` — section rule
+## `pp.header()`: section rule
 
 ```python
 header(
@@ -104,12 +104,12 @@ header(
 
 `**kwargs` is forwarded to `Console.rule()`. Common ones:
 
-- `characters=` — glyph for the rule line (e.g. `"="`, `"-"`).
-- `style=` — Rich style for the line. Defaults to `"header.rule"` if you don't override.
+- `characters=`: glyph for the rule line (e.g. `"="`, `"-"`).
+- `style=`: Rich style for the line. Defaults to `"header.rule"` if you don't override.
 
-Unlike level methods, `message` is `str | Text` only (Console.rule has no meaning for a `Table` or `Panel` inline in a rule). Suppressed when `quiet=True`. NOT logged to the logfile — header is console-only structural sugar.
+Unlike level methods, `message` is `str | Text` only (Console.rule has no meaning for a `Table` or `Panel` inline in a rule). Suppressed when `quiet=True`. NOT logged to the logfile. Header is console-only structural sugar.
 
-## `pp.kv()` — aligned key/value block
+## `pp.kv()`: aligned key/value block
 
 ```python
 kv(
@@ -129,7 +129,7 @@ Renders aligned pairs. Keys are padded to the widest key's width; padded width =
 
 `pp.kv()` is suppressed on console by `quiet=True` (same as `pp.info`), but each pair is recorded as an `INFO` record in the logfile regardless. Multi-line values produce one log record per visual line, aligned with the key column. `markup=True` parses markup in string values; keys are always escaped.
 
-## `pp.step()` — spinner context manager
+## `pp.step()`: spinner context manager
 
 ```python
 @contextmanager
@@ -192,7 +192,7 @@ configure(
 ) -> None
 ```
 
-Partial update of the shared default emitter. Fields you don't pass are left alone — passing `logfile=None` is a NO-OP, not a way to disable the logfile. To stop logging, build a fresh emitter: `pp.set_default(pp.Emitter())`.
+Partial update of the shared default emitter. Fields you don't pass are left alone. Passing `logfile=None` is a NO-OP, not a way to disable the logfile. To stop logging, build a fresh emitter: `pp.set_default(pp.Emitter())`.
 
 ```python
 pp.configure(
@@ -292,9 +292,9 @@ Field semantics:
 - `Level.marker=""` (empty string) is a REAL value meaning "no marker". Only `None` falls back to the default. Same for empty-string `style`/`detail_style`.
 - `Theme.<level> = None` keeps that level's defaults entirely.
 
-Successive `pp.configure(theme=...)` calls ACCUMULATE at the field level — overrides are not reset between calls. To fully reset, build a fresh emitter: `pp.set_default(pp.Emitter())`.
+Successive `pp.configure(theme=...)` calls ACCUMULATE at the field level. Overrides are not reset between calls. To fully reset, build a fresh emitter: `pp.set_default(pp.Emitter())`.
 
-**Not themable.** The `pp.header()` rule, the `[dry-run]` tag, and the tree connector glyphs (`├─` / `└─` / `│`). Connectors share the `sub.pipe` Rich theme key for STYLE only — to change the connector glyph itself, build a custom `Console(theme=...)`.
+**Not themable.** The `pp.header()` rule, the `[dry-run]` tag, and the tree connector glyphs (`├─` / `└─` / `│`). Connectors share the `sub.pipe` Rich theme key for STYLE only. To change the connector glyph itself, build a custom `Console(theme=...)`.
 
 Default styles (read-only, from source):
 
@@ -311,7 +311,7 @@ Default styles (read-only, from source):
 
 ## ASCII fallback
 
-`pp` probes `console.encoding` once per encoding (memoized in `_ASCII_REQUIRED_CACHE`) and falls back to ASCII when unicode glyphs can't render (e.g. `LANG=C`, `PYTHONIOENCODING=ascii`, Windows code-page rejection). Tree connectors collapse to `- `; default markers map per the table above. User-supplied `Theme(level=Level(marker=...))` markers are ALWAYS respected verbatim, ASCII or not — only built-in defaults get substituted.
+`pp` probes `console.encoding` once per encoding (memoized in `_ASCII_REQUIRED_CACHE`) and falls back to ASCII when unicode glyphs can't render (e.g. `LANG=C`, `PYTHONIOENCODING=ascii`, Windows code-page rejection). Tree connectors collapse to `- `; default markers map per the table above. User-supplied `Theme(level=Level(marker=...))` markers are ALWAYS respected verbatim, ASCII or not. Only built-in defaults get substituted.
 
 ## File logging
 
@@ -373,7 +373,7 @@ pp.console().print(table)
 pp.err_console().print("[bold red]fatal[/]")
 ```
 
-`pp.console()` and `pp.err_console()` re-resolve on each call — they read from the current default emitter, so `set_default()` swaps take effect immediately.
+`pp.console()` and `pp.err_console()` re-resolve on each call, reading from the current default emitter, so `set_default()` swaps take effect immediately.
 
 ## API reference (signatures only)
 
