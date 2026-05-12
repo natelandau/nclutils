@@ -1,3 +1,11 @@
+## v3.4.0 (2026-05-12)
+
+### Feat
+
+- **pp**: add set_skipped/skip_msg to step()
+- **pp**: add set_success/set_failure to step() (#45)
+- **strings**: add human_size byte formatter (#44)
+
 ## v3.3.1 (2026-05-11)
 
 ### Fix
