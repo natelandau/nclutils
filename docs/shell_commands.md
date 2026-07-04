@@ -24,9 +24,31 @@ result = run_command(["git", "log", "--oneline", "-5"])
 print(result.stdout)
 ```
 
-### CompletedCommand fields
+## The result object
 
-Every call to `run_command` returns a `CompletedCommand` (a frozen dataclass):
+Every call to `run_command` returns a `CompletedCommand`, a frozen dataclass. It carries six data fields and four computed properties:
+
+```python
+@dataclass(frozen=True, slots=True)
+class CompletedCommand:
+    argv: tuple[str, ...]    # full argument list that was executed
+    returncode: int          # process exit code
+    stdout: str              # captured stdout, trailing newline stripped
+    stderr: str              # captured stderr, trailing newline stripped
+    duration: float          # wall-clock seconds the process ran
+    cwd: Path | None         # resolved working directory, or None if inherited
+
+    @property
+    def ok(self) -> bool: ...                 # True when returncode == 0
+    @property
+    def command_line(self) -> str: ...        # argv joined with shlex.join, shell-safe
+    @property
+    def stdout_lines(self) -> list[str]: ...  # stdout.splitlines()
+    @property
+    def stderr_lines(self) -> list[str]: ...  # stderr.splitlines()
+```
+
+The instance is frozen, so every field is read-only once the call returns. `stdout` and `stderr` are always captured separately; nothing is folded together.
 
 | Field          | Type                  | Description                                                                  |
 | -------------- | --------------------- | ---------------------------------------------------------------------------- |
@@ -37,14 +59,14 @@ Every call to `run_command` returns a `CompletedCommand` (a frozen dataclass):
 | `duration`     | `float`               | Wall-clock seconds the process ran.                                          |
 | `cwd`          | `Path \| None`        | Resolved working directory, or `None` if inherited.                          |
 | `ok`           | `bool` (property)     | `True` when `returncode == 0`.                                               |
-| `command_line` | `str` (property)      | `argv` rendered with `shlex.join` — shell-safe and copy-pasteable.           |
-| `stdout_lines` | `list[str]` (property)| `stdout.splitlines()` — convenience for iterating output.                    |
+| `command_line` | `str` (property)      | `argv` rendered with `shlex.join`, shell-safe and copy-pasteable.            |
+| `stdout_lines` | `list[str]` (property)| `stdout.splitlines()`, convenience for iterating output.                     |
 | `stderr_lines` | `list[str]` (property)| `stderr.splitlines()`.                                                       |
 
 > [!NOTE]
 > The single trailing newline most commands print is stripped from `stdout` and `stderr`, so `result.stdout == "hello"` rather than `"hello\n"`. Use `stdout_lines` / `stderr_lines` when you want to iterate without splitting manually.
 
-### Streaming output
+## Streaming output
 
 Pass `stream=True` to print output to the terminal as it arrives while still capturing it:
 
@@ -71,7 +93,7 @@ from nclutils.sh import run_command
 result = run_command(["pwd"], cwd=Path("/tmp"))
 ```
 
-If `cwd` cannot be entered (missing, not a directory, or no permission), `run_command` raises `ShellCommandFailedError` before the process starts. `result` is `None` on that exception because no command actually ran.
+If `cwd` is missing or is not a directory, `run_command` raises `ShellCommandFailedError` before the process starts. `result` is `None` on that exception because no command actually ran. A failure to spawn the process itself, such as a permission error, raises the same exception, also with `result` set to `None`.
 
 ### `env=`: environment variables
 
@@ -180,7 +202,7 @@ The four exception classes and when each is raised:
 | Exception                   | When raised                                                      |
 | --------------------------- | ---------------------------------------------------------------- |
 | `ShellCommandNotFoundError` | `argv[0]` is not on PATH.                                        |
-| `ShellCommandFailedError`   | Process exited outside `okay_codes`, or `cwd` can't be entered. |
+| `ShellCommandFailedError`   | Process exited outside `okay_codes`, or the process could not be started (bad `cwd` or spawn error). |
 | `ShellCommandTimeoutError`  | Process exceeded `timeout=` and was killed.                      |
 | `ShellCommandError`         | Base class; catch this to handle all three above uniformly.      |
 

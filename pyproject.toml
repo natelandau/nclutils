@@ -22,11 +22,11 @@
 
 [dependency-groups]
     dev = [
-        "commitizen>=4.15.1",
-        "coverage>=7.14.0",
+        "commitizen>=4.16.4",
+        "coverage>=7.15.0",
         "duty>=1.9.0",
         "freezegun>=1.5.5",
-        "prek>=0.3.13",
+        "prek>=0.4.8",
         "pytest-clarity>=1.0.1",
         "pytest-cov>=7.1.0",
         "pytest-devtools>=1.2.0",
@@ -34,10 +34,10 @@
         "pytest-mock>=3.15.1",
         "pytest-pretty-terminal>=1.1.0",
         "pytest-sugar>=1.1.1",
-        "pytest>=9.0.3",
-        "ruff>=0.15.12",
-        "ty>=0.0.35",
-        "typos>=1.46.1",
+        "pytest>=9.1.1",
+        "ruff>=0.15.20",
+        "ty>=0.0.56",
+        "typos>=1.48.0",
         "xdoctest>=1.3.2",
     ]
 
@@ -120,14 +120,18 @@
             "PLR0917",
             "PLR2004",
             "PLR6301",
+            "PT012",
             "S101",
-            "S603",  # subprocess call with untrusted input (argv is built from literals in tests)
-            "S607",  # starting process with partial path (relying on PATH for git is intentional in tests)
-            "SLF001",  # Access a private attribute
-            "PT012",  # pytest.raises block multiple statements (legit when state must be set on a yielded object before raising)
-            "TRY301",  # Abstract `raise` to an inner function (tests intentionally raise inline to exercise real call sites)
-        ], "duties.py" = ["ANN001", "FBT001", "FBT002"], "src/nclutils/pp/emitter.py" = [
-            "ANN401", # Dynamically typed expressions (typing.Any) are disallowed in `**kwargs`
+            "S603",
+            "S607",
+            "SLF001",
+            "TRY301",
+        ], "duties.py" = [
+            "ANN001",
+            "FBT001",
+            "FBT002",
+        ], "src/nclutils/pp/emitter.py" = [
+            "ANN401",
         ] }
         select = ["ALL"]
         unfixable = [
@@ -153,3 +157,9 @@
 
 [tool.ty.terminal]
     error-on-warning = true
+
+[tool.ty.environment]
+    python-version = "3.10"
+
+[tool.ty.src]
+    exclude = ["**/docs/**", "**/tests/**"]
