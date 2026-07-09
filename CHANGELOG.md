@@ -1,3 +1,9 @@
+## v3.4.2 (2026-07-09)
+
+### Fix
+
+- **git**: detect gone branches checked out in a worktree
+
 ## v3.4.1 (2026-05-12)
 
 ### Fix
