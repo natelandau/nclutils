@@ -168,6 +168,14 @@ class TestGoneBranches:
         # Then: an intact upstream produces no entries at all
         assert result == frozenset()
 
+    def test_detects_gone_branch_in_worktree(self, repo_with_gone_branch_in_worktree: Path) -> None:
+        """Verify gone_branches lists a gone branch checked out in a worktree."""
+        # Given a gone branch whose "git branch -vv" line carries a (worktree-path) token
+        # When gone_branches parses that output
+        result = gone_branches(cwd=repo_with_gone_branch_in_worktree)
+        # Then the worktree-checked-out gone branch is still detected
+        assert "gone-feat" in result
+
 
 class TestIsEmptyBranch:
     """Tests for is_empty_branch."""

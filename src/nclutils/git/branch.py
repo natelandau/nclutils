@@ -12,7 +12,9 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
     from pathlib import Path
 
-_GONE_RE = re.compile(r"^[*+ ]?\s*(\S+)\s+\S+\s+\[[^\]]+:\s*gone\b")
+# A branch checked out in a worktree inserts a "(worktree-path)" token between the
+# commit SHA and the "[upstream: gone]" marker, so allow that token optionally.
+_GONE_RE = re.compile(r"^[*+ ]?\s*(\S+)\s+\S+\s+(?:\([^)]*\)\s+)?\[[^\]]+:\s*gone\b")
 
 PruneReason = Literal["merged", "gone", "empty"]
 

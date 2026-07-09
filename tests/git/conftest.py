@@ -287,6 +287,19 @@ def repo_with_gone_branch(repo_with_remote: Path) -> Path:
 
 
 @pytest.fixture
+def repo_with_gone_branch_in_worktree(repo_with_gone_branch: Path, tmp_path: Path) -> Path:
+    """Repo with a gone branch checked out in a worktree.
+
+    ``git branch -vv`` inserts a ``(worktree-path)`` token between the SHA and
+    the ``[upstream: gone]`` marker for such branches, which the parser must
+    tolerate.
+    """
+    wt_path = tmp_path / "wt-gone"
+    _git("worktree", "add", str(wt_path), "gone-feat", cwd=repo_with_gone_branch)
+    return repo_with_gone_branch
+
+
+@pytest.fixture
 def repo_with_stash(dirty_repo: Path) -> Path:
     """Repo with one stash entry on the current branch."""
     _git("stash", "push", "-u", "-m", "test stash", cwd=dirty_repo)

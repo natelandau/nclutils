@@ -481,7 +481,7 @@ gone_branches(
     env: Mapping[str, str] | None = None,
 ) -> frozenset[str]
 ```
-Branches whose upstream tracking ref shows `[gone]`. Parses `git branch -vv --no-color` for the `[<upstream>: gone]` marker. Markers appear after `git fetch --prune` removes the remote ref.
+Branches whose upstream tracking ref shows `[gone]`. Parses `git branch -vv --no-color` for the `[<upstream>: gone]` marker. Markers appear after `git fetch --prune` removes the remote ref. Gone branches checked out in a worktree (whose line carries a `(worktree-path)` token before the marker) are detected too.
 
 ### Worktree primitives
 

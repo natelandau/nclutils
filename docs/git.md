@@ -374,7 +374,7 @@ Every branch helper returns or accepts short branch names (no `refs/heads/` pref
 
 `merged_branches(target=None, cwd=None) -> frozenset[str]`. Short names of local branches merged into `target` (per `git branch --merged <target>`). The result includes `target` itself, since every branch is "merged" with itself. `target=None` defers to `default_branch()`; if that also returns `None`, `ValueError` is raised. Pass a non-existent ref and you'll get `ShellCommandFailedError` from git.
 
-`gone_branches(cwd=None) -> frozenset[str]`. Short names of local branches whose upstream-tracking ref has been deleted on the remote. Parses `git branch -vv` for the `[<upstream>: gone]` marker, which appears after a `git fetch --prune` removes the remote ref.
+`gone_branches(cwd=None) -> frozenset[str]`. Short names of local branches whose upstream-tracking ref has been deleted on the remote. Parses `git branch -vv` for the `[<upstream>: gone]` marker, which appears after a `git fetch --prune` removes the remote ref. Branches checked out in a worktree (whose line carries a `(worktree-path)` token before the marker) are detected too.
 
 `is_empty_branch(branch, target=None, *, cwd=None) -> bool`. Returns `True` when `branch` has zero commits ahead of `target`. Useful for detecting branches that were created but never written to, making them legitimate cleanup candidates even if they are not merged or gone. `target=None` defers to `default_branch()`; raises `ValueError` if that also returns `None`. This is the primitive that `prunable_branches(include_empty=True)` calls internally for each branch.
 
