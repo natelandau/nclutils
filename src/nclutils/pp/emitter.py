@@ -1304,9 +1304,6 @@ class Emitter:
         style, detail_style, marker = self._resolve_with_overrides(
             "warning", style=style, detail_style=detail_style, marker=marker
         )
-        # Blank line before the header gives the warning block visual breathing
-        # room so it doesn't blur into surrounding output.
-        self.err_console.print()
         _print_level(
             self.err_console,
             style=style,
@@ -1353,7 +1350,6 @@ class Emitter:
         style, detail_style, marker = self._resolve_with_overrides(
             "error", style=style, detail_style=detail_style, marker=marker
         )
-        self.err_console.print()
         _print_level(
             self.err_console,
             style=style,
@@ -1386,9 +1382,9 @@ class Emitter:
 
         Severity-only - does NOT raise. Use this for "the world is broken"
         notices that warrant a more emphatic visual than `error()`. Routes to
-        `err_console`, prepends a blank line for breathing room, and renders
-        with the level's resolved style, detail style, and marker (default
-        `‼ `, customizable via `Theme(critical=Level(...))`).
+        `err_console` and renders with the level's resolved style, detail
+        style, and marker (default `‼ `, customizable via
+        `Theme(critical=Level(...))`).
 
         See `Emitter.info` for `message`/`markup`/`style`/`detail_style`/`marker`,
         `tag`/`right_tag`, and `exception`/`show_locals` semantics.
@@ -1403,7 +1399,6 @@ class Emitter:
         style, detail_style, marker = self._resolve_with_overrides(
             "critical", style=style, detail_style=detail_style, marker=marker
         )
-        self.err_console.print()
         _print_level(
             self.err_console,
             style=style,
