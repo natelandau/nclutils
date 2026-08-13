@@ -1,3 +1,9 @@
+## v3.4.3 (2026-08-13)
+
+### Fix
+
+- **pp**: stop printing a blank line before warning, error, critical
+
 ## v3.4.2 (2026-07-09)
 
 ### Fix
