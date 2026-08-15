@@ -186,6 +186,7 @@ configure(
     console: Console | None = None,
     err_console: Console | None = None,
     theme: Theme | None = None,
+    soft_wrap: bool | None = None,
     logfile: Path | str | None = None,
     loglevel: LogLevel | None = None,
     logfmt: str | None = None,
@@ -210,6 +211,31 @@ pp.configure(
 - `--verbose --quiet` together is sensible: debug output without info chatter.
 
 Out-of-range verbosity ints are clamped via `_clamp_verbosity`, so `-vvvvv` is safe.
+
+## Capturing output (`soft_wrap`)
+
+Rich folds any line longer than the console width, which is 80 when stdout is not a tty. A folded path or URL becomes two tokens inside `$(...)`, silently breaking the caller.
+
+`soft_wrap` is tri-state and defaults to `None`:
+
+| Value   | Behavior                                                                |
+| ------- | ----------------------------------------------------------------------- |
+| `None`  | Auto-detect **per console**: fold on a tty, do not fold otherwise        |
+| `True`  | Never fold                                                              |
+| `False` | Always fold at the console width                                        |
+
+```python
+pp.configure(soft_wrap=True)          # force it on
+pp.info(long_path, soft_wrap=False)   # per-call override, wins over the emitter
+```
+
+Resolution is per console, so a piped stdout soft-wraps while an interactive stderr keeps folding. Applies to the level functions, `pp.kv()`, and `pp.step()` sub-items. `pp.header()` is unaffected because a rule is defined by the console width.
+
+Gotchas:
+
+- `configure(soft_wrap=None)` is a NO-OP, like every other `configure()` kwarg. Assign `emitter.soft_wrap = None` to restore auto-detection.
+- A soft-wrapping `pp.step()` shows no spinner. Rich's live display renders through the console width and crops to it, so the step is drawn once when the block exits.
+- Do NOT build your own `soft_wrap=True` Console to work around folding. `pp` already escapes every string it prints, so `Console(markup=False)` is unnecessary, and a hand-built Console without `theme=pp.THEME` renders `sub.pipe` and `header` unstyled.
 
 ## Isolated emitters
 
@@ -400,15 +426,15 @@ Step.fail(message, *, exception=False, markup=False) -> NoReturn
 Step.skip(message, *, markup=False) -> NoReturn
 
 # Configuration
-configure(*, verbosity=None, quiet=None, console=None, err_console=None, theme=None, logfile=None, loglevel=None, logfmt=None) -> None
+configure(*, verbosity=None, quiet=None, console=None, err_console=None, theme=None, soft_wrap=None, logfile=None, loglevel=None, logfmt=None) -> None
 
 # Emitter (positive defaults, unlike configure())
 class Emitter:
     def __init__(self, *, verbosity=Verbosity.INFO, quiet=False, console=None, err_console=None,
-                 theme=None, logfile=None, loglevel=LogLevel.INFO, logfmt=None) -> None
+                 theme=None, soft_wrap=None, logfile=None, loglevel=LogLevel.INFO, logfmt=None) -> None
     # Plus same-shape level methods: emitter.info, emitter.success, ..., emitter.header, emitter.kv, emitter.step
     def configure(self, *, verbosity=None, quiet=None, console=None, err_console=None,
-                  theme=None, logfile=None, loglevel=None, logfmt=None) -> None
+                  theme=None, soft_wrap=None, logfile=None, loglevel=None, logfmt=None) -> None
 
 # Defaults
 get_default() -> Emitter

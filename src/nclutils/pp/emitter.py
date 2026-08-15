@@ -239,6 +239,36 @@ def _merge_theme(base: Theme, overlay: Theme) -> Theme:
     return Theme(**merged)
 
 
+# Rich always crops `render_lines` output to the option width, so nested content
+# on a soft-wrapping console needs a ceiling no realistic line will reach.
+_UNBOUNDED_WIDTH = 2**20
+
+
+def _nested_options(options: ConsoleOptions, indent: int) -> ConsoleOptions:
+    """Return render options for content nested `indent` cells inside its parent.
+
+    When the parent is soft-wrapping, the nested content must not be folded or
+    cropped either, so it renders at an effectively unbounded width rather than
+    the parent's remaining space.
+    """
+    if options.no_wrap:
+        return options.update(width=_UNBOUNDED_WIDTH, overflow="ignore")
+    return options.update(width=max(1, options.max_width - indent))
+
+
+def _resolve_soft_wrap(console: Console, *, setting: bool | None) -> bool:
+    """Resolve the tri-state soft-wrap setting against the console being written to.
+
+    `None` auto-detects per console: an interactive terminal folds at its own
+    width, while a captured stream emits unfolded lines so a long unbroken token
+    (a filesystem path, a URL, an ID) survives `$(...)` capture as one token.
+    Resolution is per console because stdout can be piped while stderr is a tty.
+    """
+    if setting is not None:
+        return setting
+    return not console.is_terminal
+
+
 def _clamp_verbosity(level: int | Verbosity) -> Verbosity:
     """Coerce an int or Verbosity into the valid Verbosity range.
 
@@ -513,12 +543,14 @@ class Step:
         header_style: str,
         logsink: _LogSink | None = None,
         markup: bool = False,
+        soft_wrap: bool = False,
     ) -> None:
         header_text = _build_message_text(message, style=header_style, markup=markup)
         self.header: RenderableType = Spinner(
             "dots",
             text=header_text if header_text is not None else message,
         )
+        self._soft_wrap = soft_wrap
         self._subs: list[Text] = []
         self._logsink: _LogSink | None = logsink
         self._completion: _StepCompletion | None = None
@@ -643,7 +675,7 @@ class Step:
             for sub_text in self._subs:
                 line = Text("  - ")
                 line.append_text(sub_text)
-                yield line
+                yield self._shape(line)
             return
         # Connectors are derived at render time so the last item always shows
         # `└─` after each refresh tick - no need to mutate prior items on add.
@@ -652,7 +684,18 @@ class Step:
             connector = "└─" if i == last else "├─"
             line = Text.from_markup(f"  [sub.pipe]{connector}[/] ")
             line.append_text(sub_text)
-            yield line
+            yield self._shape(line)
+
+    def _shape(self, line: Text) -> Text:
+        """Mark a sub-item line unwrappable when the step is soft-wrapping.
+
+        Live renders the step through the console's own width, so the opt-out
+        has to travel on the `Text` itself rather than on the print call.
+        """
+        if self._soft_wrap:
+            line.no_wrap = True
+            line.overflow = "ignore"
+        return line
 
 
 class _DetailTree:
@@ -677,7 +720,7 @@ class _DetailTree:
         if _ascii_required(console):
             # ASCII fallback: simple `- ` prefix on every line, no tree connectors.
             # 4 = "  - " width on the first line; continuation lines use the same indent.
-            sub_options = options.update(width=max(1, options.max_width - 4))
+            sub_options = _nested_options(options, 4)
             for item in self._items:
                 rendered = self._wrap(item)
                 for line_idx, segments in enumerate(
@@ -693,7 +736,7 @@ class _DetailTree:
 
         last = len(self._items) - 1
         # 5 = 2 leading spaces + 2-cell glyph (├─/└─/│ ) + 1 trailing space
-        sub_options = options.update(width=max(1, options.max_width - 5))
+        sub_options = _nested_options(options, 5)
         for i, item in enumerate(self._items):
             is_last = i == last
             head = "└─" if is_last else "├─"
@@ -809,7 +852,7 @@ class _KVBlock:
         # on the next line - and would show up as trailing whitespace in captured output.
         head.rstrip()
         yield head
-        sub_options = options.update(width=max(1, options.max_width - cont_indent))
+        sub_options = _nested_options(options, cont_indent)
         for sub_line in console.render_lines(value, sub_options, pad=False):
             out_line = Text(" " * cont_indent)
             for seg in sub_line:
@@ -835,6 +878,12 @@ class Emitter:
     errors, and dry-run notices always render. Debug and trace are gated by
     `verbosity` independently of `quiet`, so combining `--verbose --quiet`
     still surfaces requested debug output.
+
+    Wrapping semantics: `soft_wrap` defaults to `None`, meaning auto-detect per
+    console - fold at the terminal width when writing to a tty, emit unfolded
+    lines otherwise. Pass `True` or `False` to force one or the other. This
+    matters when a caller captures output, because a folded path or URL becomes
+    two tokens in a shell substitution.
     """
 
     def __init__(  # noqa: PLR0913
@@ -845,12 +894,14 @@ class Emitter:
         console: Console | None = None,
         err_console: Console | None = None,
         theme: Theme | None = None,
+        soft_wrap: bool | None = None,
         logfile: Path | str | None = None,
         loglevel: LogLevel = LogLevel.INFO,
         logfmt: str | None = None,
     ) -> None:
         self.verbosity: Verbosity = _clamp_verbosity(verbosity)
         self.quiet: bool = quiet
+        self.soft_wrap: bool | None = soft_wrap
         self.console: Console = console if console is not None else Console(theme=THEME)
         self.err_console: Console = (
             err_console if err_console is not None else Console(theme=THEME, stderr=True)
@@ -872,6 +923,7 @@ class Emitter:
         console: Console | None = None,
         err_console: Console | None = None,
         theme: Theme | None = None,
+        soft_wrap: bool | None = None,
         logfile: Path | str | None = None,
         loglevel: LogLevel | None = None,
         logfmt: str | None = None,
@@ -896,6 +948,10 @@ class Emitter:
             err_console: Replacement stderr console (typically only set in tests).
             theme: Per-level style and marker overrides. Merged onto the
                 emitter's existing theme - see `_merge_theme`.
+            soft_wrap: `True` never folds long lines, `False` always folds at
+                the console width. Passing `None` is a no-op here (omitted =
+                leave as-is); assign `emitter.soft_wrap = None` to return to
+                auto-detection.
             logfile: Replacement logfile path. Swaps the sink entirely so the
                 old file is closed and a new one is opened on next emit.
             loglevel: Minimum severity written to the logfile.
@@ -911,6 +967,8 @@ class Emitter:
             self.err_console = err_console
         if theme is not None:
             self._theme = _merge_theme(self._theme, theme)
+        if soft_wrap is not None:
+            self.soft_wrap = soft_wrap
         if logfile is not None:
             self._logsink.swap_logfile(logfile)
         if loglevel is not None:
@@ -957,6 +1015,15 @@ class Emitter:
             detail_style if detail_style is not None else base_detail,
             marker if marker is not None else base_marker,
         )
+
+    def _wrap_kwargs(self, target: Console, kwargs: dict[str, Any]) -> dict[str, Any]:
+        """Fill the resolved soft-wrap setting into a level method's console kwargs.
+
+        A per-call `soft_wrap=` already present in `kwargs` wins over the
+        emitter's setting, so one message can opt out without reconfiguring.
+        """
+        kwargs.setdefault("soft_wrap", _resolve_soft_wrap(target, setting=self.soft_wrap))
+        return kwargs
 
     def _elapsed_tag(self) -> str:
         """Return a Rich-escaped right-aligned timestamp tag for verbose logging.
@@ -1069,7 +1136,7 @@ class Emitter:
             details=_attach_exception_to_details(details, exception, show_locals=show_locals),
             tag=tag,
             right_tag=right_tag,
-            **kwargs,
+            **self._wrap_kwargs(self.console, kwargs),
         )
 
     def success(  # noqa: PLR0913
@@ -1119,7 +1186,7 @@ class Emitter:
             details=_attach_exception_to_details(details, exception, show_locals=show_locals),
             tag=tag,
             right_tag=right_tag,
-            **kwargs,
+            **self._wrap_kwargs(self.console, kwargs),
         )
 
     def debug(  # noqa: PLR0913
@@ -1174,7 +1241,7 @@ class Emitter:
             details=_attach_exception_to_details(details, exception, show_locals=show_locals),
             tag=tag,
             right_tag=right_tag if right_tag is not None else elapsed,
-            **kwargs,
+            **self._wrap_kwargs(self.console, kwargs),
         )
 
     def trace(  # noqa: PLR0913
@@ -1225,7 +1292,7 @@ class Emitter:
             details=_attach_exception_to_details(details, exception, show_locals=show_locals),
             tag=tag,
             right_tag=right_tag if right_tag is not None else elapsed,
-            **kwargs,
+            **self._wrap_kwargs(self.console, kwargs),
         )
 
     def dryrun(  # noqa: PLR0913
@@ -1281,7 +1348,7 @@ class Emitter:
             details=_attach_exception_to_details(details, exception, show_locals=show_locals),
             tag=combined_tag,
             right_tag=right_tag,
-            **kwargs,
+            **self._wrap_kwargs(self.console, kwargs),
         )
 
     def warning(  # noqa: PLR0913
@@ -1324,7 +1391,7 @@ class Emitter:
             details=_attach_exception_to_details(details, exception, show_locals=show_locals),
             tag=tag,
             right_tag=right_tag,
-            **kwargs,
+            **self._wrap_kwargs(self.err_console, kwargs),
         )
 
     def error(  # noqa: PLR0913
@@ -1370,7 +1437,7 @@ class Emitter:
             details=_attach_exception_to_details(details, exception, show_locals=show_locals),
             tag=tag,
             right_tag=right_tag,
-            **kwargs,
+            **self._wrap_kwargs(self.err_console, kwargs),
         )
 
     def critical(  # noqa: PLR0913
@@ -1419,7 +1486,7 @@ class Emitter:
             details=_attach_exception_to_details(details, exception, show_locals=show_locals),
             tag=tag,
             right_tag=right_tag,
-            **kwargs,
+            **self._wrap_kwargs(self.err_console, kwargs),
         )
 
     def header(
@@ -1530,7 +1597,27 @@ class Emitter:
 
         if self.quiet:
             return
-        self.console.print(_KVBlock(pair_list, indent=indent, separator=separator, markup=markup))
+        self.console.print(
+            _KVBlock(pair_list, indent=indent, separator=separator, markup=markup),
+            soft_wrap=_resolve_soft_wrap(self.console, setting=self.soft_wrap),
+        )
+
+    @contextmanager
+    def _step_display(self, s: Step, *, soft_wrap: bool, ephemeral: bool) -> Generator[None]:
+        """Run a step's body inside its display and leave the final state on screen.
+
+        Live draws through the console's own width and crops to it, so a
+        soft-wrapping step forgoes the spinner and is drawn once on completion.
+        """
+        if not soft_wrap:
+            with Live(s, console=self.console, refresh_per_second=12.5, transient=ephemeral):
+                yield
+            return
+        try:
+            yield
+        finally:
+            if not ephemeral:
+                self.console.print(s, soft_wrap=True)
 
     @contextmanager
     def step(
@@ -1592,20 +1679,27 @@ class Emitter:
         if self._active_step:
             msg = "step() cannot be nested; use sequential steps instead."
             raise RuntimeError(msg)
+        info_style, _, info_marker = self._resolve("info")
+        success_style, _, success_marker = self._resolve("success")
+        error_style, _, error_marker = self._resolve("error")
+
+        soft_wrap = _resolve_soft_wrap(self.console, setting=self.soft_wrap)
+        s = Step(
+            message,
+            header_style=info_style,
+            logsink=self._logsink,
+            markup=markup,
+            soft_wrap=soft_wrap,
+        )
         self._active_step = True
         try:
-            info_style, _, info_marker = self._resolve("info")
-            success_style, _, success_marker = self._resolve("success")
-            error_style, _, error_marker = self._resolve("error")
-
             self._logsink.emit(
                 level=_LEVEL_TO_LOG_SEVERITY["info"],
                 message=f"starting: {_message_to_log_text(message, markup=markup)}",
                 details=None,
             )
 
-            s = Step(message, header_style=info_style, logsink=self._logsink, markup=markup)
-            with Live(s, console=self.console, refresh_per_second=12.5, transient=ephemeral):
+            with self._step_display(s, soft_wrap=soft_wrap, ephemeral=ephemeral):
                 try:
                     yield s
                 except _StepExit as exit_signal:
@@ -1732,6 +1826,7 @@ def configure(  # noqa: PLR0913
     console: Console | None = None,
     err_console: Console | None = None,
     theme: Theme | None = None,
+    soft_wrap: bool | None = None,
     logfile: Path | str | None = None,
     loglevel: LogLevel | None = None,
     logfmt: str | None = None,
@@ -1742,6 +1837,9 @@ def configure(  # noqa: PLR0913
     existing value untouched. Call after parsing CLI flags to wire `-v`,
     `--quiet`, etc. into nclutils.pp's output. Theme overrides accumulate at
     the field level across successive calls.
+
+    See `Emitter.configure` for the `soft_wrap` contract, which controls whether
+    long lines fold at the console width.
     """
     _default.configure(
         verbosity=verbosity,
@@ -1749,6 +1847,7 @@ def configure(  # noqa: PLR0913
         console=console,
         err_console=err_console,
         theme=theme,
+        soft_wrap=soft_wrap,
         logfile=logfile,
         loglevel=loglevel,
         logfmt=logfmt,

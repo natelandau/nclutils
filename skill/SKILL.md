@@ -250,11 +250,19 @@ pp.configure(verbosity=args.verbose, quiet=args.quiet)
 
 Warnings, errors, dryrun notices, and `step()` always render. `pp.critical` is severity-only and does NOT raise.
 
+### 6. Don't hand-build a Console to stop long lines from folding
+
+If a caller captures your output (`INBOX=$(myapp path --inbox)`), a path longer than the console width arrives folded into two tokens. `pp` already handles this: `soft_wrap` defaults to `None`, which auto-detects per console, folding on a tty and not folding otherwise. Force it with `pp.configure(soft_wrap=True)` or per call with `pp.info(msg, soft_wrap=False)`.
+
+Do NOT reach for `Console(soft_wrap=True, markup=False)` instead. `pp` escapes every string it prints, so bracketed text like `[schema/manual]` already survives without `markup=False`, and a hand-built Console missing `theme=pp.THEME` silently renders detail connectors and section rules unstyled.
+
+Note that a soft-wrapping `pp.step()` shows no spinner and is drawn once when the block exits. Rich's live display renders through the console width and crops to it.
+
 ## Deeper module references
 
 When you need API details beyond the table above, read the relevant file in `references/`. Don't load them eagerly; read on demand.
 
-- `references/pp.md` — full pretty-printer surface (per-call tags, exceptions, kv, file logger, themes, ASCII fallback, isolated emitters)
+- `references/pp.md` — full pretty-printer surface (per-call tags, exceptions, kv, file logger, themes, ASCII fallback, soft wrapping, isolated emitters)
 - `references/sh.md` — `run_command` options, error hierarchy, migration from the old `sh`-package API
 - `references/git.md`: composites (`get_repo_state`, `sync_branch`, `stashed`, `add_worktree`), primitives, dataclass field tables (`RepoState`, `SyncResult`, `Worktree`, `Remote`, `PrunableBranch`, `DeleteOutcome`)
 - `references/fs.md` — copy/backup semantics, symlink handling, search edge cases

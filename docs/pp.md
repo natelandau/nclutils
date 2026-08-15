@@ -457,6 +457,38 @@ User-supplied `pp.Theme(level=pp.Level(marker=...))` markers are always respecte
 > [!NOTE]
 > Detection probes `console.encoding` at render time and chooses the rendering path per call. To force one path or the other, build your own `Console` with the desired encoding and pass it via `pp.configure(console=...)` or `pp.Emitter(console=...)`.
 
+## Capturing output
+
+Rich folds a line that exceeds the console width. When output goes to a real terminal that is what you want. When output is captured, it corrupts the data: a folded path or URL arrives at the caller as two tokens.
+
+```bash
+# Without soft wrapping, a path longer than the console width arrives split in two
+INBOX=$(myapp path --inbox)
+```
+
+`pp` handles this for you. `soft_wrap` defaults to `None`, which auto-detects **per console**: fold at the terminal width when writing to a tty, emit unfolded lines otherwise. Because it resolves per console, a piped stdout soft-wraps while an interactive stderr keeps folding.
+
+Force it either way when the default is wrong:
+
+```python
+from nclutils import pp
+
+pp.configure(soft_wrap=True)   # never fold, whatever the stream is
+pp.configure(soft_wrap=False)  # always fold at the console width
+
+pp.info(long_path, soft_wrap=False)  # per-call override, wins over the emitter
+```
+
+This covers the level functions, `pp.kv()`, and `pp.step()` sub-items. `pp.header()` is unaffected, since a rule is defined by the console width.
+
+> [!NOTE]
+> `configure(soft_wrap=None)` is a no-op, matching the partial-update contract shared by every `configure()` kwarg. To return an emitter to auto-detection, assign `emitter.soft_wrap = None` directly.
+
+A soft-wrapping `pp.step()` forgoes the spinner and draws its final state once when the block exits. Rich's live display renders through the console width and crops to it, so a spinner and unfolded output cannot coexist. This costs nothing in practice: a captured stream has no one watching an animation.
+
+> [!TIP]
+> If you build your own `Console` rather than letting `pp` construct one, pass `theme=pp.THEME`. Without it, the `sub.pipe` and `header` style keys resolve to nothing and detail connectors and section rules render unstyled. There is no error, just silently plain output.
+
 ## Library use and testing
 
 The module-level functions delegate to a shared default `Emitter`. If you're writing a library that needs its own output configuration without trampling its host CLI's settings, instantiate an `Emitter` directly:
@@ -528,6 +560,7 @@ Every name below is available on the `pp` namespace (`from nclutils import pp`) 
 - `tag=None` / `right_tag=None`: see [Per-call tags](#per-call-tags).
 - `exception=False` / `show_locals=False`: see [Tracebacks](#tracebacks).
 - `style=None` / `detail_style=None` / `marker=None`: per-call overrides of the level's theme.
+- `soft_wrap=None`: per-call override of the emitter's [line folding](#capturing-output) behavior.
 
 ### Structural output
 
@@ -560,14 +593,14 @@ Step.skip(message, *, markup=False) -> NoReturn
 
 ```python
 configure(*, verbosity=None, quiet=None, console=None, err_console=None,
-          theme=None, logfile=None, loglevel=None, logfmt=None) -> None
+          theme=None, soft_wrap=None, logfile=None, loglevel=None, logfmt=None) -> None
 ```
 
 Partial update of the shared default emitter. Fields you don't pass are left alone.
 
 ### Emitter and supporting types
 
-- `Emitter(*, verbosity=Verbosity.INFO, quiet=False, console=None, err_console=None, theme=None, logfile=None, loglevel=LogLevel.INFO, logfmt=None)`: instantiate directly for isolated configuration. Same kwargs as `configure()`, but with positive defaults instead of `None`.
+- `Emitter(*, verbosity=Verbosity.INFO, quiet=False, console=None, err_console=None, theme=None, soft_wrap=None, logfile=None, loglevel=LogLevel.INFO, logfmt=None)`: instantiate directly for isolated configuration. Same kwargs as `configure()`, but with positive defaults instead of `None`.
 - `Theme`, `Level`: per-level style and marker overrides. Pass `Theme(success=Level(...))` to `configure()` or `Emitter()`.
 - `Verbosity`: `IntEnum` with `INFO`, `DEBUG`, `TRACE`.
 - `LogLevel`: `IntEnum` aligned with stdlib `logging` (`TRACE=5`, `DEBUG=10`, …, `CRITICAL=50`). Used as the `loglevel=` filter cutoff for the logfile.
