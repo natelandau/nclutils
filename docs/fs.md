@@ -73,7 +73,7 @@ backup_path(original, backup_suffix=".pre-migration.bak")
 By default `backup_path` returns `None` when the source doesn't exist. Pass `strict=True` to raise `FileNotFoundError` instead.
 
 > [!NOTE]
-> File backups preserve the source's permission bits (mode); file timestamps are not preserved. Directory backups walk the tree with `Path.walk(follow_symlinks=True)`, mirror directory mode and timestamps via `shutil.copystat`, and follow symlinks (including symlinked subdirectories) so the backup contains resolved contents. This matches `shutil.copytree(src, target)` defaults.
+> File backups preserve the source's permission bits (mode); file timestamps are not preserved. Directory backups walk the tree with `os.walk(followlinks=True)`, mirror directory mode and timestamps via `shutil.copystat`, and follow symlinks (including symlinked subdirectories) so the backup contains resolved contents. This matches `shutil.copytree(src, target)` defaults.
 
 ## Cleaning a directory
 

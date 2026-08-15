@@ -55,7 +55,7 @@ copy_directory(
 Recursively copy a directory tree. Same kwargs and progress/backup semantics as `copy_file`. Returns destination `Path`.
 
 > [!NOTE]
-> No Python-version gate. The implementation uses `os.walk(followlinks=True)`, not `Path.walk`. (Older docs claiming 3.12+ are stale.)
+> No Python-version gate. The implementation uses `os.walk(followlinks=True)`, not `Path.walk`, so it runs on every supported interpreter.
 
 Behavior:
 

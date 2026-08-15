@@ -88,7 +88,7 @@ if not check_python_version(3, 12):
     raise RuntimeError("Python 3.12+ required")
 ```
 
-`nclutils.fs.copy_directory` uses this internally to refuse to run on older interpreters that lack `Path.walk()`.
+No `nclutils` module gates itself on this. It exists for host applications that need to guard their own version-dependent code paths.
 
 ## API reference
 
