@@ -108,6 +108,22 @@ class TestKvAlignment:
         assert any(line.startswith(cont_prefix) and "first" in line for line in lines)
         assert any(line.startswith(cont_prefix) and "second" in line for line in lines)
 
+    def test_renderable_value_lines_are_not_padded(
+        self, make_recording_emitter: RecordingEmitterFactory
+    ) -> None:
+        """Verify renderable value lines are not padded with trailing spaces to the width."""
+        # Given an emitter and a Rich Table value
+        e, out, _ = make_recording_emitter()
+        table = Table(show_header=False)
+        table.add_row("first")
+
+        # When kv is called with the renderable as a value
+        e.kv({"Output": table})
+
+        # Then no rendered line carries trailing whitespace
+        lines = out.export_text().splitlines()
+        assert [line for line in lines if line != line.rstrip()] == []
+
 
 class TestKvQuiet:
     """`quiet=True` suppresses kv output."""

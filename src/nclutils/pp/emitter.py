@@ -680,7 +680,9 @@ class _DetailTree:
             sub_options = options.update(width=max(1, options.max_width - 4))
             for item in self._items:
                 rendered = self._wrap(item)
-                for line_idx, segments in enumerate(console.render_lines(rendered, sub_options)):
+                for line_idx, segments in enumerate(
+                    console.render_lines(rendered, sub_options, pad=False)
+                ):
                     line = Text("  ")
                     line.append("- " if line_idx == 0 else "  ")
                     for seg in segments:
@@ -698,7 +700,9 @@ class _DetailTree:
             cont = "  " if is_last else "│ "
 
             rendered = self._wrap(item)
-            for line_idx, segments in enumerate(console.render_lines(rendered, sub_options)):
+            for line_idx, segments in enumerate(
+                console.render_lines(rendered, sub_options, pad=False)
+            ):
                 line = Text("  ")
                 line.append(head if line_idx == 0 else cont, style="sub.pipe")
                 line.append(" ")
@@ -780,10 +784,12 @@ class _KVBlock:
         first = Text(prefix)
         first.append_text(key_part)
         first.append_text(lines[0])
+        first.rstrip()
         yield first
         for line in lines[1:]:
             cont = Text(" " * cont_indent)
             cont.append_text(line)
+            cont.rstrip()
             yield cont
 
     def _render_renderable_row(
@@ -799,9 +805,12 @@ class _KVBlock:
         # indented to the value column.
         head = Text(prefix)
         head.append_text(key_part)
+        # The separator's trailing space aligns nothing here - the value starts
+        # on the next line - and would show up as trailing whitespace in captured output.
+        head.rstrip()
         yield head
         sub_options = options.update(width=max(1, options.max_width - cont_indent))
-        for sub_line in console.render_lines(value, sub_options):
+        for sub_line in console.render_lines(value, sub_options, pad=False):
             out_line = Text(" " * cont_indent)
             for seg in sub_line:
                 if seg.text:
@@ -809,6 +818,7 @@ class _KVBlock:
                         seg.text,
                         style=seg.style if seg.style is not None else "",
                     )
+            out_line.rstrip()
             yield out_line
 
 

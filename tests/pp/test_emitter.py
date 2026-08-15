@@ -987,6 +987,20 @@ class TestDetailTree:
         assert "└─ only-item" in text
         assert "├─" not in text
 
+    def test_detail_lines_are_not_padded(
+        self, make_recording_emitter: RecordingEmitterFactory
+    ) -> None:
+        """Verify detail lines are not padded with trailing spaces out to the console width."""
+        # Given an Emitter wired to a recording stdout
+        e, out, _ = make_recording_emitter()
+
+        # When info is emitted with details shorter than the console width
+        e.info("hello", details=["one", "two"])
+
+        # Then no rendered line carries trailing whitespace
+        lines = out.export_text().splitlines()
+        assert [line for line in lines if line != line.rstrip()] == []
+
     @pytest.mark.parametrize(
         ("level_method", "stream", "verbosity"),
         [
