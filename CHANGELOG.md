@@ -1,3 +1,10 @@
+## v3.4.4 (2026-08-15)
+
+### Fix
+
+- **pp**: add soft_wrap control for captured output
+- **pp**: stop padding detail and kv lines to the console width
+
 ## v3.4.3 (2026-08-13)
 
 ### Fix
