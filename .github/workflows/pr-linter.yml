@@ -10,7 +10,7 @@ on:
         branches:
             - main
 
-permissions:
+permissions: # added using https://github.com/step-security/secure-workflows
     contents: read
 
 concurrency:

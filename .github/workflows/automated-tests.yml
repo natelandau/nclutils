@@ -4,25 +4,30 @@ name: "Automated Tests"
 on:
     workflow_dispatch:
     push:
-        paths:
-            - ".github/workflows/automated-tests.yml"
-            - ".github/actions/**"
-            - "**.py"
-            - "pyproject.toml"
-            - "uv.lock"
         branches:
             - main
+        paths-ignore:
+            - "**.md"
+            - "docs/**"
+            - "LICENSE"
+            - ".github/dependabot.yml"
+            - ".github/workflows/pr-linter.yml"
+            - ".github/workflows/create-release.yml"
     pull_request:
         types:
             - opened
             - reopened
             - synchronize
-        paths:
-            - ".github/workflows/automated-tests.yml"
-            - ".github/actions/**"
-            - "**.py"
-            - "pyproject.toml"
-            - "uv.lock"
+        paths-ignore:
+            - "**.md"
+            - "docs/**"
+            - "LICENSE"
+            - ".github/dependabot.yml"
+            - ".github/workflows/pr-linter.yml"
+            - ".github/workflows/create-release.yml"
+
+permissions:
+    contents: read
 
 concurrency:
     group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -34,4 +39,4 @@ jobs:
         uses: ./.github/workflows/reusable-tests.yml
         secrets: inherit
         with:
-            run-coverage: true
+            upload-coverage: true
