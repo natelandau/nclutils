@@ -1,3 +1,13 @@
+## v4.0.0 (2026-10-12)
+
+### BREAKING CHANGE
+
+- nclutils no longer supports python v3.10
+
+### Feat
+
+- support python 3.15 and drop 3.10 (#50)
+
 ## v3.4.4 (2026-08-15)
 
 ### Fix
