@@ -160,10 +160,14 @@ Opinionated workflow: refuses detached HEAD, requires an upstream, never merges 
 ```python
 result = sync_branch()
 match result.action:
-    case "up_to_date":     print("nothing to do")
-    case "fast_forwarded": print(f"ff'd {result.behind_before} commits")
-    case "rebased":        print(f"rebased {result.ahead_before} locals over upstream")
-    case "aborted":        print("conflicts; aborted")
+    case "up_to_date":
+        print("nothing to do")
+    case "fast_forwarded":
+        print(f"ff'd {result.behind_before} commits")
+    case "rebased":
+        print(f"rebased {result.ahead_before} locals over upstream")
+    case "aborted":
+        print("conflicts; aborted")
 ```
 
 Sequence (in order):
@@ -562,6 +566,7 @@ Every git invocation is logged at `DEBUG` by `nclutils.sh.run_command` (which `r
 
 ```python
 import logging
+
 logging.getLogger("nclutils.sh").setLevel(logging.DEBUG)
 logging.basicConfig()
 ```

@@ -31,17 +31,17 @@ Every call to `run_command` returns a `CompletedCommand`, a frozen dataclass. It
 ```python
 @dataclass(frozen=True, slots=True)
 class CompletedCommand:
-    argv: tuple[str, ...]    # full argument list that was executed
-    returncode: int          # process exit code
-    stdout: str              # captured stdout, trailing newline stripped
-    stderr: str              # captured stderr, trailing newline stripped
-    duration: float          # wall-clock seconds the process ran
-    cwd: Path | None         # resolved working directory, or None if inherited
+    argv: tuple[str, ...]  # full argument list that was executed
+    returncode: int  # process exit code
+    stdout: str  # captured stdout, trailing newline stripped
+    stderr: str  # captured stderr, trailing newline stripped
+    duration: float  # wall-clock seconds the process ran
+    cwd: Path | None  # resolved working directory, or None if inherited
 
     @property
-    def ok(self) -> bool: ...                 # True when returncode == 0
+    def ok(self) -> bool: ...  # True when returncode == 0
     @property
-    def command_line(self) -> str: ...        # argv joined with shlex.join, shell-safe
+    def command_line(self) -> str: ...  # argv joined with shlex.join, shell-safe
     @property
     def stdout_lines(self) -> list[str]: ...  # stdout.splitlines()
     @property

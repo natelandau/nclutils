@@ -26,6 +26,7 @@ Both functions are `@overload`-decorated so the return type narrows by the input
 V = TypeVar("V", bound=Path | str | int | float | bool)
 T = TypeVar("T")
 
+
 # choose_one_from_list
 @overload
 def choose_one_from_list(choices: list[V], message: str) -> V | None: ...
@@ -33,6 +34,7 @@ def choose_one_from_list(choices: list[V], message: str) -> V | None: ...
 def choose_one_from_list(choices: list[tuple[str, T]], message: str) -> T | None: ...
 @overload
 def choose_one_from_list(choices: list[dict[str, T]], message: str) -> T | None: ...
+
 
 # choose_multiple_from_list
 @overload
@@ -181,8 +183,8 @@ format_iso_timestamp(datetime_obj: datetime, *, microseconds: bool = False) -> s
 ```python
 from nclutils.utils import iso_timestamp, format_iso_timestamp
 
-iso_timestamp()                       # "2026-05-04T18:32:01Z"
-iso_timestamp(microseconds=True)      # "2026-05-04T18:32:01.847239Z"
+iso_timestamp()  # "2026-05-04T18:32:01Z"
+iso_timestamp(microseconds=True)  # "2026-05-04T18:32:01.847239Z"
 ```
 
 The `+00:00` suffix is replaced with a trailing `Z` for consistency across timezones.
@@ -191,7 +193,7 @@ The `+00:00` suffix is replaced with a trailing `Z` for consistency across timez
 from datetime import datetime, timezone
 
 dt = datetime(2026, 5, 4, 18, 32, 1, tzinfo=timezone.utc)
-format_iso_timestamp(dt)              # "2026-05-04T18:32:01Z"
+format_iso_timestamp(dt)  # "2026-05-04T18:32:01Z"
 ```
 
 `format_iso_timestamp` calls `datetime_obj.astimezone(timezone.utc)` before formatting, so:
@@ -215,18 +217,18 @@ from nclutils.utils import new_uid, new_timestamp_uid, unique_id
 # Random base-36, case-insensitive, no hyphens. Uses random.SystemRandom (os.urandom) —
 # cryptographically secure, safe for filenames, cache keys, anything where collision matters.
 # Length = int(bits / 5.16) + 1.
-new_uid()              # 64 bits, ~13 chars: "kgk5mznp7q3xz"
-new_uid(bits=128)      # ~25 chars
+new_uid()  # 64 bits, ~13 chars: "kgk5mznp7q3xz"
+new_uid(bits=128)  # ~25 chars
 
 # Timestamp prefix + random suffix. Lexicographically sortable by creation time.
 # Format: f"{YYYYMMDDTHHMMSS}-{new_uid(bits)}". Used by nclutils.fs.backup_path.
-new_timestamp_uid()    # "20260504T183201-kgk5mzn"
+new_timestamp_uid()  # "20260504T183201-kgk5mzn"
 new_timestamp_uid(bits=64)
 
 # Process-wide incrementing counter. Backed by a module-global ID_COUNTER int.
-unique_id()            # "1"
-unique_id("id_")       # "id_2"
-unique_id()            # "3"
+unique_id()  # "1"
+unique_id("id_")  # "id_2"
+unique_id()  # "3"
 ```
 
 > [!WARNING]

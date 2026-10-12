@@ -101,6 +101,7 @@ except ShellCommandError as e:
 
 ```python
 import logging
+
 logging.getLogger("nclutils.sh").setLevel(logging.DEBUG)
 logging.basicConfig()
 ```
@@ -137,6 +138,7 @@ run_command(["npm", "install"], stream=True, exclude_regex=r"^npm warn deprecate
 
 ```python
 import os
+
 run_command(
     ["printenv"],
     env={**os.environ, "MY_VAR": "hello"},

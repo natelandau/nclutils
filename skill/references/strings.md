@@ -9,12 +9,12 @@ All five accept arbitrary text and tokenize the same way: `list_words` splits on
 ```python
 from nclutils.strings import camel_case, kebab_case, pascal_case, separator_case, snake_case
 
-camel_case("FOO BAR_bAz")          # "fooBarBaz"
-kebab_case("The b c_d-e!f")         # "the-b-c-d-e-f"
-pascal_case("FOO BAR_bAz")          # "FooBarBaz"
-separator_case("a!!b___c.d", "_")   # "a_b_c_d"
-snake_case("This is Snake!")        # "this_is_snake"
-snake_case("crème brûlée")          # "creme_brulee"
+camel_case("FOO BAR_bAz")  # "fooBarBaz"
+kebab_case("The b c_d-e!f")  # "the-b-c-d-e-f"
+pascal_case("FOO BAR_bAz")  # "FooBarBaz"
+separator_case("a!!b___c.d", "_")  # "a_b_c_d"
+snake_case("This is Snake!")  # "this_is_snake"
+snake_case("crème brûlée")  # "creme_brulee"
 ```
 
 `separator_case(text, separator="-")` is the generic version; the others are presets.
@@ -26,11 +26,11 @@ snake_case("crème brûlée")          # "creme_brulee"
 Split text into words on word boundaries while keeping contractions intact.
 
 ```python
-list_words("a b, c; d-e")                            # ["a", "b", "c", "d", "e"]
-list_words("Jim's horse is fast")                    # ["Jim's", "horse", "is", "fast"]
+list_words("a b, c; d-e")  # ["a", "b", "c", "d", "e"]
+list_words("Jim's horse is fast")  # ["Jim's", "horse", "is", "fast"]
 list_words("Jim's horse is fast", strip_apostrophes=True)  # ["Jims", ...]
-list_words("fred, barney, & pebbles", "[^, ]+")      # ["fred", "barney", "&", "pebbles"]
-list_words("this_is_a_test")                         # ["this", "is", "a", "test"]
+list_words("fred, barney, & pebbles", "[^, ]+")  # ["fred", "barney", "&", "pebbles"]
+list_words("this_is_a_test")  # ["this", "is", "a", "test"]
 ```
 
 ### `split_camel_case(string_list, match_case_list=()) -> list[str]`

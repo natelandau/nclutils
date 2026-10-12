@@ -235,7 +235,9 @@ for pb in candidates:
 
 names = [pb.name for pb in candidates]
 outcome = delete_branches(names)
-print(f"deleted {len(outcome.deleted)}, skipped {len(outcome.skipped)}, failed {len(outcome.failed)}")
+print(
+    f"deleted {len(outcome.deleted)}, skipped {len(outcome.skipped)}, failed {len(outcome.failed)}"
+)
 ```
 
 `prunable_branches` returns a sorted `list[PrunableBranch]`. Each `PrunableBranch` is a frozen dataclass with two fields:

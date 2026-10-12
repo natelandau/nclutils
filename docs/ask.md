@@ -65,16 +65,18 @@ When you need a different display string than the value, pass a list of two-tupl
 from dataclasses import dataclass
 from nclutils.ask import choose_one_from_list
 
+
 @dataclass
 class Profile:
     name: str
     region: str
 
+
 profile = choose_one_from_list(
     [
         ("US production", Profile(name="prod", region="us-east-1")),
         ("EU production", Profile(name="prod", region="eu-west-1")),
-        ("Staging",       Profile(name="staging", region="us-east-1")),
+        ("Staging", Profile(name="staging", region="us-east-1")),
     ],
     "Pick a deployment target",
 )
