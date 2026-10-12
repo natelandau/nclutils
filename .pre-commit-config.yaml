@@ -5,7 +5,7 @@ default_stages: [pre-commit, manual]
 fail_fast: true
 repos:
   - repo: "https://github.com/commitizen-tools/commitizen"
-    rev: v4.18.0
+    rev: v4.19.2
     hooks:
       - id: commitizen
 
@@ -57,7 +57,7 @@ repos:
       - id: gitleaks
 
   - repo: "https://github.com/astral-sh/ruff-pre-commit"
-    rev: "v0.16.6"
+    rev: "v0.17.0"
     hooks:
       - id: ruff-check
         exclude: tests/
@@ -73,7 +73,7 @@ repos:
         entry: yamllint --strict --config-file .yamllint.yml
 
   - repo: "https://github.com/adhtruong/mirrors-typos"
-    rev: v1.50.1
+    rev: v1.51.1
     hooks:
       - id: typos
         stages: [commit-msg, pre-commit]

@@ -14,7 +14,7 @@ from .repo import is_dirty, primary_remote, repo_root
 from .runner import run_git
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Mapping
+    from collections.abc import Generator, Mapping
 
 
 def fetch(  # noqa: PLR0913
@@ -86,7 +86,7 @@ def stashed(
     include_untracked: bool = True,
     stream: bool = False,
     env: Mapping[str, str] | None = None,
-) -> Iterator[bool]:
+) -> Generator[bool]:
     """Context manager: stash on enter (if dirty), pop on exit.
 
     Yields True if a stash was created, False if the tree was clean (no-op).
