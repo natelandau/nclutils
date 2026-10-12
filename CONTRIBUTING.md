@@ -30,6 +30,8 @@ This project uses [uv](https://docs.astral.sh/uv/) for dependency management. To
 -   `duty lint` - Run all linters
 -   `duty test` - Run all tests
 
+The lint and test duties run each tool through [gate-cache](https://github.com/natelandau/gate-cache). When a tool already passed on the same files and the same Python version, gate-cache skips it. The pre-commit hooks call the same duties, so a check that passed in your terminal skips at commit time and at push time. Caching is off when `CI` is set. To run every check again, set `GATE_CACHE_DISABLE=1` or run `uv run gate-cache clear`.
+
 ## Development Guidelines
 
 When developing for nclutils, please follow these guidelines:

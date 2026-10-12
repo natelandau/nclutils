@@ -17,6 +17,8 @@ duty ruff | duty format | duty ty | duty typos   # individual linters
 duty update                     # refresh uv.lock and pre-commit pins
 ```
 
+The `ruff`, `format`, `ty`, `typos`, `prek`, and `test` duties wrap their tool in [`gate-cache`](https://github.com/natelandau/gate-cache), so a duty that already passed on the same files and Python version prints a skip line and exits 0. The pre-commit hooks call these duties, so they share the same cache. Use `GATE_CACHE_DISABLE=1 duty test` to force a real run, and `uv run gate-cache status` to see which gates passed. Wrap any new lint or test duty with the `gated()` helper in `duties.py`.
+
 To run a single test, invoke pytest directly through `uv`:
 
 ```bash
