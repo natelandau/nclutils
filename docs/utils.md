@@ -5,8 +5,8 @@ Timestamps, unique identifiers, and a Python version check. Imported from `nclut
 ```python
 from nclutils.utils import iso_timestamp, new_timestamp_uid
 
-iso_timestamp()        # "2026-05-04T18:32:01Z"
-new_timestamp_uid()    # "20260504T183201-kgk5mzn"
+iso_timestamp()  # "2026-05-04T18:32:01Z"
+new_timestamp_uid()  # "20260504T183201-kgk5mzn"
 ```
 
 ## Timestamps
@@ -18,8 +18,8 @@ Return the current UTC time as an ISO 8601 string. The `+00:00` suffix is replac
 ```python
 from nclutils.utils import iso_timestamp
 
-iso_timestamp()                       # "2026-05-04T18:32:01Z"
-iso_timestamp(microseconds=True)      # "2026-05-04T18:32:01.847239Z"
+iso_timestamp()  # "2026-05-04T18:32:01Z"
+iso_timestamp(microseconds=True)  # "2026-05-04T18:32:01.847239Z"
 ```
 
 ### `format_iso_timestamp`
@@ -45,8 +45,8 @@ Generate a case-insensitive random base-36 string with at least the requested bi
 ```python
 from nclutils.utils import new_uid
 
-new_uid()           # 64 bits, ~13 chars: "kgk5mznp7q3xz"
-new_uid(bits=128)   # ~25 chars
+new_uid()  # 64 bits, ~13 chars: "kgk5mznp7q3xz"
+new_uid(bits=128)  # ~25 chars
 ```
 
 ### `new_timestamp_uid`
@@ -56,7 +56,7 @@ Combine a UTC timestamp prefix with a random suffix. The result is lexicographic
 ```python
 from nclutils.utils import new_timestamp_uid
 
-new_timestamp_uid()         # "20260504T183201-kgk5mzn"
+new_timestamp_uid()  # "20260504T183201-kgk5mzn"
 new_timestamp_uid(bits=64)  # longer random suffix
 ```
 
@@ -69,9 +69,9 @@ Return a process-wide incrementing integer as a string, optionally prefixed. The
 ```python
 from nclutils.utils import unique_id
 
-unique_id()        # "1"
-unique_id("id_")   # "id_2"
-unique_id()        # "3"
+unique_id()  # "1"
+unique_id("id_")  # "id_2"
+unique_id()  # "3"
 ```
 
 > [!NOTE]

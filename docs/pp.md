@@ -93,7 +93,7 @@ Combining `--verbose --quiet` is reasonable: debug output without the routine in
 
 ```python
 pp.configure(verbosity=pp.Verbosity.DEBUG)
-pp.configure(quiet=True)   # verbosity still DEBUG
+pp.configure(quiet=True)  # verbosity still DEBUG
 ```
 
 ## Detail trees
@@ -134,7 +134,7 @@ from rich.text import Text
 from nclutils import pp
 
 pp.info("Found [bold]42[/] matches", markup=True)
-pp.info(Text.from_markup("Found [bold]42[/] matches"))   # Text instances always keep their styling
+pp.info(Text.from_markup("Found [bold]42[/] matches"))  # Text instances always keep their styling
 ```
 
 Use `markup=True` only when you control the string. For arbitrary input (file paths, exception messages, JSON snippets), keep the default escape so brackets can't accidentally render as styling or raise `MarkupError`.
@@ -206,12 +206,14 @@ Pass `show_locals=True` for verbose dumps that include each frame's local variab
 
 ```python
 pp.header("Build Status")
-pp.kv({
-    "Branch":   "main",
-    "Commit":   "abc1234",
-    "Status":   "clean",
-    "Duration": "3.2s",
-})
+pp.kv(
+    {
+        "Branch": "main",
+        "Commit": "abc1234",
+        "Status": "clean",
+        "Duration": "3.2s",
+    }
+)
 ```
 
 ```text
@@ -226,11 +228,13 @@ pp.kv({
 Keys are padded automatically. Pass a `list[tuple[str, Any]]` when you need duplicate keys or want explicit ordering:
 
 ```python
-pp.kv([
-    ("Step", "init"),
-    ("Step", "build"),
-    ("Step", "deploy"),
-])
+pp.kv(
+    [
+        ("Step", "init"),
+        ("Step", "build"),
+        ("Step", "deploy"),
+    ]
+)
 ```
 
 `indent=2` and `separator=": "` are the defaults. Pass `markup=True` to parse Rich markup in string values. Keys are always escaped (treated as identifiers). Non-string, non-renderable values pass through `str()`. Rich renderables (Tables, JSON, etc.) render below the key, indented to the value column.
@@ -309,7 +313,7 @@ Call `s.fail(message)` inside the block to render the failure marker and exit ea
 with pp.step("compiling sources") as s:
     for path in sources:
         if not path.exists():
-            s.fail(f"missing source: {path}")   # exits here
+            s.fail(f"missing source: {path}")  # exits here
         compile_one(path)
     s.set_success_msg(f"compiled {len(sources)} files")
 ```
@@ -334,7 +338,7 @@ Call `s.skip(message)` when the work didn't run (nothing to do, preconditions un
 ```python
 with pp.step("warming caches") as s:
     if cache.is_warm():
-        s.skip("caches already warm")   # exits here
+        s.skip("caches already warm")  # exits here
     warm_cache()
 ```
 
@@ -357,7 +361,7 @@ from nclutils import pp
 
 e = pp.Emitter(
     logfile=Path("./run.log"),
-    loglevel=pp.LogLevel.INFO,        # default; filter cutoff for the file
+    loglevel=pp.LogLevel.INFO,  # default; filter cutoff for the file
     # logfmt="%(asctime)s [%(levelname)s] %(message)s",  # optional override
 )
 
@@ -410,7 +414,7 @@ from nclutils import pp
 pp.configure(
     theme=pp.Theme(
         success=pp.Level(style="cyan", marker="🎉 "),
-        warning=pp.Level(marker=""),   # hide the warning marker entirely
+        warning=pp.Level(marker=""),  # hide the warning marker entirely
     ),
 )
 
@@ -473,7 +477,7 @@ Force it either way when the default is wrong:
 ```python
 from nclutils import pp
 
-pp.configure(soft_wrap=True)   # never fold, whatever the stream is
+pp.configure(soft_wrap=True)  # never fold, whatever the stream is
 pp.configure(soft_wrap=False)  # always fold at the console width
 
 pp.info(long_path, soft_wrap=False)  # per-call override, wins over the emitter

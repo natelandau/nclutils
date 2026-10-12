@@ -27,7 +27,7 @@ pp.success(f"normalized name: {snake_case('Hello World')}")
 
 ## Installation
 
-Requires Python 3.10 or newer.
+Requires Python 3.11 or newer.
 
 ```bash
 # With uv

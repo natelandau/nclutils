@@ -195,6 +195,7 @@ Raises `KeyError` when `username` is unknown AND `strict=True` (POSIX only).
 
 ```python
 import logging
+
 logging.getLogger("nclutils.fs").setLevel(logging.DEBUG)
 logging.basicConfig()
 ```

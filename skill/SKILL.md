@@ -24,33 +24,66 @@ Every other symbol lives under a submodule:
 ```python
 from nclutils.ask import choose_one_from_list, choose_multiple_from_list
 from nclutils.fs import (
-    copy_file, copy_directory, backup_path, clean_directory,
-    find_files, find_subdirectories, directory_tree, find_user_home_dir,
+    copy_file,
+    copy_directory,
+    backup_path,
+    clean_directory,
+    find_files,
+    find_subdirectories,
+    directory_tree,
+    find_user_home_dir,
 )
 from nclutils.git import (
-    get_repo_state, sync_branch, fetch, stashed,
-    add_worktree, prunable_branches, delete_branches, run_git,
-    is_empty_branch, stash_counts,
-    PrunableBranch, PruneReason, DeleteOutcome,
+    get_repo_state,
+    sync_branch,
+    fetch,
+    stashed,
+    add_worktree,
+    prunable_branches,
+    delete_branches,
+    run_git,
+    is_empty_branch,
+    stash_counts,
+    PrunableBranch,
+    PruneReason,
+    DeleteOutcome,
     NotARepoError,
 )
 from nclutils.net import network_available
 from nclutils.sh import (
-    run_command, run_interactive, which,
+    run_command,
+    run_interactive,
+    which,
     CompletedCommand,
-    ShellCommandError, ShellCommandNotFoundError,
-    ShellCommandFailedError, ShellCommandTimeoutError,
+    ShellCommandError,
+    ShellCommandNotFoundError,
+    ShellCommandFailedError,
+    ShellCommandTimeoutError,
 )
 from nclutils.strings import (
-    camel_case, kebab_case, pascal_case, separator_case, snake_case,
-    deburr, list_words, split_camel_case, strip_ansi,
-    pad, pad_start, pad_end,
-    random_string, int_to_emoji, human_size,
+    camel_case,
+    kebab_case,
+    pascal_case,
+    separator_case,
+    snake_case,
+    deburr,
+    list_words,
+    split_camel_case,
+    strip_ansi,
+    pad,
+    pad_start,
+    pad_end,
+    random_string,
+    int_to_emoji,
+    human_size,
 )
 from nclutils.text import replace_in_file, ensure_lines_in_file
 from nclutils.utils import (
-    iso_timestamp, format_iso_timestamp,
-    new_uid, new_timestamp_uid, unique_id,
+    iso_timestamp,
+    format_iso_timestamp,
+    new_uid,
+    new_timestamp_uid,
+    unique_id,
     check_python_version,
 )
 ```
@@ -137,6 +170,7 @@ If you want to see internal diagnostics during development:
 
 ```python
 import logging
+
 logging.getLogger("nclutils").setLevel(logging.DEBUG)  # or "nclutils.sh", "nclutils.fs", etc.
 logging.basicConfig()
 ```
@@ -147,15 +181,15 @@ logging.basicConfig()
 from nclutils.sh import run_command, ShellCommandError
 
 result = run_command(["git", "status", "--short"])
-result.stdout         # str — captured stdout (trailing newlines stripped)
-result.stderr         # str — captured stderr, separate from stdout (trailing newlines stripped)
-result.returncode     # int
-result.ok             # bool — True if returncode == 0
-result.duration       # float — wall-clock seconds
-result.argv           # tuple[str, ...] — what actually ran
-result.command_line   # str — argv rendered via shlex.join, shell-safe
-result.stdout_lines   # list[str] — stdout.splitlines(), for iteration
-result.stderr_lines   # list[str]
+result.stdout  # str — captured stdout (trailing newlines stripped)
+result.stderr  # str — captured stderr, separate from stdout (trailing newlines stripped)
+result.returncode  # int
+result.ok  # bool — True if returncode == 0
+result.duration  # float — wall-clock seconds
+result.argv  # tuple[str, ...] — what actually ran
+result.command_line  # str — argv rendered via shlex.join, shell-safe
+result.stdout_lines  # list[str] — stdout.splitlines(), for iteration
+result.stderr_lines  # list[str]
 ```
 
 Common wrong patterns:
@@ -166,7 +200,8 @@ run_command("git", ["status"])
 
 # WRONG — the return value is CompletedCommand, not a string:
 output = run_command(["git", "status"])
-if "modified" in output: ...           # TypeError-adjacent; use .stdout
+if "modified" in output:
+    ...  # TypeError-adjacent; use .stdout
 
 # WRONG — default raises on non-zero exit. grep returning 1 is a typed error:
 result = run_command(["grep", "needle", "file"])  # raises if no match
@@ -179,6 +214,7 @@ result = run_command(["grep", "needle", "file"], check=False)
 run_command(["printenv", "PATH"], env={"MY_VAR": "x"})
 # Right: merge with parent env
 import os
+
 run_command(["printenv", "PATH"], env={**os.environ, "MY_VAR": "x"})
 ```
 
@@ -222,7 +258,7 @@ Rich's `Live` rendering cannot stack. `pp.step()` raises `RuntimeError` if you t
 ```python
 # WRONG
 with pp.step("outer") as outer:
-    with pp.step("inner") as inner:   # RuntimeError
+    with pp.step("inner") as inner:  # RuntimeError
         ...
 
 # Right — use Step.sub() for hierarchical progress under a single Live

@@ -225,8 +225,8 @@ Rich folds any line longer than the console width, which is 80 when stdout is no
 | `False` | Always fold at the console width                                        |
 
 ```python
-pp.configure(soft_wrap=True)          # force it on
-pp.info(long_path, soft_wrap=False)   # per-call override, wins over the emitter
+pp.configure(soft_wrap=True)  # force it on
+pp.info(long_path, soft_wrap=False)  # per-call override, wins over the emitter
 ```
 
 Resolution is per console, so a piped stdout soft-wraps while an interactive stderr keeps folding. Applies to the level functions, `pp.kv()`, and `pp.step()` sub-items. `pp.header()` is unaffected because a rule is defined by the console width.
@@ -266,6 +266,7 @@ logger.info("library-internal message")
 
 # Recording console for tests
 from rich.console import Console
+
 capture = Console(theme=pp.THEME, record=True, force_terminal=True, width=80)
 e = pp.Emitter(console=capture, err_console=capture)
 e.info("captured")
@@ -287,9 +288,10 @@ finally:
 ```python
 @dataclass(frozen=True, slots=True)
 class Level:
-    style: str | None = None         # main message style (Rich style string)
+    style: str | None = None  # main message style (Rich style string)
     detail_style: str | None = None  # detail-line style
-    marker: str | None = None        # marker glyph; "" hides; None inherits default
+    marker: str | None = None  # marker glyph; "" hides; None inherits default
+
 
 @dataclass(frozen=True, slots=True)
 class Theme:
@@ -307,7 +309,7 @@ class Theme:
 pp.configure(
     theme=pp.Theme(
         success=pp.Level(style="cyan", marker="🎉 "),
-        warning=pp.Level(marker=""),   # hide the warning marker
+        warning=pp.Level(marker=""),  # hide the warning marker
     ),
 )
 ```
@@ -375,8 +377,9 @@ class Verbosity(IntEnum):
     DEBUG = 1
     TRACE = 2
 
+
 class LogLevel(IntEnum):
-    TRACE = 5      # nclutils.pp-specific; registered via logging.addLevelName at import
+    TRACE = 5  # nclutils.pp-specific; registered via logging.addLevelName at import
     DEBUG = 10
     INFO = 20
     WARNING = 30

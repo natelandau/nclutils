@@ -7,7 +7,7 @@ from nclutils.strings import deburr, list_words, snake_case
 
 snake_case("Café Résumé Builder")  # "cafe_resume_builder"
 list_words("fred's horse is fast")  # ["fred's", "horse", "is", "fast"]
-deburr("crème brûlée")              # "creme brulee"
+deburr("crème brûlée")  # "creme brulee"
 ```
 
 ## Case conversions
@@ -27,9 +27,9 @@ All five case helpers accept arbitrary text and tokenize it the same way: `list_
 ```python
 from nclutils.strings import camel_case, separator_case, snake_case
 
-camel_case("read CSV file")             # "readCsvFile"
-separator_case("hello world", ".")      # "hello.world"
-snake_case("crème brûlée")              # "creme_brulee"
+camel_case("read CSV file")  # "readCsvFile"
+separator_case("hello world", ".")  # "hello.world"
+snake_case("crème brûlée")  # "creme_brulee"
 ```
 
 ## Tokenizing
@@ -82,8 +82,8 @@ Strip Latin-1 diacritical marks: `é` becomes `e`, `ñ` becomes `n`, `ß` become
 ```python
 from nclutils.strings import deburr
 
-deburr("déjà vu")        # "deja vu"
-deburr("crème brûlée")   # "creme brulee"
+deburr("déjà vu")  # "deja vu"
+deburr("crème brûlée")  # "creme brulee"
 ```
 
 `deburr` covers the Latin-1 supplementary block. It does not transliterate non-Latin scripts.
@@ -105,10 +105,10 @@ Three variants: pad on both sides (`pad`), the right (`pad_end`), or the left (`
 ```python
 from nclutils.strings import pad, pad_start, pad_end
 
-pad("abc", 5)              # " abc "
-pad("abc", 6, "x")         # "xabcxx"   (right gets the extra char)
-pad_end("abc", 5, ".")     # "abc.."
-pad_start("abc", 5, ".")   # "..abc"
+pad("abc", 5)  # " abc "
+pad("abc", 6, "x")  # "xabcxx"   (right gets the extra char)
+pad_end("abc", 5, ".")  # "abc.."
+pad_start("abc", 5, ".")  # "..abc"
 ```
 
 If the text is already at or beyond the target length, the original string is returned unchanged. Multi-character `chars` are repeated and truncated to fit, so `pad("abc", 5, "...")` becomes `".abc."`.
@@ -132,13 +132,13 @@ Format a byte count as a human-readable string. Picks the largest of `B`, `kB`, 
 ```python
 from nclutils.strings import human_size
 
-human_size(512)              # "512 B"
-human_size(1500)             # "1.5 kB"
-human_size(1000 ** 4)        # "1.0 TB"
-human_size(1000 ** 5)        # "1.0 PB"
-human_size(1000 ** 8)        # "1.0 YB"
-human_size(1500, decimals=2) # "1.50 kB"
-human_size(-1500)            # "-1.5 kB"
+human_size(512)  # "512 B"
+human_size(1500)  # "1.5 kB"
+human_size(1000**4)  # "1.0 TB"
+human_size(1000**5)  # "1.0 PB"
+human_size(1000**8)  # "1.0 YB"
+human_size(1500, decimals=2)  # "1.50 kB"
+human_size(-1500)  # "-1.5 kB"
 ```
 
 Values past YB stay on the YB unit rather than rolling over, so `human_size(1000 ** 9)` returns `"1000.0 YB"`. Uses SI base 1000 with SI unit labels (`kB`, `MB`, etc.); if your context requires binary IEC labeling (`KiB`, `MiB` with base 1024), format the value yourself.
@@ -150,11 +150,11 @@ Render integers 0–10 as keycap emoji. Numbers outside that range come back as 
 ```python
 from nclutils.strings import int_to_emoji
 
-int_to_emoji(1)                  # ":one:"
-int_to_emoji(10)                 # ":keycap_ten:"
-int_to_emoji(11)                 # "11"
+int_to_emoji(1)  # ":one:"
+int_to_emoji(10)  # ":keycap_ten:"
+int_to_emoji(11)  # "11"
 int_to_emoji(11, markdown=True)  # "`11`"
-int_to_emoji(10, images=True)    # "🔟"
+int_to_emoji(10, images=True)  # "🔟"
 ```
 
 Without `images=True`, the output uses Discord-style `:name:` codes that render in chat clients. With `images=True`, the output uses the actual Unicode keycap glyphs.

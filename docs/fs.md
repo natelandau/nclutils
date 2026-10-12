@@ -152,6 +152,7 @@ Pair it with `pp.console()` to render through the same console that the rest of 
 
 ```python
 from nclutils import pp
+
 pp.console().print(directory_tree(Path("./src")))
 ```
 
@@ -178,6 +179,7 @@ Returns `None` if the user isn't found, or if the platform does not provide `pwd
 
 ```python
 import logging
+
 logging.getLogger("nclutils.fs").setLevel(logging.DEBUG)
 logging.basicConfig()
 ```
