@@ -1,6 +1,6 @@
 # Filesystem
 
-Common filesystem operations on top of `pathlib`, `shutil`, and Rich. Imported from `nclutils.fs`.
+Use `nclutils.fs` to copy, back up, clean, and search files and directories, with optional Rich progress bars. Import the functions from `nclutils.fs`.
 
 ```python
 from pathlib import Path
@@ -12,56 +12,78 @@ for src in find_files(Path("src"), globs=["*.py"]):
 
 ## Copying files and directories
 
-`copy_file` and `copy_directory` are drop-in replacements for `shutil.copy` / `shutil.copytree` with two extras: an optional Rich progress bar and automatic backup of an existing destination.
+`copy_file` copies one file. `copy_directory` copies a directory and all its contents. Both functions can show a Rich progress bar, and both back up a destination that already exists before they replace it. Each function returns the destination path.
 
 ```python
 from pathlib import Path
 from nclutils.fs import copy_file, copy_directory
 
-# File copy with a transient progress bar
+# File copy with a progress bar that clears when the copy completes
 copy_file(Path("dist/app.tar.gz"), Path("releases/app.tar.gz"), with_progress=True)
 
 # Directory copy
 copy_directory(Path("./build"), Path("./public"))
 ```
 
-When the destination already exists, the original is moved aside with a timestamped suffix (e.g. `app.tar.gz.20260504T143201-kgk5mzn.bak`). Pass `keep_backup=False` to overwrite without backing up.
+Both functions expand `~` in `src` and `dst`. `copy_file` makes the parent directories of `dst` if they do not exist. The copies keep the permission bits (mode) of the source files and directories. They do not keep modification times.
+
+### Existing destinations
+
+If the destination exists, the function first copies it to a backup next to it, with a timestamped suffix, for example `app.tar.gz.20260504T143201-kgk5mzn.bak`. Then it replaces the destination with the copy.
+
+> [!CAUTION]
+> Pass `keep_backup=False` only if you can lose the destination. The function then replaces an existing destination with no backup. For `copy_directory`, it deletes the full destination tree first, including files that are not in the source. For `copy_file`, it deletes a directory at `dst`.
 
 ```python
-copy_file(src, dst, keep_backup=False)
+from pathlib import Path
+from nclutils.fs import copy_file
+
+copy_file(Path("config.toml"), Path("deploy/config.toml"), keep_backup=False)
 ```
 
-`with_progress=True` shows a Rich progress bar; `transient=True` (the default) clears the bar after the copy completes.
+### Progress bars
 
-For `copy_directory(..., with_progress=True)`, the bar shows the total bytes across all files plus a recycled per-file subtask. When `keep_backup=True` and the destination already exists, you'll see two sequential phases: a Backup phase (snapshotting the existing destination) that dismisses on completion, then a Copy phase. Each phase has its own progress bar.
+Pass `with_progress=True` to show a Rich progress bar. With `transient=True` (the default), the bar clears when the copy completes. Pass `transient=False` to keep it on screen.
 
-Pass `console=` to route the progress bar through your own Rich `Console` instead of Rich's global default. This is useful when you want the bar to share a console with `pp.console()`:
+For `copy_directory`, the bar shows the total bytes of all files and the progress of the current file. If the destination exists and `keep_backup=True`, two bars show one after the other: one for the backup, then one for the copy.
+
+Pass `console=` to show the bar on your own Rich `Console` instead of Rich's default console. For example, use the same console as `nclutils.pp`:
 
 ```python
+from pathlib import Path
 from nclutils import pp
 from nclutils.fs import copy_file
 
-copy_file(src, dst, with_progress=True, console=pp.console())
+copy_file(Path("dist/app.tar.gz"), Path("releases/app.tar.gz"), with_progress=True, console=pp.console())
 ```
 
-> [!NOTE]
-> `copy_directory` and the directory variant of `backup_path` both follow symlinks: a symlink to a directory inside the source tree is materialized as a real directory in the destination, with the symlink target's contents copied recursively. This matches `shutil.copytree(symlinks=False)` (the default).
+### Symlinks
 
-> [!NOTE]
-> By default, same-source-and-destination and parent/child copy attempts return the source path and log a warning. Pass `strict=True` to raise `shutil.SameFileError` or `ValueError` instead.
+`copy_directory` follows symlinks. A symlink to a file or directory inside the source tree becomes a real file or directory in the destination, with the contents of the target. This is the same as the default behavior of `shutil.copytree`.
 
-> [!NOTE]
-> `copy_file` raises `IsADirectoryError` when the source is a directory and `OSError` for any other non-regular file. `~` is expanded in both `src` and `dst` before validation, so `Path("~/foo")` resolves correctly. `copy_directory` preserves the source directory's permission bits (mode) through `shutil.copystat`; modification times are not preserved because file writes during copy bump the mirrored directory's mtime.
+### Errors
+
+`copy_file` raises `FileNotFoundError` if `src` does not exist, `IsADirectoryError` if `src` is a directory, and `OSError` if `src` is another type of non-regular file. `copy_directory` raises `FileNotFoundError` if `src` does not exist or is not a directory.
+
+Some copies are not possible: a file to itself, a directory to itself, or a directory into its own parent or child. By default, the function does not copy, logs a warning, and returns the source path. Pass `strict=True` to raise an exception instead:
+
+| Function         | Condition                                | Exception with `strict=True` |
+| ---------------- | ---------------------------------------- | ---------------------------- |
+| `copy_file`      | `src` and `dst` are the same file        | `shutil.SameFileError`       |
+| `copy_directory` | `src` and `dst` are the same directory   | `shutil.SameFileError`       |
+| `copy_directory` | `src` is a parent or child of `dst`      | `ValueError`                 |
+
+Both functions raise `RuntimeError` if a copied file has a different size from its source.
 
 ## Standalone backups
 
-Use `backup_path` directly when you want to snapshot a path without copying it somewhere else. The default suffix is `.<timestamp>-<rand>.bak`; pass `backup_suffix=` to override.
+Use `backup_path` to make a copy of a file or directory next to the original, without a copy to a different location. The default suffix is `.<timestamp>-<random>.bak`. Pass `backup_suffix=` to use a different suffix. `backup_path` returns the path of the backup.
 
 ```python
 from pathlib import Path
 from nclutils.fs import backup_path
 
-# Snapshot before mutating
+# Back up before you change the file
 original = Path("config.toml")
 backup = backup_path(original)
 # config.toml -> config.toml.20260504T143201-kgk5mzn.bak
@@ -70,14 +92,19 @@ backup = backup_path(original)
 backup_path(original, backup_suffix=".pre-migration.bak")
 ```
 
-By default `backup_path` returns `None` when the source doesn't exist. Pass `strict=True` to raise `FileNotFoundError` instead.
+> [!CAUTION]
+> Use a suffix that no other file uses. If a file or directory with the backup name exists, `backup_path` deletes it before it writes the backup.
 
-> [!NOTE]
-> File backups preserve the source's permission bits (mode); file timestamps are not preserved. Directory backups walk the tree with `os.walk(followlinks=True)`, mirror directory mode and timestamps via `shutil.copystat`, and follow symlinks (including symlinked subdirectories) so the backup contains resolved contents. This matches `shutil.copytree(src, target)` defaults.
+If the source does not exist, `backup_path` logs a warning and returns `None`. Pass `strict=True` to raise `FileNotFoundError` instead. `backup_path` accepts `with_progress=`, `transient=`, and `console=` with the same meaning as `copy_file`. It does not expand `~`.
+
+A backup keeps the permission bits of the source, but not the modification times. A directory backup follows symlinks, the same as `copy_directory`.
 
 ## Cleaning a directory
 
-`clean_directory` empties a directory in place: files are unlinked and subdirectories are removed recursively, but the directory itself stays.
+`clean_directory` deletes all contents of a directory and keeps the directory. It deletes files, symlinks, and subdirectories with all their contents. For a symlink, it deletes the link and does not change the target.
+
+> [!CAUTION]
+> Make sure that the path is correct before you call `clean_directory`. It deletes the contents with no backup and no confirmation.
 
 ```python
 from pathlib import Path
@@ -86,42 +113,42 @@ from nclutils.fs import clean_directory
 clean_directory(Path("./tmp"))
 ```
 
-If the path isn't an existing directory, the call is a no-op and a warning is logged. Pass `strict=True` to raise `NotADirectoryError` instead. Symlinks inside the directory (including dangling links and links pointing at directories) are removed via `unlink()`; their targets are not modified.
+If the path is not an existing directory, `clean_directory` logs a warning and does nothing. Pass `strict=True` to raise `NotADirectoryError` instead.
 
 ## Searching
 
 ### `find_files`
 
-Return files in a directory, optionally matching a list of globs. Without `globs`, returns every file in the top level (no recursion).
+`find_files` returns a sorted list of the files in a directory that match one or more glob patterns. A file that matches more than one pattern shows only once. Without `globs`, it returns all files in the top level of the directory, with no recursion.
 
 ```python
 from pathlib import Path
 from nclutils.fs import find_files
 
-# All files in src/, excluding dotfiles
+# All files in src/, without dotfiles
 find_files(Path("src"), ignore_dotfiles=True)
 
 # Only Python and TOML files
 find_files(Path("."), globs=["*.py", "*.toml"])
+
+# Python files in all subdirectories
+find_files(Path("."), globs=["**/*.py"])
 ```
 
-Globs are passed through to `Path.glob`, so `**/*.py` works for recursive matching.
-
-> [!NOTE]
-> When `ignore_dotfiles=True`, files reached through a hidden directory (such as `**/.cache/foo.py`) are also excluded. The user-supplied root path is never filtered, so passing a hidden directory like `Path("~/.config")` as the search root works as expected. If multiple globs match the same file, it appears only once in the result.
+The patterns go to `Path.glob`, so `**/*.py` matches recursively. With `ignore_dotfiles=True`, `find_files` skips files whose name starts with `.` and files inside a directory whose name starts with `.`. The directory that you pass is never filtered, so `Path("~/.config").expanduser()` works as a search root.
 
 ### `find_subdirectories`
 
-Search a directory tree with depth control, regex filtering, and an optional leaf-only mode.
+`find_subdirectories` returns a sorted list of subdirectories, with a depth limit, a name filter, and an option to return only the deepest matches.
 
 ```python
 from pathlib import Path
 from nclutils.fs import find_subdirectories
 
-# Immediate subdirs only
+# Immediate subdirectories only
 find_subdirectories(Path("."))
 
-# Up to two levels deep, names starting with 'a', skip hidden, leaves only
+# Up to two levels deep, names that start with "a", no hidden directories, leaves only
 find_subdirectories(
     Path("."),
     depth=2,
@@ -131,51 +158,57 @@ find_subdirectories(
 )
 ```
 
-`leaf_dirs_only=True` filters the result so that directories which still contain matching subdirectories within the depth limit are excluded. The result is sorted by path.
+The parameters work as follows:
 
-> [!NOTE]
-> `depth` must be 1 or greater; passing 0 or a negative value raises `ValueError`. The `filter_regex` is applied with `re.search`, so it matches if the pattern is found anywhere in a directory's name. Anchor with `^` or `$` for whole-name matching. When `ignore_dotfiles=True`, the user-supplied root directory is never filtered out; only descendants whose own name starts with `.` are excluded.
+- `depth` is the number of levels to search. `1` (the default) returns only the immediate subdirectories. A value less than `1` raises `ValueError`.
+- `filter_regex` is matched against each directory name with `re.search`, so it matches anywhere in the name. Use `^` and `$` to match the full name. The default, `""`, matches all names.
+- `ignore_dotfiles=True` skips directories whose name starts with `.` and does not search inside them. The directory that you pass is never filtered.
+- `leaf_dirs_only=True` removes each directory that contains another match within the depth limit.
 
 ## Building a directory tree
 
-`directory_tree` returns a [`rich.tree.Tree`](https://rich.readthedocs.io/en/stable/tree.html) that renders nicely in a Rich `Console`.
+`directory_tree` returns a [`rich.tree.Tree`](https://rich.readthedocs.io/en/stable/tree.html) of a directory and all its contents. Directories come first, and each file shows its size. Hidden files and directories are left out unless you pass `show_hidden=True`.
 
 ```python
 from pathlib import Path
 from rich.console import Console
 from nclutils.fs import directory_tree
 
-Console().print(directory_tree(Path("./src"), show_hidden=False))
+Console().print(directory_tree(Path("./src")))
 ```
 
-Pair it with `pp.console()` to render through the same console that the rest of `nclutils` uses:
+To render the tree on the same console as the rest of `nclutils`, use `pp.console()`:
 
 ```python
+from pathlib import Path
 from nclutils import pp
+from nclutils.fs import directory_tree
 
-pp.console().print(directory_tree(Path("./src")))
+pp.console().print(directory_tree(Path("./src"), show_hidden=True))
 ```
 
 ## Looking up a user's home directory
 
-`find_user_home_dir` resolves a home directory in a way that's friendly to scripts running under `sudo`. POSIX lookups go through the standard library `pwd` module (`pwd.getpwnam(username).pw_dir`), so no subprocess is spawned.
+`find_user_home_dir` returns a home directory, and gives the correct result for scripts that run under `sudo`.
 
 ```python
 from nclutils.fs import find_user_home_dir
 
-# When run normally: same as Path.home()
-# When run under sudo: returns the invoking user's home, not /root
+# Without sudo: the same as Path.home()
+# Under sudo: the home of the user who ran sudo, not /root
 find_user_home_dir()
 
-# Look up a specific user
+# A specific user
 find_user_home_dir("alice")
 ```
 
-Returns `None` if the user isn't found, or if the platform does not provide `pwd` (Windows). Pass `strict=True` to raise `KeyError` when the user is unknown. The `pwd` unavailability path always returns `None` regardless of `strict`, since it represents a platform limitation rather than a runtime error. On platforms without `pwd` a warning is logged.
+Without `username`, the function uses the `SUDO_USER` environment variable. If `SUDO_USER` is not set, it returns `Path.home()`. A user name is looked up with the standard library `pwd` module.
+
+If the user is not found, the function returns `None`. Pass `strict=True` to raise `KeyError` instead. On platforms without `pwd`, such as Windows, a user name lookup logs a warning and returns `None`, also with `strict=True`.
 
 ## Diagnostic logging
 
-`nclutils.fs` emits `DEBUG`/`WARNING`/`ERROR` messages through the stdlib `logging` module under the `nclutils.fs` logger. To see them:
+`nclutils.fs` writes `DEBUG`, `WARNING`, and `ERROR` records through stdlib `logging`, under the `nclutils.fs` logger. Each skipped operation logs a warning, and each exception logs an error before it is raised. To show the records:
 
 ```python
 import logging
@@ -184,15 +217,15 @@ logging.getLogger("nclutils.fs").setLevel(logging.DEBUG)
 logging.basicConfig()
 ```
 
-This is independent of `nclutils.pp`. It covers internal operations like "starting a copy" or "skipping a backup because the source is missing."
+The logger is separate from `nclutils.pp` and shows nothing until the host application attaches a handler.
 
 ## API reference
 
-- `backup_path(src, backup_suffix="", *, with_progress=False, transient=True, console=None, strict=False)`. Snapshot a file or directory with a timestamped suffix, preserving the source's permission bits. Raises `FileNotFoundError` if `strict=True` and source is missing.
-- `clean_directory(directory, *, strict=False)`. Recursively empty a directory in place. Raises `NotADirectoryError` if `strict=True` and target is not a directory.
-- `copy_file(src, dst, *, with_progress=False, transient=True, keep_backup=True, console=None, strict=False)`. Copy a file with optional progress and destination backup. Raises `IsADirectoryError` if `src` is a directory; raises `shutil.SameFileError` if `strict=True` and src equals dst.
-- `copy_directory(src, dst, *, with_progress=False, transient=True, keep_backup=True, console=None, strict=False)`. Recursively copy a directory, preserving directory permission bits. Raises `shutil.SameFileError` or `ValueError` if `strict=True` and src/dst are the same or nested.
-- `directory_tree(directory, *, show_hidden=False)`. Build a `rich.tree.Tree` view of a directory.
-- `find_files(path, globs=None, *, ignore_dotfiles=False)`. List files in a directory matching globs. Duplicate matches across overlapping globs are deduped.
-- `find_subdirectories(directory, depth=1, filter_regex="", *, ignore_dotfiles=False, leaf_dirs_only=False)`. Search subdirectories with depth and regex filtering. `depth` must be >= 1.
-- `find_user_home_dir(username=None, *, strict=False)`. Resolve a user's home directory, honoring `SUDO_USER` when running under sudo. Raises `KeyError` if `strict=True` and user is unknown.
+- `backup_path(src: Path, backup_suffix: str = "", *, with_progress: bool = False, transient: bool = True, console: Console | None = None, strict: bool = False) -> Path | None`. Copy a file or directory to the same name with a suffix. Returns the backup path, or `None` if `src` does not exist. Raises `FileNotFoundError` if `strict=True` and `src` does not exist.
+- `clean_directory(directory: Path, *, strict: bool = False) -> None`. Delete all contents of a directory and keep the directory. Raises `NotADirectoryError` if `strict=True` and `directory` is not an existing directory.
+- `copy_file(src: Path, dst: Path, *, with_progress: bool = False, transient: bool = True, keep_backup: bool = True, console: Console | None = None, strict: bool = False) -> Path`. Copy a file, and back up an existing destination. Returns `dst`, or `src` if no copy was made. Raises `FileNotFoundError`, `IsADirectoryError`, or `OSError` for a bad `src`, `shutil.SameFileError` if `strict=True` and `src` is `dst`, and `RuntimeError` if the copy is incomplete.
+- `copy_directory(src: Path, dst: Path, *, with_progress: bool = False, transient: bool = True, keep_backup: bool = True, console: Console | None = None, strict: bool = False) -> Path`. Copy a directory tree, and back up an existing destination. Returns `dst`, or `src` if no copy was made. Raises `FileNotFoundError` if `src` is not a directory. If `strict=True`, raises `shutil.SameFileError` when `src` is `dst` and `ValueError` when one contains the other. Raises `RuntimeError` if a file copy is incomplete.
+- `directory_tree(directory: Path, *, show_hidden: bool = False) -> rich.tree.Tree`. Build a Rich tree of a directory.
+- `find_files(path: Path, globs: list[str] | None = None, *, ignore_dotfiles: bool = False) -> list[Path]`. Return the sorted, unique files that match the glob patterns.
+- `find_subdirectories(directory: Path, depth: int = 1, filter_regex: str = "", *, ignore_dotfiles: bool = False, leaf_dirs_only: bool = False) -> list[Path]`. Return the sorted subdirectories that match the filters. Raises `ValueError` if `depth` is less than 1.
+- `find_user_home_dir(username: str | None = None, *, strict: bool = False) -> Path | None`. Return the home directory of a user, or of the user who ran `sudo`. Returns `None` if the user is not found. Raises `KeyError` if `strict=True` and the user is not found.

@@ -1,6 +1,6 @@
 # Utilities
 
-Timestamps, unique identifiers, and a Python version check. Imported from `nclutils.utils`.
+Timestamps, unique identifiers, and a Python version check. Import them from `nclutils.utils`.
 
 ```python
 from nclutils.utils import iso_timestamp, new_timestamp_uid
@@ -11,9 +11,11 @@ new_timestamp_uid()  # "20260504T183201-kgk5mzn"
 
 ## Timestamps
 
+Both timestamp functions return an ISO 8601 string in UTC with a trailing `Z` in place of `+00:00`.
+
 ### `iso_timestamp`
 
-Return the current UTC time as an ISO 8601 string. The `+00:00` suffix is replaced with a trailing `Z` so the output is consistent across timezones.
+Return the current UTC time. Pass `microseconds=True` to add microseconds.
 
 ```python
 from nclutils.utils import iso_timestamp
@@ -24,7 +26,7 @@ iso_timestamp(microseconds=True)  # "2026-05-04T18:32:01.847239Z"
 
 ### `format_iso_timestamp`
 
-The same format applied to an existing `datetime`. The input is converted to UTC before formatting, so naive datetimes are treated as local time.
+Format an existing `datetime` in the same format. The function converts the input to UTC first. A naive `datetime` is treated as local time.
 
 ```python
 from datetime import datetime, timezone
@@ -36,35 +38,33 @@ format_iso_timestamp(dt)  # "2026-05-04T18:32:01Z"
 
 ## Unique identifiers
 
-Three helpers cover different needs: random strings (`new_uid`), sortable timestamp-prefixed strings (`new_timestamp_uid`), and process-local incrementing counters (`unique_id`).
+Three functions make identifiers for different needs: random strings (`new_uid`), sortable strings with a timestamp prefix (`new_timestamp_uid`), and a counter for the current process (`unique_id`).
 
 ### `new_uid`
 
-Generate a case-insensitive random base-36 string with at least the requested bits of entropy. Uses `random.SystemRandom`, so it's safe for filenames, cache keys, and other identifiers where collisions matter.
+Make a random string of lowercase letters and digits (base 36) with at least `bits` bits of entropy. It uses `random.SystemRandom`, so it is safe for filenames, cache keys, and other identifiers that must not collide.
 
 ```python
 from nclutils.utils import new_uid
 
-new_uid()  # 64 bits, ~13 chars: "kgk5mznp7q3xz"
-new_uid(bits=128)  # ~25 chars
+new_uid()  # 64 bits, 13 characters: "kgk5mznp7q3xz"
+new_uid(bits=128)  # 25 characters
 ```
 
 ### `new_timestamp_uid`
 
-Combine a UTC timestamp prefix with a random suffix. The result is lexicographically sortable by creation time, which is useful for backup filenames or log records.
+Join a UTC timestamp (`YYYYMMDDTHHMMSS`) and a random suffix from `new_uid`. A sort by string puts the results in creation order, to the second. Use it for backup filenames or log records. `nclutils.fs.backup_path` uses this value in its default backup suffix.
 
 ```python
 from nclutils.utils import new_timestamp_uid
 
-new_timestamp_uid()  # "20260504T183201-kgk5mzn"
-new_timestamp_uid(bits=64)  # longer random suffix
+new_timestamp_uid()  # 32 bits: "20260504T183201-kgk5mzn"
+new_timestamp_uid(bits=64)  # 13-character random suffix
 ```
-
-This is the format `nclutils.fs.backup_path` uses for default backup suffixes.
 
 ### `unique_id`
 
-Return a process-wide incrementing integer as a string, optionally prefixed. The counter is module-level state, so it's shared across every caller and isn't reset between calls.
+Return the next value of a counter as a string, with an optional prefix. The counter starts at 1, is shared by all callers in the process, and does not reset.
 
 ```python
 from nclutils.utils import unique_id
@@ -75,26 +75,24 @@ unique_id()  # "3"
 ```
 
 > [!NOTE]
-> `unique_id` is sequential, not random. It's useful for short-lived labels (test fixtures, in-memory IDs) but isn't safe across processes or restarts.
+> `unique_id` is sequential, not random. Use it for short-lived labels, such as test fixtures and in-memory IDs. It is not unique across processes or restarts.
 
 ## Python version checks
 
-`check_python_version` compares `sys.version_info` against a `(major, minor)` minimum. Use it to gate code paths that depend on a specific interpreter version.
+`check_python_version(major, minor)` returns `True` if the running interpreter is at the `(major, minor)` version or later. Use it to gate code that needs a newer interpreter than the package minimum of Python 3.11.
 
 ```python
 from nclutils.utils import check_python_version
 
-if not check_python_version(3, 12):
-    raise RuntimeError("Python 3.12+ required")
+if check_python_version(3, 13):
+    ...  # code that needs Python 3.13
 ```
-
-No `nclutils` module gates itself on this. It exists for host applications that need to guard their own version-dependent code paths.
 
 ## API reference
 
-- `check_python_version(major, minor)`. Return `True` if the running interpreter meets the minimum version.
-- `format_iso_timestamp(datetime_obj, *, microseconds=False)`. Format a `datetime` as an ISO 8601 UTC string.
-- `iso_timestamp(*, microseconds=False)`. Current UTC time as an ISO 8601 string.
-- `new_uid(bits=64)`. Random base-36 string with at least the requested bits of entropy.
-- `new_timestamp_uid(bits=32)`. Sortable timestamp-prefixed UID.
-- `unique_id(prefix="")`. Process-wide incrementing counter as a string.
+- `check_python_version(major, minor) -> bool`. Return `True` if the running interpreter meets the minimum version.
+- `format_iso_timestamp(datetime_obj, *, microseconds=False) -> str`. Format a `datetime` as an ISO 8601 UTC string.
+- `iso_timestamp(*, microseconds=False) -> str`. Current UTC time as an ISO 8601 string.
+- `new_uid(bits=64) -> str`. Random base-36 string with at least `bits` bits of entropy.
+- `new_timestamp_uid(bits=32) -> str`. Sortable UID with a timestamp prefix.
+- `unique_id(prefix="") -> str`. Next value of the process-wide counter, as a string.
