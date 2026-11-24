@@ -53,8 +53,8 @@
 ]
 
 [tool.uv]
-    # Matches the uv_build range in build-system; CI's setup-uv installs the newest uv it allows
-    required-version = ">=0.13.9,<0.14"
+    # CI's setup-uv reads this and installs the newest uv it allows
+    required-version = ">=0.13.9"
 
 [tool.commitizen]
     bump_message               = "bump(release): v$current_version → v$new_version"
