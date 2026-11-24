@@ -83,7 +83,7 @@ pp.info("saved", tag="api", right_tag="200ms")
 
 - `tag`: dim text between marker and message, no brackets on the console. The logfile prepends it as `[tag] `.
 - `right_tag`: dim text right-aligned to the console width, first line only. Console-only, never logged.
-- `debug` / `trace` auto-fill `right_tag` with elapsed time `[+s.fffs]`, measured from the emitter's first `debug` or `trace` call. A caller `right_tag` replaces it on the console; the logfile still appends the elapsed time to the message as `\[+s.fffs]`, with a literal backslash.
+- `debug` / `trace` auto-fill `right_tag` with elapsed time `[+s.fffs]`, measured from the emitter's first `debug` or `trace` call. A caller `right_tag` replaces it on the console; the logfile still appends the elapsed time to the message as `[+s.fffs]`.
 - `dryrun` with a tag: console `deploy [dry-run] would push`, logfile `[deploy] [dry-run] would push`.
 - Tags are parsed as Rich markup. Escape `[` and `]` yourself (`rich.markup.escape`) or pass plain text.
 
@@ -196,7 +196,7 @@ Outcomes:
 `ephemeral=True`:
 
 - Success or skip: spinner and subs are cleared, nothing remains on screen.
-- `s.fail(msg)`: cleared, then `pp.error(msg)` is printed on stderr. The logfile gets `failed: <msg>` and also a plain `<msg>` `ERROR` record from that `error()` call.
+- `s.fail(msg)`: cleared, then an error line is printed on stderr. The logfile gets only `failed: <msg>`.
 - Uncaught exception: cleared, nothing on screen.
 - Logfile records are written as for a non-ephemeral step.
 
@@ -377,7 +377,7 @@ pp.configure(logfile=Path("run.log"), loglevel=pp.LogLevel.INFO)
 | --- | --- | --- |
 | `info`, `success` | `INFO` | `[tag] msg` |
 | `dryrun` | `INFO` | `[tag] [dry-run] msg` |
-| `debug`, `trace` | `DEBUG`, `TRACE` | `[tag] msg  \[+s.fffs]` (literal backslash) |
+| `debug`, `trace` | `DEBUG`, `TRACE` | `[tag] msg  [+s.fffs]` |
 | `warning`, `error`, `critical` | `WARNING`, `ERROR`, `CRITICAL` | `[tag] msg` |
 | `step()` | `INFO`, `failed:` at `ERROR` | `starting:`, `succeeded:`, `skipped:`, `failed:` |
 | `s.sub()` | `INFO` | `  text` |

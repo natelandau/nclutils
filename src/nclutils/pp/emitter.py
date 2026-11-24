@@ -1026,7 +1026,9 @@ class Emitter:
         return kwargs
 
     def _elapsed_tag(self) -> str:
-        """Return a Rich-escaped right-aligned timestamp tag for verbose logging.
+        """Return the plain `[+s.fffs]` timestamp tag for verbose logging.
+
+        Callers escape it before passing it to the console, which parses `right_tag` as markup.
 
         Lazy-initializes the reference clock on first call so timestamps reflect
         when verbose logging actually began rather than emitter construction.
@@ -1034,7 +1036,7 @@ class Emitter:
         """
         if self._log_t0 is None:
             self._log_t0 = time.monotonic()
-        return f"\\[+{time.monotonic() - self._log_t0:.3f}s]"
+        return f"[+{time.monotonic() - self._log_t0:.3f}s]"
 
     def _emit_log_record(
         self,
@@ -1240,7 +1242,7 @@ class Emitter:
             markup=markup,
             details=_attach_exception_to_details(details, exception, show_locals=show_locals),
             tag=tag,
-            right_tag=right_tag if right_tag is not None else elapsed,
+            right_tag=right_tag if right_tag is not None else escape(elapsed),
             **self._wrap_kwargs(self.console, kwargs),
         )
 
@@ -1291,7 +1293,7 @@ class Emitter:
             markup=markup,
             details=_attach_exception_to_details(details, exception, show_locals=show_locals),
             tag=tag,
-            right_tag=right_tag if right_tag is not None else elapsed,
+            right_tag=right_tag if right_tag is not None else escape(elapsed),
             **self._wrap_kwargs(self.console, kwargs),
         )
 
@@ -1724,7 +1726,23 @@ class Emitter:
                             details=log_details,
                         )
                         if ephemeral:
-                            self.error(exit_signal.message, markup=exit_signal.markup)
+                            # The transient display clears the failure, so show it again on
+                            # stderr. Console only: the `failed:` record above is the log entry.
+                            err_style, err_detail_style, err_marker = self._resolve_with_overrides(
+                                "error", style=None, detail_style=None, marker=None
+                            )
+                            _print_level(
+                                self.err_console,
+                                style=err_style,
+                                detail_style=err_detail_style,
+                                marker=err_marker,
+                                message=exit_signal.message,
+                                markup=exit_signal.markup,
+                                details=None,
+                                tag=None,
+                                right_tag=None,
+                                **self._wrap_kwargs(self.err_console, {}),
+                            )
                         return
                     # skip outcome: we've already written our own log line, so we
                     # return out of `with Live(...)` instead of falling through to
