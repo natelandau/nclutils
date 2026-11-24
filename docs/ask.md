@@ -1,9 +1,9 @@
 # Ask
 
-Two thin wrappers around [questionary](https://github.com/tmbo/questionary) for the most common interactive prompts: pick one item or pick many. Imported from `nclutils.ask`.
+Two wrappers around [questionary](https://github.com/tmbo/questionary) for the most common interactive prompts: pick one item or pick many. Import them from `nclutils.ask`.
 
 > [!NOTE]
-> The legacy import path `nclutils.questions` still works but is deprecated and will be removed in v4.0.0. New code should use `nclutils.ask`.
+> `nclutils.questions` is a deprecated alias of `nclutils.ask`. It raises a `DeprecationWarning` on import and is scheduled for removal in v4.0.0. Import from `nclutils.ask` instead.
 
 ```python
 from nclutils.ask import choose_one_from_list
@@ -13,7 +13,7 @@ color = choose_one_from_list(["red", "green", "blue"], "Pick a color")
 
 ## Single selection
 
-`choose_one_from_list(choices, message)` displays a select widget and returns the chosen value, or `None` if the user cancels (Esc / Ctrl-C) or the choices list is empty.
+`choose_one_from_list(choices, message)` shows a select widget and returns the chosen value. It returns `None` if the choices list is empty or the user presses Ctrl-C. It also returns `None` if the chosen value is falsy, such as `0`, `False`, or `""`.
 
 ```python
 from nclutils.ask import choose_one_from_list
@@ -25,7 +25,7 @@ if color is None:
 
 ## Multiple selection
 
-`choose_multiple_from_list(choices, message)` shows a checkbox widget and returns a list of selected values. Like the single-select version, it returns `None` if nothing was selected or the user cancelled.
+`choose_multiple_from_list(choices, message)` shows a checkbox widget and returns a list of the selected values. It returns `None` if the choices list is empty, the user selects nothing, or the user presses Ctrl-C.
 
 ```python
 from nclutils.ask import choose_multiple_from_list
@@ -40,17 +40,17 @@ for area in picks or []:
 
 ## Choice formats
 
-Both functions accept the same three input shapes. Use whichever fits your data:
+Both functions accept the same three input shapes. Use the shape that fits your data.
 
 ### Plain values
 
-A list of `Path`, `str`, `int`, `float`, or `bool`. The display string is the value's `str()` representation, except for `Path` where the display string is `path.name`:
+A list of `Path`, `str`, `int`, `float`, or `bool`. The widget shows the `str()` of each value. For a `Path`, the widget shows `path.name`.
 
 ```python
 from pathlib import Path
 from nclutils.ask import choose_one_from_list
 
-# Display will show just the filename, but the returned value is the full Path
+# The widget shows only the filename, but the returned value is the full Path
 config = choose_one_from_list(
     [Path("./conf/dev.toml"), Path("./conf/prod.toml")],
     "Choose a config",
@@ -59,7 +59,7 @@ config = choose_one_from_list(
 
 ### `(label, value)` tuples
 
-When you need a different display string than the value, pass a list of two-tuples. The first element is shown to the user; the second is what gets returned.
+To show a label that is different from the value, pass a list of two-tuples. The widget shows the first element and the function returns the second.
 
 ```python
 from dataclasses import dataclass
@@ -84,7 +84,7 @@ profile = choose_one_from_list(
 
 ### Single-key dicts
 
-A list of single-key `{label: value}` dicts works the same as the tuple form. Use it when your data is already shaped that way.
+A list of single-key `{label: value}` dicts works the same as the tuple form. Use it when your data already has that shape.
 
 ```python
 from nclutils.ask import choose_multiple_from_list
@@ -93,15 +93,15 @@ selected = choose_multiple_from_list(
     [{"Frontend": "fe"}, {"Backend": "be"}, {"Infra": "infra"}],
     "Which teams to notify?",
 )
-# -> ["fe", "be"] (or whichever boxes the user checked)
+# ["fe", "be"] if the user checks Frontend and Backend
 ```
 
 > [!NOTE]
-> Mixing shapes in the same call works (each item is inspected independently), but it's a smell. Pick one shape per prompt.
+> Each item is converted on its own, so one call can mix shapes. One shape per prompt is easier to read.
 
 ## API reference
 
 - `choose_one_from_list(choices, message) -> T | None`. Single-select prompt. Returns the chosen value or `None`.
 - `choose_multiple_from_list(choices, message) -> list[T] | None`. Multi-select prompt. Returns the chosen values or `None`.
 
-`choices` accepts `list[Path | str | int | float | bool]`, `list[tuple[str, T]]`, or `list[dict[str, T]]`. `message` is the prompt text shown above the widget.
+`choices` accepts `list[Path | str | int | float | bool]`, `list[tuple[str, T]]`, or `list[dict[str, T]]`. `message` is the prompt text that shows above the widget.

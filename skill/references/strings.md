@@ -1,81 +1,12 @@
 # `nclutils.strings` reference
 
-Case conversions, padding, tokenizing, normalization.
-
-## Case conversions
-
-All five accept arbitrary text and tokenize the same way: `list_words` splits on word boundaries, contractions are folded, accents stripped via `deburr` before joining.
-
 ```python
-from nclutils.strings import camel_case, kebab_case, pascal_case, separator_case, snake_case
-
-camel_case("FOO BAR_bAz")  # "fooBarBaz"
-kebab_case("The b c_d-e!f")  # "the-b-c-d-e-f"
-pascal_case("FOO BAR_bAz")  # "FooBarBaz"
-separator_case("a!!b___c.d", "_")  # "a_b_c_d"
-snake_case("This is Snake!")  # "this_is_snake"
-snake_case("crème brûlée")  # "creme_brulee"
-```
-
-`separator_case(text, separator="-")` is the generic version; the others are presets.
-
-## Tokenizing
-
-### `list_words(text, pattern="", *, strip_apostrophes=False) -> list[str]`
-
-Split text into words on word boundaries while keeping contractions intact.
-
-```python
-list_words("a b, c; d-e")  # ["a", "b", "c", "d", "e"]
-list_words("Jim's horse is fast")  # ["Jim's", "horse", "is", "fast"]
-list_words("Jim's horse is fast", strip_apostrophes=True)  # ["Jims", ...]
-list_words("fred, barney, & pebbles", "[^, ]+")  # ["fred", "barney", "&", "pebbles"]
-list_words("this_is_a_test")  # ["this", "is", "a", "test"]
-```
-
-### `split_camel_case(string_list, match_case_list=()) -> list[str]`
-
-Break camelCase tokens, preserving acronyms and an optional allowlist of strings that shouldn't be split.
-
-```python
-split_camel_case(["CamelCase", "SomethingElse", "hello", "CEO"])
-# ["Camel", "Case", "Something", "Else", "hello", "CEO"]
-
-split_camel_case(["I have a camelCase", "SomethingElse"], ("SomethingElse",))
-# ["I", "have", "a", "camel", "Case", "SomethingElse"]
-```
-
-## Normalizing
-
-- `deburr(text)` — strip Latin-1 diacritical marks: `é` → `e`, `ñ` → `n`, `ß` → `ss`. Does NOT transliterate non-Latin scripts.
-- `strip_ansi(text)` — remove ANSI escape sequences. Handy after capturing terminal output.
-
-## Padding
-
-- `pad(text, length, chars=" ")` — pad both sides. Right gets the extra char on odd lengths.
-- `pad_start(text, length, chars=" ")` — left-pad.
-- `pad_end(text, length, chars=" ")` — right-pad.
-
-If text is already at or beyond `length`, returned unchanged. Multi-char `chars` repeats and truncates to fit (`pad("abc", 5, "...")` → `".abc."`).
-
-## Misc
-
-- `human_size(size_bytes, *, decimals=1)` — format a byte count with the largest fitting unit (`B`, `kB`, `MB`, `GB`, `TB`, `PB`, `EB`, `ZB`, `YB`). SI base 1000. Bytes always render as integers; `decimals` controls precision for larger units. Negative inputs keep their sign. Values past YB stay on `YB` rather than rolling over (`human_size(1000 ** 9) == "1000.0 YB"`).
-- `random_string(length)` — random ASCII letter string. Uses `random.choice`, NOT cryptographically secure. For secure IDs, use `nclutils.utils.new_uid`.
-- `int_to_emoji(num, *, markdown=False, images=False)` — render 0–10 as keycap emoji.
-    - Default: Discord `:name:` codes (`:one:`, `:keycap_ten:`).
-    - `images=True`: actual Unicode glyphs (`🔟`).
-    - Numbers outside 0–10 come back as plain strings; `markdown=True` wraps them in backticks.
-
-## Signatures
-
-```python
-# Case conversions
+# Case conversion
 camel_case(text: str) -> str
-kebab_case(text: str) -> str
 pascal_case(text: str) -> str
-separator_case(text: str, separator: str = "-") -> str
+kebab_case(text: str) -> str
 snake_case(text: str) -> str
+separator_case(text: str, separator: str = "-") -> str
 
 # Tokenizing
 list_words(text: str, pattern: str = "", *, strip_apostrophes: bool = False) -> list[str]
@@ -90,8 +21,73 @@ pad(text: str, length: int, chars: str = " ") -> str
 pad_start(text: str, length: int, chars: str = " ") -> str
 pad_end(text: str, length: int, chars: str = " ") -> str
 
-# Misc
+# Other
 human_size(size_bytes: float, *, decimals: int = 1) -> str
 int_to_emoji(num: int, *, markdown: bool = False, images: bool = False) -> str
 random_string(length: int) -> str
 ```
+
+## Case conversion
+
+All five run `deburr`, then `list_words(..., strip_apostrophes=True)`, then join. `separator_case` is the general form; `kebab_case` and `snake_case` are `separator_case` with `-` and `_`.
+
+```python
+camel_case("FOO BAR_bAz")         # "fooBarBaz"
+pascal_case("FOO BAR_bAz")        # "FooBarBaz"
+kebab_case("The b c_d-e!f")       # "the-b-c-d-e-f"
+snake_case("Jim's crème brûlée")  # "jims_creme_brulee"
+separator_case("a!!b___c.d", "_") # "a_b_c_d"
+```
+
+Gotchas:
+
+- camelCase input is not split: `snake_case("fooBar")` -> `"foobar"`. Run `split_camel_case` on the words first.
+- Only ASCII `'` is removed. A curly apostrophe (U+2019) splits the word: `kebab_case("Jim’s")` -> `"jim-s"`.
+- `camel_case` and `pascal_case` use `str.title()` per word: `camel_case("1st place")` -> `"1StPlace"`.
+
+## Tokenizing
+
+### `list_words`
+
+- Default pattern: `\b(\w+(?:'\w+)?)\b`, keeps contractions (`"Jim's"`).
+- Underscores are word boundaries (replaced with spaces before matching).
+- `pattern` (second positional arg): custom regex; returns `re.findall` matches.
+- `strip_apostrophes=True`: removes ASCII `'` before matching (`"Jim's"` -> `"Jims"`).
+
+```python
+list_words("a b, c; d-e")                         # ["a", "b", "c", "d", "e"]
+list_words("this_is_a_test")                      # ["this", "is", "a", "test"]
+list_words("fred, barney, & pebbles", "[^, ]+")   # ["fred", "barney", "&", "pebbles"]
+```
+
+### `split_camel_case`
+
+Takes a list of strings, returns one flat list.
+
+- Item in `match_case_list` or all uppercase -> kept whole.
+- Otherwise split on camelCase boundaries and whitespace; acronyms stay together (`"HTTPServer"` -> `["HTTP", "Server"]`).
+- Digits and punctuation are dropped when an item splits: `"abc123Def"` -> `["abc", "Def"]`.
+
+```python
+split_camel_case(["CamelCase", "hello", "CEO"])                         # ["Camel", "Case", "hello", "CEO"]
+split_camel_case(["I have a camelCase", "SomethingElse"], ("SomethingElse",))
+# ["I", "have", "a", "camel", "Case", "SomethingElse"]
+```
+
+## Normalizing
+
+- `deburr`: maps Latin-1 letters (U+00C0 to U+00FF) to ASCII: `é` -> `e`, `ß` -> `ss`, `Æ` -> `Ae`; `×` and `÷` -> space. Other scripts pass through unchanged.
+- `strip_ansi`: removes ANSI escape sequences.
+
+## Padding
+
+- `pad`: both sides; odd remainder goes to the right.
+- `pad_start`: left. `pad_end`: right.
+- `text` at or past `length` -> returned unchanged.
+- Multi-char `chars` repeats and is truncated to fit: `pad("abc", 5, "...")` -> `".abc."`.
+
+## Other
+
+- `human_size`: SI units, base 1000: `B`, `kB`, `MB`, `GB`, `TB`, `PB`, `EB`, `ZB`, `YB`. Bytes render as integers (`"512 B"`); larger units use `decimals` (`human_size(1500)` -> `"1.5 kB"`). Negatives keep the sign. Past YB stays on YB: `human_size(1000 ** 9)` -> `"1000.0 YB"`.
+- `int_to_emoji`: 0 to 10 -> Discord codes (`":one:"`, `":keycap_ten:"`); `images=True` -> Unicode keycap glyphs. Other numbers -> `str(num)`; with `markdown=True`, wrapped in backticks (`` "`11`" ``).
+- `random_string`: ASCII letters (a-z, A-Z) via `random.choice`, not cryptographically secure. For secure IDs use `nclutils.utils.new_uid`.

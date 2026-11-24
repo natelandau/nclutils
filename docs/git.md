@@ -1,6 +1,6 @@
 # Git
 
-Git operations for Python scripts. Each helper shells out to the `git` binary through `nclutils.sh.run_command`, so a working `git` install is the only runtime requirement. There is no third-party git library, no in-process libgit2 binding, and no global state.
+Git operations for Python scripts. Each helper runs the `git` binary through `nclutils.sh.run_command`, so a working `git` install is the only runtime requirement.
 
 ```python
 from nclutils.git import get_repo_state, sync_branch
@@ -13,38 +13,38 @@ if state.behind > 0 and not state.is_dirty:
 
 ## When to use this module
 
-This module is aimed at scripts that need a handful of common operations without the weight of a full git library:
+Use this module in scripts that need a few common git operations without a full git library:
 
-- Checking repo state (current branch, dirty, ahead/behind, stash count) in a way that's easy to act on.
-- Running everyday workflows (fetch then rebase, stash around a risky operation, clean up merged branches) as a single call.
-- Driving git worktrees from Python with structured results.
-- Calling arbitrary git subcommands when the helpers don't fit, with the same logging and error handling as everything else.
+- Read the repo state (current branch, dirty files, ahead and behind counts, stashes) as typed values.
+- Run everyday workflows (fetch then rebase, stash around a risky operation, delete merged branches) in one call.
+- Create, list, and delete git worktrees with structured results.
+- Run any other git subcommand with the same logging and error handling.
 
-Process semantics match `git` on the command line. Hooks fire, configuration loads the same way, and `GIT_*` environment variables work as documented. The cost is that parsing porcelain output is on the caller for anything the composites don't already cover. The composites in this module do that parsing for the workflows that come up most often.
-
-Errors come back as `ShellCommandError` (from `nclutils.sh`), `NotARepoError`, or `ValueError`. The exception hierarchy is small on purpose; there's nothing new to learn beyond what `nclutils.sh` already exposes.
+Git behaves the same as on the command line. Hooks run, configuration loads the same way, and `GIT_*` environment variables work as git documents them. The helpers parse git output for the common workflows. For any other output, you parse it yourself.
 
 ## Conventions
 
-A few conventions apply across every helper.
+These conventions apply to every helper.
 
 ### Short names everywhere
 
-Every helper that takes or returns a branch uses the short name: `"main"`, not `"refs/heads/main"`; `("origin", "main")`, not `("origin", "refs/heads/main")`. Remote names are short too (`"origin"`, not a URL).
+Every helper that takes or returns a branch uses the short name: `"main"`, not `"refs/heads/main"`, and `("origin", "main")`, not `("origin", "refs/heads/main")`. Remote names are short too (`"origin"`, not a URL).
 
-The one exception is `ahead_behind`, which accepts anything `git rev-parse` accepts: branch names, SHAs (full or short), tags, or expressions like `HEAD~3` or `origin/main`.
+The exception is `ahead_behind`, which accepts any revision that `git rev-parse` accepts: branch names, full or short SHAs, tags, or expressions such as `HEAD~3` or `origin/main`.
 
 ### `cwd`, `stream`, and `env` are uniform
 
-Every helper accepts the same three forwarding arguments, with the same meaning everywhere:
+Every helper except `is_git_installed` accepts the same three arguments, with the same meaning everywhere:
 
-- `cwd: Path | str | None = None`. The repo to operate on. The default `None` uses the process's current working directory. `~` is expanded.
-- `stream: bool = False`. When `True`, tees git's stdout/stderr to the parent streams in real time. Useful for long-running operations like fetch, clone, or rebase where progress matters.
-- `env: Mapping[str, str] | None = None`. Replaces the child environment. The usual pattern is `{**os.environ, "GIT_SSH_COMMAND": "..."}` so the rest of the environment is preserved.
+- `cwd: Path | str | None = None`. The repo to operate on. `None` uses the current working directory of the process. A leading `~` is expanded.
+- `stream: bool = False`. If `True`, git's stdout and stderr also go to the terminal in real time. Use it to show progress for slow operations such as fetch or rebase.
+- `env: Mapping[str, str] | None = None`. Replaces the environment of the git process. To keep the rest of the environment, pass `{**os.environ, "GIT_SSH_COMMAND": "..."}`.
 
-These pass straight through to `run_git`, which forwards them to `nclutils.sh.run_command`.
+The helpers pass these arguments to `run_git`, which passes them to `nclutils.sh.run_command`.
 
 ```python
+import os
+
 from nclutils.git import current_branch, fetch
 
 current_branch(cwd="~/projects/my-app")
@@ -53,18 +53,21 @@ fetch(cwd="/srv/repo", stream=True, env={**os.environ, "GIT_TERMINAL_PROMPT": "0
 
 ### Outside a repo
 
-Helpers split into two categories when `cwd` is not inside a git repo:
+If `cwd` is not inside a git repo, a helper does one of three things:
 
-- "Absent to empty" helpers return a falsy or empty value: `is_git_repo()` returns `False`, `all_local_branches()` returns an empty frozenset. Safe to use as guards.
-- Everything else raises `NotARepoError`. The exception name is intentional; `git` itself returns a generic "not a git repository" error, and `NotARepoError` lifts that into a class you can catch.
+- Returns an empty or falsy value, so you can use it as a guard: `is_git_repo`, `current_branch`, `default_branch`, `branch_exists`, `all_local_branches`, `tracking_branch`, and `primary_remote`. `delete_branches` puts every name in `skipped`.
+- Raises `NotARepoError`: `repo_root`, `is_dirty`, `is_rebase_in_progress`, `get_repo_state`, `fetch`, `stashed`, and `sync_branch`.
+- Raises an error from the git command or from the missing default branch. `ahead_behind`, `gone_branches`, `stash_counts`, `run_git`, and the worktree helpers raise `ShellCommandFailedError`. With `target=None`, `merged_branches`, `is_empty_branch`, and `prunable_branches` raise `ValueError`.
+
+Use `is_git_repo()` first when your script can start outside a repo.
 
 ## Composites
 
-Composites wrap multi-step workflows behind a single call. Reach for these first; drop down to the primitives below only when no composite fits.
+Composites wrap a multi-step workflow in one call. Use a composite first. Use the primitives below only when no composite fits.
 
 ### `get_repo_state`
 
-Snapshot a repo in one call. Returns a `RepoState` with the current branch, upstream, ahead/behind counts, file counts by category, stash count for the branch, and whether a rebase is paused.
+Read the state of a repo in one call. `get_repo_state` returns a `RepoState` with the current branch, upstream, ahead and behind counts, file counts by category, the stash count for the branch, and whether a rebase is paused. It raises `NotARepoError` outside a repo.
 
 ```python
 from nclutils.git import get_repo_state
@@ -78,43 +81,41 @@ if state.rebase_in_progress:
 
 `RepoState` is a frozen dataclass:
 
-| Field                | Type             | Description                                                                                                                        |
-| -------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `root`               | `Path`           | Absolute path to the working tree root.                                                                                            |
-| `branch`             | `str \| None`    | Short branch name; `None` on detached HEAD.                                                                                        |
-| `upstream`           | `str \| None`    | Upstream as `<remote>/<branch>` (e.g., `"origin/main"`); `None` if no upstream is configured.                                      |
-| `primary_remote`     | `Remote \| None` | The first configured remote (alphabetical, usually `"origin"`); `None` if no remotes are configured. See the `Remote` table below. |
-| `ahead`              | `int`            | Commits on the local branch not on the upstream. `0` if there is no upstream.                                                      |
-| `behind`             | `int`            | Commits on the upstream not on the local branch. `0` if there is no upstream.                                                      |
-| `is_dirty`           | `bool`           | `True` if any of the file counts below are nonzero.                                                                                |
-| `staged`             | `int`            | Count of files with index changes.                                                                                                 |
-| `modified`           | `int`            | Count of files with worktree changes (not yet staged).                                                                             |
-| `untracked`          | `int`            | Count of files not under version control.                                                                                          |
-| `unmerged`           | `int`            | Count of files with merge conflicts.                                                                                               |
-| `stash_count`        | `int`            | Stash entries created on the current branch (filtered from `git stash list`).                                                      |
-| `rebase_in_progress` | `bool`           | `True` if `.git/rebase-merge/` or `.git/rebase-apply/` exists.                                                                     |
+| Field                | Type             | Description                                                                                                                  |
+| -------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `root`               | `Path`           | Absolute path to the working tree root.                                                                                      |
+| `branch`             | `str \| None`    | Short branch name. `None` on detached HEAD.                                                                                  |
+| `upstream`           | `str \| None`    | Upstream as `<remote>/<branch>`, for example `"origin/main"`. `None` if no upstream is configured.                           |
+| `primary_remote`     | `Remote \| None` | The first configured remote, in the order `git remote` lists them. `None` if no remote is configured. See the `Remote` table. |
+| `ahead`              | `int`            | Commits on the local branch that are not on the upstream. `0` if there is no upstream.                                       |
+| `behind`             | `int`            | Commits on the upstream that are not on the local branch. `0` if there is no upstream.                                       |
+| `is_dirty`           | `bool`           | `True` if any of the four file counts is more than zero.                                                                     |
+| `staged`             | `int`            | Count of files with index changes.                                                                                           |
+| `modified`           | `int`            | Count of files with working tree changes that are not staged.                                                                |
+| `untracked`          | `int`            | Count of files not under version control.                                                                                    |
+| `unmerged`           | `int`            | Count of files with merge conflicts.                                                                                         |
+| `stash_count`        | `int`            | Stash entries created on the current branch. `0` on detached HEAD.                                                           |
+| `rebase_in_progress` | `bool`           | `True` if a rebase is paused.                                                                                                |
 
-`Remote` is a frozen dataclass with three fields:
+`Remote` is a frozen dataclass:
 
-| Field     | Type          | Description                                                                                                                                                                                                                                                                                       |
-| --------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`    | `str`         | Short remote name (e.g., `"origin"`).                                                                                                                                                                                                                                                             |
-| `url`     | `str`         | Configured fetch URL (e.g., `"git@github.com:org/repo.git"`).                                                                                                                                                                                                                                     |
-| `web_url` | `str \| None` | Best-effort browser URL inferred from `url`: an `https://<host>/<owner>/<repo>` rewrite that works for hosts following the common forge layout (GitHub, GitLab, Bitbucket, Gitea, Forgejo, Codeberg, sourcehut). `None` for local paths, `file://` URLs, or anything without a recognizable host. |
-
-`get_repo_state` issues a small number of subprocess calls under the hood: `rev-parse --show-toplevel`, `status --branch --porcelain=v2`, `stash list`, `rev-parse --absolute-git-dir`, plus `git remote` and `git remote get-url` for `primary_remote` (the last one runs only when at least one remote is configured). It still beats assembling those primitive calls by hand because callers don't have to parse the porcelain output themselves. Raises `NotARepoError` outside a repo.
+| Field     | Type          | Description                                                                                                                                                                                                                       |
+| --------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`    | `str`         | Short remote name, for example `"origin"`.                                                                                                                                                                                        |
+| `url`     | `str`         | Configured fetch URL, for example `"git@github.com:org/repo.git"`.                                                                                                                                                                |
+| `web_url` | `str \| None` | Browser URL inferred from `url` as `https://<host>/<owner>/<repo>`. The result is correct for hosts with the common forge layout (GitHub, GitLab, Bitbucket, Gitea, Forgejo, Codeberg, sourcehut). `None` for local paths and `file://` URLs. |
 
 > [!NOTE]
-> The four file-count fields are counts, not lists. If you need the actual paths, use `run_git("status", "--porcelain=v2", ...)` and parse it yourself, or `run_git("diff", "--name-only", ...)` for a specific filter.
+> The four file-count fields are counts, not lists. To get the paths, run `run_git("status", "--porcelain=v2")` and parse the output, or run `run_git("diff", "--name-only")` with a filter.
 
 ### `fetch`
 
-Fetch from a remote with prune-by-default behavior. Returns `None`.
+Fetch from a remote. `fetch` prunes stale remote-tracking refs by default and returns `None`.
 
 ```python
 from nclutils.git import fetch
 
-# Fetch the current branch's upstream remote (falls back to primary_remote)
+# Fetch the remote of the current branch's upstream (falls back to primary_remote)
 fetch()
 
 # Fetch a specific remote
@@ -126,43 +127,44 @@ fetch(all_remotes=True)
 # Skip tags
 fetch(tags=False)
 
-# Stream progress to the terminal
+# Show progress in the terminal
 fetch(stream=True)
 ```
 
-When `remote` is `None` and `all_remotes` is `False`, the remote is resolved in this order: the upstream of the current branch, then `primary_remote()`, then a `ShellCommandFailedError` if neither exists.
+| Parameter     | Type          | Default | Description                                                                                                         |
+| ------------- | ------------- | ------- | ------------------------------------------------------------------------------------------------------------------- |
+| `remote`      | `str \| None` | `None`  | Remote to fetch. If `None`, `fetch` uses the remote of the current branch's upstream, then `primary_remote()`.      |
+| `prune`       | `bool`        | `True`  | Pass `--prune`. Without it, branches deleted on the remote stay visible locally as `origin/<branch>`.               |
+| `all_remotes` | `bool`        | `False` | Run `git fetch --all`. `remote` is ignored.                                                                         |
+| `tags`        | `bool`        | `True`  | If `False`, pass `--no-tags`.                                                                                       |
 
-`prune=True` (the default) removes stale remote-tracking refs. This is almost always what you want; without it, branches deleted on the remote keep showing up locally as `origin/<branch>`.
-
-Raises `NotARepoError` outside a repo, and `ShellCommandFailedError` if no remote can be resolved or the fetch itself fails.
+`fetch` raises `NotARepoError` outside a repo. It raises `ShellCommandFailedError` if it cannot find a remote or if the fetch fails.
 
 ### `stashed`
 
-Context manager that stashes uncommitted changes on entry and pops on exit. Yields `True` if a stash was created, `False` if the tree was already clean.
+Stash uncommitted changes for the length of a `with` block. On entry, `stashed` stashes the changes if the working tree is dirty. On exit, it pops the stash. It yields `True` if it created a stash, and `False` if the tree was clean.
 
 ```python
-from nclutils.git import stashed, run_git
+from nclutils.git import run_git, stashed
 
 with stashed() as did_stash:
     run_git("checkout", "main")
     run_git("merge", "feature-branch")
-# Stash is popped here, even if the block raised.
+# If did_stash is True, the stash is popped here, also when the block raised.
 ```
 
-Behavior:
+| Parameter           | Type          | Default | Description                                                         |
+| ------------------- | ------------- | ------- | ------------------------------------------------------------------- |
+| `message`           | `str \| None` | `None`  | Stash message that `git stash list` shows.                          |
+| `include_untracked` | `bool`        | `True`  | Pass `-u` to `git stash push`, so untracked files are stashed too.  |
 
-- If the tree is clean on entry, no stash is created and the context manager yields `False`. The exit step does nothing.
-- If the tree is dirty, `git stash push -u` runs (the `-u` includes untracked files).
-- On exit, the stash is popped unconditionally.
-- If the pop conflicts, the stash is left on the stack and `ShellCommandFailedError` is raised. A pop failure supersedes any exception raised inside the block, since the stash is the more recoverable artifact.
+If the tree is clean on entry, `stashed` creates no stash and does nothing on exit. If the pop conflicts, the stash stays on the stack and `stashed` raises `ShellCommandFailedError`. This error replaces any exception from inside the block, because the stash is the easier state to recover.
 
-`include_untracked=True` (the default) passes `-u` to `git stash push`. Pass `message="..."` to set a stash message visible in `git stash list`.
-
-Raises `NotARepoError` outside a repo, and `ShellCommandFailedError` if either the push or the pop fails.
+`stashed` raises `NotARepoError` outside a repo, and `ShellCommandFailedError` if the push or the pop fails.
 
 ### `sync_branch`
 
-The opinionated workflow composite. Fetches the upstream, optionally stashes a dirty tree, then either fast-forwards or rebases the current branch. Returns a `SyncResult` describing what happened.
+Update the checked-out branch from its upstream. `sync_branch` fetches the upstream, stashes a dirty tree if necessary, then fast-forwards or rebases the branch. It returns a `SyncResult`.
 
 ```python
 from nclutils.git import sync_branch
@@ -181,256 +183,253 @@ match result.action:
             print(f"  conflict: {path}")
 ```
 
-`sync_branch` is opinionated. It refuses detached HEAD, requires an upstream, never merges (only fast-forwards or rebases), auto-stashes by default, and gives you a structured result. In exchange, you lose the merge strategy.
+`sync_branch` works only on a checked-out branch that has an upstream. It never merges: it fast-forwards or rebases. It runs these steps:
 
-The sequence:
+1. Get the current branch. On detached HEAD, raise `ValueError`.
+2. If `branch` is set and is not the current branch, raise `ValueError`. `branch` is a safety check, not a way to sync a different branch.
+3. Get the upstream of the current branch. If there is no upstream, raise `ValueError`.
+4. Fetch the upstream's remote.
+5. Count the commits ahead and behind the upstream. If behind is `0`, return `action="up_to_date"`.
+6. If the tree is dirty and `stash=True`, stash the changes with `stashed()`. If the tree is dirty and `stash=False`, raise `ShellCommandFailedError` before any change.
+7. If ahead is `0`, run `git pull --ff-only`. If it succeeds, return `action="fast_forwarded"`.
+8. If `allow_rebase=True`, run `git pull --rebase`. If it succeeds, return `action="rebased"`. If `allow_rebase=False`, raise `ShellCommandFailedError`.
+9. If the rebase has conflicts and `on_conflict="abort"`, run `git rebase --abort`, restore the stash, and return `action="aborted"` with `conflicts` set. If `git rebase --abort` fails, raise `ShellCommandFailedError`.
+10. If the rebase has conflicts and `on_conflict="leave"`, leave the rebase paused and the stash on the stack, and raise `ShellCommandFailedError`.
 
-1. Resolve the current branch via `current_branch(cwd)`. Detached HEAD raises `ValueError`.
-2. If `branch=` was passed, assert it equals the current branch (otherwise `ValueError`). This is a safety check, not a way to sync a different branch; `git pull` always operates on the checked-out branch and so does `sync_branch`.
-3. Resolve the upstream via `tracking_branch(current, cwd)`. No upstream raises `ValueError`.
-4. `fetch()` the upstream's remote.
-5. Compute ahead/behind via `ahead_behind(current, upstream_ref)`. If behind is `0`, return `action="up_to_date"`.
-6. If the tree is dirty:
-    - `stash=True` (default): wrap the pull in `stashed()`.
-    - `stash=False`: raise `ShellCommandFailedError` before touching anything.
-7. If ahead is `0`, try `git pull --ff-only`. On success, return `action="fast_forwarded"`.
-8. Otherwise (or if `--ff-only` failed), run `git pull --rebase` when `allow_rebase=True`. On success, return `action="rebased"`. With `allow_rebase=False` and ff-only unavailable, raise `ShellCommandFailedError`.
-9. On rebase conflict:
-    - `on_conflict="abort"` (default): run `git rebase --abort`, restore the stash, return `action="aborted"` with `conflicts` populated.
-    - `on_conflict="leave"`: leave the rebase paused with the stash unpopped and raise `ShellCommandFailedError`.
+| Parameter      | Type                        | Default   | Description                                                                                      |
+| -------------- | --------------------------- | --------- | ------------------------------------------------------------------------------------------------ |
+| `cwd`          | `Path \| str \| None`       | `None`    | Repo to operate on. `None` uses the process working directory.                                   |
+| `branch`       | `str \| None`               | `None`    | Safety check. If set, it must be the checked-out branch, or `ValueError` is raised.              |
+| `stash`        | `bool`                      | `True`    | Stash a dirty tree before the pull. If `False`, a dirty tree raises `ShellCommandFailedError`.   |
+| `allow_rebase` | `bool`                      | `True`    | Run `git pull --rebase` when a fast-forward is not possible. If `False`, raise instead.          |
+| `on_conflict`  | `Literal["abort", "leave"]` | `"abort"` | Action on a rebase conflict. `"abort"` rolls back. `"leave"` keeps the rebase paused and raises. |
+| `stream`       | `bool`                      | `False`   | Show git output in the terminal.                                                                 |
+| `env`          | `Mapping[str, str] \| None` | `None`    | Environment for every git process.                                                               |
 
-Inputs:
-
-| Parameter      | Type                        | Default   | Description                                                                                          |
-| -------------- | --------------------------- | --------- | ---------------------------------------------------------------------------------------------------- |
-| `cwd`          | `Path \| str \| None`       | `None`    | Repo to operate on. `None` uses the process cwd.                                                     |
-| `branch`       | `str \| None`               | `None`    | Optional safety check. Must equal the checked-out branch when set; otherwise `ValueError`.           |
-| `stash`        | `bool`                      | `True`    | Auto-stash a dirty tree before pulling. With `False`, a dirty tree raises `ShellCommandFailedError`. |
-| `allow_rebase` | `bool`                      | `True`    | Allow `git pull --rebase` when fast-forward isn't possible. With `False`, raise instead of rebasing. |
-| `on_conflict`  | `Literal["abort", "leave"]` | `"abort"` | What to do on rebase conflict. `"abort"` rolls back; `"leave"` keeps the rebase paused and raises.   |
+`sync_branch` raises `NotARepoError` outside a repo.
 
 `SyncResult` is a frozen dataclass:
 
-| Field           | Type                                                            | Description                                                                          |
-| --------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `action`        | `Literal["up_to_date", "fast_forwarded", "rebased", "aborted"]` | What the sync ended up doing.                                                        |
-| `ahead_before`  | `int`                                                           | Commits ahead of upstream before the pull.                                           |
-| `behind_before` | `int`                                                           | Commits behind upstream before the pull.                                             |
-| `conflicts`     | `tuple[Path, ...]`                                              | Paths with conflicts, relative to the repo root. Empty unless `action == "aborted"`. |
-| `stashed`       | `bool`                                                          | `True` if a stash was created and (for non-`"aborted"` actions) popped.              |
+| Field           | Type                                                            | Description                                                                              |
+| --------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `action`        | `Literal["up_to_date", "fast_forwarded", "rebased", "aborted"]` | What the sync did.                                                                       |
+| `ahead_before`  | `int`                                                           | Commits ahead of the upstream before the pull.                                           |
+| `behind_before` | `int`                                                           | Commits behind the upstream before the pull.                                             |
+| `conflicts`     | `tuple[Path, ...]`                                              | Paths with conflicts, relative to the repo root. Empty unless `action` is `"aborted"`.   |
+| `stashed`       | `bool`                                                          | `True` if `sync_branch` stashed the changes. The stash is popped before it returns.      |
 
 > [!NOTE]
-> When `sync_branch` returns `action="fast_forwarded"` or `action="rebased"`, the local branch contains the remote's commits. When it returns `action="aborted"`, the local branch is exactly where it started; the remote commits are still in `origin/<branch>` after the fetch but were not integrated.
+> After `action="fast_forwarded"` or `action="rebased"`, the local branch contains the remote commits. After `action="aborted"`, the local branch is where it started. The fetched remote commits are in `origin/<branch>` but are not on the local branch.
 
 ### `prunable_branches` and `delete_branches`
 
-Find local branches that are safe to delete, then delete them. The two helpers are split so callers can review the list before pulling the trigger.
+Find local branches that are safe to delete, then delete them. The two helpers are separate, so you can review the list before you delete.
 
 ```python
 from nclutils.git import delete_branches, prunable_branches
 
 candidates = prunable_branches()
-for pb in candidates:
-    print(f"{pb.name}: {pb.reason}")  # e.g. "feat/old-thing: gone"
+for candidate in candidates:
+    print(f"{candidate.name}: {candidate.reason}")  # for example "feat/old-thing: gone"
 
-names = [pb.name for pb in candidates]
-outcome = delete_branches(names)
+outcome = delete_branches([candidate.name for candidate in candidates])
 print(
     f"deleted {len(outcome.deleted)}, skipped {len(outcome.skipped)}, failed {len(outcome.failed)}"
 )
 ```
 
-`prunable_branches` returns a sorted `list[PrunableBranch]`. Each `PrunableBranch` is a frozen dataclass with two fields:
+> [!WARNING]
+> `prunable_branches` returns `list[PrunableBranch]`, and `delete_branches` returns a `DeleteOutcome`. Neither is a `list[str]`. Pass `[candidate.name for candidate in candidates]` to `delete_branches`, and read the results from `outcome.deleted`, `outcome.skipped`, and `outcome.failed`.
 
-| Field    | Type          | Description                                                |
-| -------- | ------------- | ---------------------------------------------------------- |
-| `name`   | `str`         | Short local branch name.                                   |
+`prunable_branches` returns a list of `PrunableBranch`, sorted by name. `PrunableBranch` is a frozen dataclass:
+
+| Field    | Type          | Description                                                   |
+| -------- | ------------- | ------------------------------------------------------------- |
+| `name`   | `str`         | Short local branch name.                                      |
 | `reason` | `PruneReason` | Why the branch qualifies: `"gone"`, `"merged"`, or `"empty"`. |
 
-`PruneReason` is a `Literal["merged", "gone", "empty"]` type alias. When a branch qualifies under more than one criterion, the highest-precedence reason wins: `"gone"` beats `"merged"` beats `"empty"`. Results are sorted alphabetically by name.
+`PruneReason` is the type alias `Literal["merged", "gone", "empty"]`. If a branch qualifies for more than one reason, `"gone"` wins over `"merged"`, and `"merged"` wins over `"empty"`.
 
-`prunable_branches` combines up to three sources, each gated by a keyword argument:
+| Parameter       | Type              | Default                          | Description                                                                                         |
+| --------------- | ----------------- | -------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `merged`        | `bool`            | `True`                           | Include branches merged into `target` (from `git branch --merged`).                                 |
+| `gone`          | `bool`            | `True`                           | Include branches whose upstream was deleted on the remote (the `gone` marker in `git branch -vv`). |
+| `include_empty` | `bool`            | `False`                          | Include branches with zero commits ahead of `target`: branches that nobody committed to.            |
+| `target`        | `str \| None`     | `None`                           | Base branch for `merged` and `include_empty`. If `None`, use `default_branch()`.                    |
+| `exclude`       | `tuple[str, ...]` | `("main", "master", "develop")`  | Names never returned.                                                                               |
 
-- `merged=True` (default): branches fully merged into `target` (zero commits ahead of `target`).
-- `gone=True` (default): branches whose upstream-tracking ref has been deleted on the remote (the `[gone]` marker in `git branch -vv`).
-- `include_empty=False` (default): when `True`, also surfaces branches with zero commits ahead of `target` that were not already classified as `merged` or `gone`. This catches branches that were created but never had work committed to them.
+The result never contains the current branch, `target`, or a name in `exclude`. If `merged` or `include_empty` is `True`, `target` is `None`, and `default_branch()` returns `None`, `prunable_branches` raises `ValueError`.
 
-The current branch, the resolved `target` branch, and any name in `exclude` are filtered out before returning. Defaults: `target=None` defers to `default_branch()` (which reads `<remote>/HEAD`); `exclude=("main", "master", "develop")`. If `target=None` and `default_branch()` returns `None`, `ValueError` is raised.
+`delete_branches` takes a sequence of short branch names and runs `git branch -d` for each. With `force=True`, it runs `git branch -D`, which deletes a branch that is not merged. It returns a `DeleteOutcome` frozen dataclass:
 
-`delete_branches` takes a sequence of short branch names and returns a `DeleteOutcome` dataclass describing what happened per branch:
+| Field     | Type              | Description                                                                                   |
+| --------- | ----------------- | --------------------------------------------------------------------------------------------- |
+| `deleted` | `tuple[str, ...]` | Deleted branches, in input order.                                                             |
+| `skipped` | `tuple[str, ...]` | Branches not attempted, because they are the current branch or do not exist locally.          |
+| `failed`  | `dict[str, str]`  | Branches that git did not delete, mapped to the stderr of `git branch`.                       |
 
-| Field     | Type               | Description                                                                                    |
-| --------- | ------------------ | ---------------------------------------------------------------------------------------------- |
-| `deleted` | `tuple[str, ...]`  | Branches that were actually deleted, in input order.                                            |
-| `skipped` | `tuple[str, ...]`  | Branches skipped because they are the current branch or do not exist locally.                   |
-| `failed`  | `dict[str, str]`   | Branches whose `git branch -d/-D` invocation failed. Value is the captured stderr message.     |
-
-Per-branch deletion failures (for example, trying to delete an unmerged branch without `force=True`) are captured in `failed` rather than raised. Only infrastructural errors (git not found, not a repo) propagate as exceptions. This lets callers report fine-grained progress instead of losing context on the first failure.
-
-Pass `force=True` to use `git branch -D` instead of `git branch -d`, which deletes regardless of merge state.
+A per-branch failure, for example an unmerged branch without `force=True`, goes into `failed` and does not raise. You get the result for every branch instead of an exception at the first failure.
 
 ```python
-# Delete only branches you've reviewed
+from nclutils.git import delete_branches, prunable_branches
+
+# Delete a branch you reviewed, merged or not
 outcome = delete_branches(["feat/abandoned"], force=True)
 
-# Two-step: find then delete (prunable_branches returns PrunableBranch objects)
-candidates = prunable_branches(gone=False)  # only merged ones
-outcome = delete_branches([pb.name for pb in candidates])
-if outcome.failed:
-    for branch, msg in outcome.failed.items():
-        print(f"could not delete {branch}: {msg}")
+# Delete only merged branches
+candidates = prunable_branches(gone=False)
+outcome = delete_branches([candidate.name for candidate in candidates])
+for branch, message in outcome.failed.items():
+    print(f"could not delete {branch}: {message}")
 ```
-
-> [!WARNING]
-> `prunable_branches` returns `list[PrunableBranch]`, not `list[str]`. Passing its return value directly to `delete_branches` is a type error. Extract the names first: `[pb.name for pb in prunable_branches()]`.
-
-> [!WARNING]
-> `delete_branches` returns a `DeleteOutcome` dataclass, not `list[str]`. Access results via `outcome.deleted`, `outcome.skipped`, and `outcome.failed`. Per-branch failures (e.g., unmerged without `force=True`) land in `outcome.failed[name] = stderr` rather than raising; only infrastructural errors (git missing, not a repo) propagate.
 
 ### `add_worktree`
 
-Create a worktree and return its `Worktree` record. Composes `create_worktree` and `list_worktrees`: the worktree is created, then looked up in `git worktree list --porcelain` so the caller gets back a populated record (including the resolved HEAD SHA).
+Create a worktree and return its `Worktree` record. `add_worktree` runs `create_worktree`, then reads the new worktree from `list_worktrees`, so the record includes the HEAD SHA.
 
 ```python
 from pathlib import Path
+
 from nclutils.git import add_worktree
 
 # Check out an existing branch in a new worktree
-wt = add_worktree(Path("../feature-x"), branch="feature-x")
+worktree = add_worktree(Path("../feature-x"), branch="feature-x")
 
-# Create a new branch as part of the operation
-wt = add_worktree(
+# Create a new branch in the same operation
+worktree = add_worktree(
     Path("../experiment"),
     branch="experiment",
     new_branch=True,
     start_point="origin/main",
 )
 
-print(wt.path, wt.branch, wt.head)
+print(worktree.path, worktree.branch, worktree.head)
 ```
 
-Inputs:
+| Parameter     | Type          | Default  | Description                                                                                                                                |
+| ------------- | ------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `path`        | `Path \| str` | required | Where to create the worktree.                                                                                                              |
+| `branch`      | `str`         | required | Short name of the branch to check out, or to create if `new_branch=True`.                                                                  |
+| `new_branch`  | `bool`        | `False`  | Pass `-b` to create `branch`.                                                                                                              |
+| `start_point` | `str \| None` | `None`   | Commit or ref for the new branch to start from. Requires `new_branch=True`.                                                                |
+| `track`       | `bool \| None`| `None`   | Upstream tracking for the new branch. `None` keeps git's default. `True` passes `--track`. `False` passes `--no-track`, for a local branch that you do not push. |
 
-- `path`: `Path | str` where the worktree should be created.
-- `branch`: short branch name to check out (or create when `new_branch=True`).
-- `new_branch=True`: pass `-b` to create the branch as part of `git worktree add`.
-- `start_point`: optional commit/ref the new branch starts from. Requires `new_branch=True`; raises `ValueError` otherwise.
-- `track: bool | None = None`: controls upstream tracking for the new branch. `None` (default) leaves git's default behavior intact. `True` passes `--track` to force tracking even against a non-remote ref. `False` passes `--no-track` to suppress automatic tracking even when the start point is a remote-tracking ref. Use `False` for short-lived feature branches that you do not intend to push.
-
-Returns the `Worktree` record. Raises `RuntimeError` if the new worktree is missing from the subsequent listing (a guard against silent bugs; should not fire in practice).
+`add_worktree` raises `ValueError` if `start_point` is set without `new_branch=True`. It raises `RuntimeError` if git creates the worktree but the worktree is not in the listing that follows.
 
 `Worktree` is a frozen dataclass:
 
-| Field         | Type          | Description                                                                                     |
-| ------------- | ------------- | ----------------------------------------------------------------------------------------------- |
-| `path`        | `Path`        | Filesystem path of the worktree (as reported by `git worktree list`, not necessarily resolved). |
-| `branch`      | `str \| None` | Short branch name checked out; `None` on detached HEAD.                                         |
-| `head`        | `str`         | Full commit SHA at HEAD.                                                                        |
-| `is_bare`     | `bool`        | `True` for the bare worktree of a bare repo.                                                    |
-| `is_detached` | `bool`        | `True` if HEAD is detached.                                                                     |
-| `is_locked`   | `bool`        | `True` if the worktree is locked.                                                               |
+| Field         | Type          | Description                                                                            |
+| ------------- | ------------- | -------------------------------------------------------------------------------------- |
+| `path`        | `Path`        | Path of the worktree as `git worktree list` reports it. The path is not resolved.      |
+| `branch`      | `str \| None` | Short name of the checked-out branch. `None` on detached HEAD.                         |
+| `head`        | `str`         | Full commit SHA at HEAD.                                                               |
+| `is_bare`     | `bool`        | `True` for the bare worktree of a bare repo.                                           |
+| `is_detached` | `bool`        | `True` if HEAD is detached.                                                            |
+| `is_locked`   | `bool`        | `True` if the worktree is locked.                                                      |
 
 ## Primitives
 
-The composites cover the common workflows. When they don't fit, drop down to the primitives. Every primitive accepts `cwd=`, `stream=`, and `env=`; the examples below omit those and operate on the process cwd.
+Use the primitives when no composite fits. Every primitive except `is_git_installed` accepts `cwd`, `stream`, and `env`. The examples below leave them out and operate on the process working directory.
 
 ### Repo
 
-`is_git_installed() -> bool`. `True` if the `git` binary is on PATH. Use this when `git` is optional in your code path. The check is via `nclutils.sh.which`, so no subprocess runs.
+`is_git_installed() -> bool`. `True` if the `git` binary is on `PATH`. Use it when `git` is optional for your script. It runs no subprocess.
 
-`is_git_repo(cwd=None) -> bool`. `True` if `cwd` is inside a git working tree. Returns `False` (rather than raising) outside a repo, so it's safe to use as a guard.
+`is_git_repo(cwd=None) -> bool`. `True` if `cwd` is inside a git working tree. Outside a repo, or if `git` is not installed, it returns `False`.
 
-`repo_root(cwd=None) -> Path`. Absolute path to the working tree root (resolved from `git rev-parse --show-toplevel`). Raises `NotARepoError` outside a repo.
+`repo_root(cwd=None) -> Path`. Absolute path to the working tree root, from `git rev-parse --show-toplevel`. Raises `NotARepoError` outside a repo.
 
-`primary_remote(cwd=None) -> Remote | None`. Returns a `Remote(name, url, web_url)` for the first remote listed by `git remote`, or `None` if no remotes are configured. "First" is alphabetical, which means `origin` in almost all repos. See the `Remote` table under [`get_repo_state`](#get_repo_state) above.
+`primary_remote(cwd=None) -> Remote | None`. The first remote that `git remote` lists, as a `Remote`. `git remote` sorts names alphabetically, so a repo with one remote usually gets `origin`. Returns `None` if no remote is configured. See the `Remote` table under [`get_repo_state`](#get_repo_state).
 
-`is_dirty(cwd=None) -> bool`. `True` if `git status --porcelain` produces any output. Counts both index changes and untracked files. Raises `NotARepoError` outside a repo.
+`is_dirty(cwd=None) -> bool`. `True` if the working tree has staged changes, unstaged changes, or untracked files. Raises `NotARepoError` outside a repo.
 
-`is_rebase_in_progress(cwd=None) -> bool`. `True` if either `.git/rebase-merge/` (interactive rebase) or `.git/rebase-apply/` (non-interactive rebase) exists. Raises `NotARepoError` outside a repo.
+`is_rebase_in_progress(cwd=None) -> bool`. `True` if an interactive or non-interactive rebase is paused. Raises `NotARepoError` outside a repo.
 
-`stash_counts(cwd=None) -> dict[str, int]`. Returns per-branch stash counts across the whole repo, parsed from `git stash list`. The result maps each branch name to the number of stashes created on it. Useful for status dashboards that need stash information across all branches, rather than just the current branch (which is what `RepoState.stash_count` reports). Detached-HEAD stashes are excluded because they have no branch name to key on.
+`stash_counts(cwd=None) -> dict[str, int]`. Stash counts for every branch in the repo, from `git stash list`. Use it when you need stashes for all branches. `RepoState.stash_count` gives only the current branch. Stashes made on detached HEAD are not counted.
 
 ```python
 from nclutils.git import stash_counts
 
-counts = stash_counts()
-for branch, count in counts.items():
+for branch, count in stash_counts().items():
     print(f"{branch}: {count} stash(es)")
 ```
 
 ### Branch
 
-Every branch helper returns or accepts short branch names (no `refs/heads/` prefix).
+`current_branch(cwd=None) -> str | None`. Short name of the checked-out branch. Returns `None` on detached HEAD and outside a repo.
 
-`current_branch(cwd=None) -> str | None`. Short name of the currently checked-out branch, or `None` on detached HEAD. Implemented via `git symbolic-ref --short HEAD`. Outside a repo, the underlying call raises `ShellCommandFailedError`.
+`default_branch(cwd=None, *, remote="origin") -> str | None`. Short name of the branch that `<remote>/HEAD` points to. Returns `None` if that ref is not set. `git clone` sets it. To set it in another repo, run `git remote set-head <remote> -a`.
 
-`default_branch(cwd=None, *, remote="origin") -> str | None`. Short name of the branch advertised by `<remote>/HEAD`, or `None` when the symbolic ref isn't configured. The `<remote>/HEAD` symref is set automatically by `git clone` and can be re-resolved with `git remote set-head <remote> -a`.
+`branch_exists(branch, cwd=None) -> bool`. `True` if `branch` is a local branch. It does not look at remote-tracking branches.
 
-`branch_exists(branch, cwd=None) -> bool`. `True` if `branch` (a short name) is a local branch. Implemented via `git rev-parse --verify refs/heads/<branch>`. Does not check remote-tracking branches; use `tracking_branch` or `git ls-remote` for that.
+`all_local_branches(cwd=None) -> frozenset[str]`. Short names of all local branches. Returns an empty `frozenset` outside a repo.
 
-`all_local_branches(cwd=None) -> frozenset[str]`. Set of short local branch names. Returns an empty `frozenset` outside a repo (matching the "absent to empty" pattern used by other branch primitives).
+`tracking_branch(branch=None, cwd=None) -> tuple[str, str] | None`. `(remote, branch_on_remote)` for the upstream of `branch`, for example `("origin", "main")`. `branch=None` means the checked-out branch. Returns `None` if no upstream is configured, or if `branch=None` and HEAD is detached.
 
-`tracking_branch(branch=None, cwd=None) -> tuple[str, str] | None`. Returns `(remote, branch_on_remote)` for the upstream of `branch`, or `None` if no upstream is configured. `branch=None` (the default) means the currently checked-out branch; if HEAD is detached, the result is `None`. Both elements are short names: `("origin", "main")`, not anything with `refs/`.
+`ahead_behind(left, right, cwd=None) -> tuple[int, int]`. `(ahead, behind)` commit counts of `left` compared to `right`, from `git rev-list --left-right --count left...right`. Both arguments accept any revision. For example, `ahead_behind("main", "origin/main")` compares your `main` to `origin/main`. Raises `ShellCommandFailedError` if a revision does not exist.
 
-`ahead_behind(left, right, cwd=None) -> tuple[int, int]`. Returns `(ahead, behind)` commit counts comparing `left` to `right`, computed via `git rev-list --left-right --count left...right`. Both arguments accept anything `git rev-parse` accepts: branch names, SHAs, tags, `HEAD~3`, `origin/main`. Typical use is `ahead_behind("main", "origin/main")` to ask "how does my main differ from origin/main?"
+`merged_branches(target=None, cwd=None) -> frozenset[str]`. Short names of local branches merged into `target`, from `git branch --merged`. The result includes `target`, because every branch is merged into itself. `target=None` uses `default_branch()`. Raises `ValueError` if `default_branch()` also returns `None`, and `ShellCommandFailedError` if `target` does not exist.
 
-`merged_branches(target=None, cwd=None) -> frozenset[str]`. Short names of local branches merged into `target` (per `git branch --merged <target>`). The result includes `target` itself, since every branch is "merged" with itself. `target=None` defers to `default_branch()`; if that also returns `None`, `ValueError` is raised. Pass a non-existent ref and you'll get `ShellCommandFailedError` from git.
+`gone_branches(cwd=None) -> frozenset[str]`. Short names of local branches whose upstream was deleted on the remote. These branches carry the `[<upstream>: gone]` marker in `git branch -vv` after `git fetch --prune`.
 
-`gone_branches(cwd=None) -> frozenset[str]`. Short names of local branches whose upstream-tracking ref has been deleted on the remote. Parses `git branch -vv` for the `[<upstream>: gone]` marker, which appears after a `git fetch --prune` removes the remote ref. Branches checked out in a worktree (whose line carries a `(worktree-path)` token before the marker) are detected too.
-
-`is_empty_branch(branch, target=None, *, cwd=None) -> bool`. Returns `True` when `branch` has zero commits ahead of `target`. Useful for detecting branches that were created but never written to, making them legitimate cleanup candidates even if they are not merged or gone. `target=None` defers to `default_branch()`; raises `ValueError` if that also returns `None`. This is the primitive that `prunable_branches(include_empty=True)` calls internally for each branch.
+`is_empty_branch(branch, target=None, *, cwd=None) -> bool`. `True` if `branch` has zero commits ahead of `target`. An empty branch is a cleanup candidate even if it is not merged or gone. `target=None` uses `default_branch()`. Raises `ValueError` if `default_branch()` also returns `None`.
 
 ```python
 from nclutils.git import is_empty_branch
 
-# Guard before deleting a branch that might still be useful
 if is_empty_branch("feat/placeholder"):
     print("this branch has no commits of its own")
 ```
 
 ### Worktree
 
-`list_worktrees(cwd=None) -> list[Worktree]`. All registered worktrees as a list of `Worktree` records, parsed from `git worktree list --porcelain`. The bare worktree of a bare repo appears with `is_bare=True`.
+`list_worktrees(cwd=None) -> list[Worktree]`. All registered worktrees, from `git worktree list --porcelain`. In a bare repo, the bare worktree has `is_bare=True`.
 
-`create_worktree(path, branch, *, cwd=None, new_branch=False, start_point=None, track=None) -> None`. Run `git worktree add` to create a worktree at `path` checked out to `branch`. With `new_branch=True`, pass `-b` to create the branch. `start_point` requires `new_branch=True` and raises `ValueError` otherwise. `track` is a tri-state: `None` passes no flag; `True` passes `--track`; `False` passes `--no-track`. Returns `None`; use `add_worktree` (composite) if you want the resulting `Worktree` record.
+`create_worktree(path, branch, *, cwd=None, new_branch=False, start_point=None, track=None) -> None`. Run `git worktree add` to create a worktree at `path` with `branch` checked out. The parameters are the same as for [`add_worktree`](#add_worktree), and so is the `ValueError`. Use `add_worktree` to get the `Worktree` record.
 
-`remove_worktree(path, *, cwd=None, force=False) -> None`. Run `git worktree remove`. With `force=True`, pass `--force` so removal succeeds even on dirty worktrees or those containing submodules.
+`remove_worktree(path, *, cwd=None, force=False) -> None`. Run `git worktree remove`. With `force=True`, pass `--force` to delete a worktree that is dirty or contains submodules.
+
+```python
+from nclutils.git import list_worktrees, remove_worktree
+
+for worktree in list_worktrees():
+    if worktree.branch == "experiment":
+        remove_worktree(worktree.path)
+```
 
 ### Runner
 
-`run_git(*args, cwd=None, env=None, input=None, timeout=None, exclude_regex=None, stream=False, check=True, okay_codes=(0,)) -> CompletedCommand` is the single subprocess entry point used by every other helper in the module. It prepends `git` to `args` and forwards every option to `nclutils.sh.run_command`. Returns a `CompletedCommand` (see [shell_commands.md](shell_commands.md)).
+`run_git(*args, cwd=None, env=None, input=None, timeout=None, exclude_regex=None, stream=False, check=True, okay_codes=(0,)) -> CompletedCommand`. Every other helper in the module uses it to run git. It puts `git` before `args` and passes every option to `nclutils.sh.run_command`. It returns a `CompletedCommand` with `stdout`, `stderr`, `returncode`, `argv`, `duration`, and `cwd`. See [shell_commands.md](shell_commands.md) for the options.
 
 ```python
 from nclutils.git import run_git
 
-# Run any git subcommand when no helper covers it
+# Run a git subcommand that no helper covers
 result = run_git("log", "--oneline", "-5")
 for line in result.stdout.splitlines():
     print(line)
 
-# Inspect exit code without raising
+# Read the exit code without an exception
 result = run_git("diff", "--quiet", check=False)
 print("dirty" if result.returncode != 0 else "clean")
 ```
 
-Reach for `run_git` when:
+Use `run_git` for a subcommand that no helper covers (`git log`, `git show`, `git tag`), for options the helpers do not expose, or to get the full `CompletedCommand`.
 
-- No primitive covers the subcommand you need (`git log`, `git show`, `git tag`, and so on).
-- You want options the helpers don't expose (`--no-color`, `--max-count`, custom format strings).
-- You need the raw `CompletedCommand` (`stdout`, `stderr`, `returncode`, `duration`, `argv`, `cwd`).
+`run_git` raises `ShellCommandNotFoundError` if `git` is not on `PATH`, `ShellCommandFailedError` if the exit code is not in `okay_codes` and `check=True`, and `ShellCommandTimeoutError` if `timeout` expires.
 
 ## Error handling
 
-Every git helper either returns a value or raises one of these exception types:
+A git helper returns a value or raises one of these exceptions:
 
-| Exception                                      | When raised                                                                                                                                                                                                                   |
-| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NotARepoError`                                | Operation requires a repo, but `cwd` (or the process cwd) is not inside one. Raised by `repo_root`, `is_dirty`, `is_rebase_in_progress`, `get_repo_state`, `fetch`, `stashed`, and `sync_branch` (transitively, via `fetch`). |
-| `ValueError`                                   | Operation is not well-defined: detached HEAD where a branch was needed, missing upstream, missing default branch, `start_point` without `new_branch=True`.                                                                    |
-| `RuntimeError`                                 | Raised only by `add_worktree` when the new worktree was created but does not appear in the subsequent `git worktree list`. A guard against silent bugs.                                                                       |
-| `nclutils.sh.ShellCommandError` and subclasses | Any subprocess failure: `git` not on PATH, non-zero exit, timeout exceeded.                                                                                                                                                   |
+| Exception                                      | When raised                                                                                                                                                                          |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `NotARepoError`                                | The helper needs a repo and `cwd` is not inside one. Raised by `repo_root`, `is_dirty`, `is_rebase_in_progress`, `get_repo_state`, `fetch`, `stashed`, and `sync_branch`.             |
+| `ValueError`                                   | The request has no clear meaning: detached HEAD where a branch is necessary, a `branch` that is not checked out, no upstream, no default branch, or `start_point` without `new_branch=True`. |
+| `RuntimeError`                                 | Raised only by `add_worktree`, if git creates the worktree but it is not in the listing that follows.                                                                                |
+| `nclutils.sh.ShellCommandError` and subclasses | A git process failure: `git` not on `PATH`, an exit code that is not allowed, or a timeout.                                                                                           |
 
-`ShellCommandError` is the base class for all shell-level failures, so a single `except` handles every subprocess error:
+`ShellCommandError` is the base class for all shell failures, so one `except` clause catches every git process error:
 
 ```python
 from nclutils.git import NotARepoError, sync_branch
@@ -446,11 +445,11 @@ except ShellCommandError as e:
     print(f"git failed: {e}")
 ```
 
-See [docs/shell_commands.md](shell_commands.md) for the full `ShellCommandError` hierarchy (`ShellCommandNotFoundError`, `ShellCommandFailedError`, `ShellCommandTimeoutError`).
+See [shell_commands.md](shell_commands.md#error-handling) for the `ShellCommandError` subclasses (`ShellCommandNotFoundError`, `ShellCommandFailedError`, `ShellCommandTimeoutError`).
 
 ## Diagnostic logging
 
-Every git invocation is logged at `DEBUG` by `nclutils.sh.run_command`, which is what `run_git` delegates to. The records arrive under the `nclutils.sh` logger, not `nclutils.git`:
+`nclutils.sh.run_command` logs every git command at `DEBUG`. The records go to the `nclutils.sh` logger, not `nclutils.git`:
 
 ```python
 import logging
@@ -459,58 +458,56 @@ logging.getLogger("nclutils.sh").setLevel(logging.DEBUG)
 logging.basicConfig()
 ```
 
-See [shell_commands.md](shell_commands.md#diagnostic-logging) for what the records contain. This is independent of `nclutils.pp`; the git module never writes to the console directly. For visible progress on long-running commands, pass `stream=True` to the helper instead.
+See [shell_commands.md](shell_commands.md#diagnostic-logging) for the content of the records. The git module never writes to the console. To show progress for a slow command, pass `stream=True` to the helper.
 
 ## API reference
 
 ### Foundation
 
 - `run_git(*args, cwd=None, env=None, input=None, timeout=None, exclude_regex=None, stream=False, check=True, okay_codes=(0,)) -> CompletedCommand`. Run a `git` subcommand and return the captured result.
-- `NotARepoError`. Raised when an operation requires a repo but `cwd` is not inside one.
+- `NotARepoError`. Raised when a helper needs a repo and `cwd` is not inside one.
 
 ### Repo
 
-- `is_git_installed() -> bool`. `True` if `git` is on PATH.
+- `is_git_installed() -> bool`. `True` if `git` is on `PATH`.
 - `is_git_repo(cwd=None, *, stream=False, env=None) -> bool`. `True` if `cwd` is inside a working tree. Never raises.
 - `repo_root(cwd=None, *, stream=False, env=None) -> Path`. Absolute path to the working tree root.
 - `primary_remote(cwd=None, *, stream=False, env=None) -> Remote | None`. The first configured remote, or `None`.
-- `Remote`. Frozen dataclass with `name`, `url`, and `web_url`; see the field table above.
-- `is_dirty(cwd=None, *, stream=False, env=None) -> bool`. `True` if `git status --porcelain` is non-empty.
+- `Remote`. Frozen dataclass with `name`, `url`, and `web_url`.
+- `is_dirty(cwd=None, *, stream=False, env=None) -> bool`. `True` if the working tree has changes or untracked files.
 - `is_rebase_in_progress(cwd=None, *, stream=False, env=None) -> bool`. `True` if a rebase is paused.
-- `stash_counts(cwd=None, *, stream=False, env=None) -> dict[str, int]`. Per-branch stash counts across the whole repo. Detached-HEAD stashes are excluded.
-- `get_repo_state(cwd=None, *, stream=False, env=None) -> RepoState`. Snapshot a repo's state in one call.
-- `RepoState`. Frozen dataclass; see the field table above.
+- `stash_counts(cwd=None, *, stream=False, env=None) -> dict[str, int]`. Stash counts for every branch.
+- `get_repo_state(cwd=None, *, stream=False, env=None) -> RepoState`. The state of a repo in one call.
+- `RepoState`. Frozen dataclass. See the field table under [`get_repo_state`](#get_repo_state).
 
 ### Branch
 
-Every helper returns or accepts short branch names (no `refs/heads/` prefix).
-
 - `current_branch(cwd=None, *, stream=False, env=None) -> str | None`. Short name of the current branch, or `None` on detached HEAD.
-- `default_branch(cwd=None, *, remote="origin", stream=False, env=None) -> str | None`. Short name of `<remote>/HEAD`, or `None` if unset.
-- `branch_exists(branch, cwd=None, *, stream=False, env=None) -> bool`. `True` if `branch` (a short name) exists locally.
-- `all_local_branches(cwd=None, *, stream=False, env=None) -> frozenset[str]`. Short names of every local branch.
-- `tracking_branch(branch=None, cwd=None, *, stream=False, env=None) -> tuple[str, str] | None`. `(remote_short_name, branch_short_name_on_remote)`, or `None`.
-- `ahead_behind(left, right, cwd=None, *, stream=False, env=None) -> tuple[int, int]`. `(ahead, behind)` for any two `git rev-parse`-able revisions.
-- `merged_branches(target=None, cwd=None, *, stream=False, env=None) -> frozenset[str]`. Local branches merged into `target`. Includes `target`.
-- `gone_branches(cwd=None, *, stream=False, env=None) -> frozenset[str]`. Branches whose upstream-tracking ref is `[gone]`.
-- `is_empty_branch(branch, target=None, *, cwd=None, stream=False, env=None) -> bool`. `True` when `branch` has zero commits ahead of `target`. Raises `ValueError` if `target=None` and `default_branch()` returns `None`.
-- `prunable_branches(cwd=None, *, merged=True, gone=True, include_empty=False, target=None, exclude=("main", "master", "develop"), stream=False, env=None) -> list[PrunableBranch]`. Sorted list of branches safe to delete, with the reason each qualifies.
+- `default_branch(cwd=None, *, remote="origin", stream=False, env=None) -> str | None`. Short name of the branch `<remote>/HEAD` points to, or `None`.
+- `branch_exists(branch, cwd=None, *, stream=False, env=None) -> bool`. `True` if `branch` exists locally.
+- `all_local_branches(cwd=None, *, stream=False, env=None) -> frozenset[str]`. Short names of all local branches.
+- `tracking_branch(branch=None, cwd=None, *, stream=False, env=None) -> tuple[str, str] | None`. `(remote, branch_on_remote)`, or `None`.
+- `ahead_behind(left, right, cwd=None, *, stream=False, env=None) -> tuple[int, int]`. `(ahead, behind)` for two revisions.
+- `merged_branches(target=None, cwd=None, *, stream=False, env=None) -> frozenset[str]`. Local branches merged into `target`, including `target`.
+- `gone_branches(cwd=None, *, stream=False, env=None) -> frozenset[str]`. Local branches whose upstream was deleted.
+- `is_empty_branch(branch, target=None, *, cwd=None, stream=False, env=None) -> bool`. `True` if `branch` has zero commits ahead of `target`.
+- `prunable_branches(cwd=None, *, merged=True, gone=True, include_empty=False, target=None, exclude=("main", "master", "develop"), stream=False, env=None) -> list[PrunableBranch]`. Branches that are safe to delete, with the reason for each, sorted by name.
 - `PrunableBranch`. Frozen dataclass with `name: str` and `reason: PruneReason`.
 - `PruneReason`. `Literal["merged", "gone", "empty"]`.
-- `delete_branches(branches, cwd=None, *, force=False, stream=False, env=None) -> DeleteOutcome`. Delete a sequence of branches; return a structured per-branch outcome.
+- `delete_branches(branches, cwd=None, *, force=False, stream=False, env=None) -> DeleteOutcome`. Delete local branches and return the result for each.
 - `DeleteOutcome`. Frozen dataclass with `deleted: tuple[str, ...]`, `skipped: tuple[str, ...]`, and `failed: dict[str, str]`.
 
 ### Sync
 
 - `fetch(cwd=None, *, remote=None, prune=True, all_remotes=False, tags=True, stream=False, env=None) -> None`. Fetch from a remote.
-- `stashed(cwd=None, *, message=None, include_untracked=True, stream=False, env=None)`. Context manager. Yields `True` if a stash was created.
-- `sync_branch(cwd=None, *, branch=None, stash=True, allow_rebase=True, on_conflict="abort", stream=False, env=None) -> SyncResult`. Fetch and pull (rebase) the current branch from its upstream.
-- `SyncResult`. Frozen dataclass; see the field table above.
+- `stashed(cwd=None, *, message=None, include_untracked=True, stream=False, env=None)`. Context manager that yields `True` if it created a stash.
+- `sync_branch(cwd=None, *, branch=None, stash=True, allow_rebase=True, on_conflict="abort", stream=False, env=None) -> SyncResult`. Fast-forward or rebase the current branch onto its upstream.
+- `SyncResult`. Frozen dataclass. See the field table under [`sync_branch`](#sync_branch).
 
 ### Worktree
 
 - `list_worktrees(cwd=None, *, stream=False, env=None) -> list[Worktree]`. All registered worktrees.
-- `create_worktree(path, branch, *, cwd=None, new_branch=False, start_point=None, track=None, stream=False, env=None) -> None`. Create a worktree. `track=None` leaves git's default; `True` passes `--track`; `False` passes `--no-track`.
-- `remove_worktree(path, *, cwd=None, force=False, stream=False, env=None) -> None`. Remove the worktree at `path`.
-- `add_worktree(path, branch, *, cwd=None, new_branch=False, start_point=None, track=None, stream=False, env=None) -> Worktree`. Composite: create and return the resolved record.
-- `Worktree`. Frozen dataclass; see the field table above.
+- `create_worktree(path, branch, *, cwd=None, new_branch=False, start_point=None, track=None, stream=False, env=None) -> None`. Create a worktree.
+- `remove_worktree(path, *, cwd=None, force=False, stream=False, env=None) -> None`. Delete the worktree at `path`.
+- `add_worktree(path, branch, *, cwd=None, new_branch=False, start_point=None, track=None, stream=False, env=None) -> Worktree`. Create a worktree and return its record.
+- `Worktree`. Frozen dataclass. See the field table under [`add_worktree`](#add_worktree).

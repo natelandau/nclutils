@@ -1,101 +1,88 @@
-# CLAUDE.md
-
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## Development commands
 
-This project uses [`duty`](https://pawamoy.github.io/duty/) as the task runner and [`uv`](https://docs.astral.sh/uv/) for package management. Use them exclusively — never `pip`, `poetry`, or `conda`.
+Use [`uv`](https://docs.astral.sh/uv/) for packages and [`duty`](https://pawamoy.github.io/duty/) for tasks, never `pip`, `poetry`, or `conda`. Run every duty through `uv run`, so it uses this checkout's `.venv`.
 
 ```bash
-uv sync                         # install/refresh dependencies
-pre-commit install --install-hooks   # one-time hook setup
+uv sync                                 # install or refresh dependencies
+uv run prek install --prepare-hooks     # one-time git hook setup
 
-duty --list                     # discover all tasks
-duty test                       # run pytest with coverage
-duty lint                       # ruff + ty + typos + pre-commit
-duty ruff | duty format | duty ty | duty typos   # individual linters
-duty update                     # refresh uv.lock and pre-commit pins
+uv run duty --list                      # list all tasks
+uv run duty test                        # pytest with coverage
+uv run duty lint                        # ruff, ty, typos, actionlint, prek hooks
+uv run duty ruff                        # one linter: ruff, format, ty, typos, actionlint
+uv run duty update                      # refresh uv.lock and prek hook pins
 ```
 
-The `ruff`, `format`, `ty`, `typos`, `prek`, and `test` duties wrap their tool in [`gate-cache`](https://github.com/natelandau/gate-cache), so a duty that already passed on the same files and Python version prints a skip line and exits 0. The pre-commit hooks call these duties, so they share the same cache. Use `GATE_CACHE_DISABLE=1 duty test` to force a real run, and `uv run gate-cache status` to see which gates passed. Wrap any new lint or test duty with the `gated()` helper in `duties.py`.
+The `typos`, `prek`, and `test` duties wrap their tool in [`gate-cache`](https://github.com/natelandau/gate-cache): a duty that already passed on the same files and Python version prints a skip line and exits 0. Treat a skip as a pass. The git hooks call the same duties and share the cache. `ruff`, `format`, and `ty` are fast and stay uncached on purpose.
 
-To run a single test, invoke pytest directly through `uv`:
+- Run lint and the full test suite only through the duties, not the tools directly, so runs read and write the shared cache.
+- The `test` gate is scoped with `--path` to `TEST_GATE_PATHS` in `duties.py`. When the suite starts reading a new tracked file or directory, add it there.
+- `uv run duty test <args>` passes the arguments to pytest and bypasses the cache, because a filtered run must not mark the full suite as passed.
+- Force a full run (`GATE_CACHE_DISABLE=1 uv run duty test`) only when asked, or when an input git does not track changed: an installed tool, an environment variable, an ignored file. `uv run gate-cache status` lists the gates that passed.
+- Before adding or changing a gate, run `uv run gate-cache --skill` and follow it. Wrap a new gate with the `gated()` helper in `duties.py`.
+
+Run a single test with pytest directly:
 
 ```bash
 uv run pytest tests/test_strings.py::test_random_string
 uv run pytest tests/filesystem/test_copy.py -k "backup"
 ```
 
-`pytest` is configured (`pyproject.toml`) with `--xdoctest --exitfirst --failed-first --strict-config --strict-markers` and runs against both `tests/` and `src/`. Doctests in source docstrings are part of the suite.
+pytest config lives in `[tool.pytest]` in `pyproject.toml`:
+
+- Runs `tests/` and `src/` with `--xdoctest --exitfirst --failed-first`. Doctests in source docstrings are part of the suite.
+- Strict: unknown markers or config keys, duplicate parametrize IDs, a passing `xfail`, and any warning fail the run.
+- Every test must pass alone and in any order: `duty test` runs in parallel (pytest-xdist) and shuffled (pytest-randomly). A direct `uv run pytest` runs serially; add `-n auto` for parallel. To repeat an order, pass the `--randomly-seed` value from the pytest header; `-p no:randomly` turns shuffling off.
 
 ## Architecture
 
-`nclutils` is a flat collection of utility modules. Each public module under `src/nclutils/` follows the same shape:
+`nclutils` is a flat collection of utility modules. Each public module under `src/nclutils/` has the same shape:
 
-- `src/nclutils/<module>/__init__.py` — re-exports the public surface and defines `__all__`.
-- `src/nclutils/<module>/<implementation>.py` — actual code.
+- `src/nclutils/<module>/__init__.py`: re-exports the public surface and defines `__all__`.
+- `src/nclutils/<module>/<implementation>.py`: the code.
 
-Every module must be imported from its submodule. The preferred form for the pretty-printer is `from nclutils import pp` and call sites use `pp.info(...)`, `pp.success(...)`, etc.; individual symbols may also be pulled with `from nclutils.pp import info`. Other modules follow the same pattern (`from nclutils.fs import copy_file`). Preserve this convention — it's the public API contract and is documented in the README.
+Import from the module, not the package root: `from nclutils import pp`, then `pp.info(...)`; or `from nclutils.pp import info`; or `from nclutils.fs import copy_file`. This is the public API contract documented in the README, so keep it.
 
-`tests/` mirrors the source layout. Larger modules have their own subdirectory with its own `conftest.py`; smaller modules use a single `tests/test_<module>.py` file. Match the existing pattern when adding tests.
+`tests/` mirrors the source layout. Larger modules have a subdirectory with its own `conftest.py`; smaller modules use one `tests/test_<module>.py`. Match the existing pattern when adding tests.
 
-`docs/` contains one per-module guide per public module. The README is an index; the `docs/` pages are the deep dives.
+`docs/<module>.md`: one guide per public module. The README is the index.
 
-`skill/` is the AI-agent-facing reference shipped alongside the source. `skill/SKILL.md` is the quick-reference card (import patterns, task-to-module lookup, top gotchas); `skill/references/<module>.md` holds per-module deep dives written for agents. Downstream agents read it directly from this repo, often pinned to a tag, so the content must stay accurate for the version it lives in.
+`skill/` is the agent-facing reference shipped with the source: `skill/SKILL.md` is the quick-reference card (import patterns, task-to-module table, gotchas, public-symbols list), and `skill/references/<module>.md` holds per-module detail. Downstream agents read it from this repo, often pinned to a tag, so it must stay accurate for the version it ships in.
 
-**Always update documentation when code changes.** Any change to a public function's signature, behavior, defaults, exceptions, or examples must be reflected in the matching `docs/<module>.md`, the matching `skill/references/<module>.md`, and the README's module summary table if the surface area shifts. Update `skill/SKILL.md` too when the change touches anything it calls out (import patterns, the task-to-module table, the gotchas, the public-symbols list).
+Keep docs in step with code:
 
-New public exports must be added to the relevant `__init__.py`'s `__all__`, the module's API reference in `docs/`, the matching `skill/references/<module>.md`, the public-symbols list in `skill/SKILL.md`, and the README. Removing or renaming a public symbol is a breaking change. If a new top-level module is added, also add a new `skill/references/<module>.md` and link it from `skill/SKILL.md`.
+| Change | Update |
+| --- | --- |
+| Public function signature, behavior, defaults, exceptions, or examples | `docs/<module>.md`, `skill/references/<module>.md`; the README module table if the surface shifts; `skill/SKILL.md` if it mentions the change |
+| New public export | The module's `__init__.py` `__all__`, `docs/<module>.md`, `skill/references/<module>.md`, the public-symbols list in `skill/SKILL.md`, the README |
+| New top-level module | All of the above, plus a new `skill/references/<module>.md` linked from `skill/SKILL.md` |
+
+Removing or renaming a public symbol is a breaking change.
 
 ### Two logging systems
 
-The project has two parallel output paths and they are intentionally separate:
+The project has two output paths, kept separate on purpose:
 
-1. **`nclutils.pp`** — Rich-based user-facing CLI output (`info`, `success`, `error`, `step()`, etc.). The `Emitter` class owns this, with module-level functions delegating to a shared default. Has its own theme, verbosity gates, and optional file logger.
-2. **stdlib `logging`** — internal diagnostics inside library modules. Each module logs under its own `nclutils.<module>` logger and is silent unless the host application attaches a handler.
+1. **`nclutils.pp`**: Rich-based user-facing CLI output (`info`, `success`, `error`, `step()`, and others). The `Emitter` class owns it; module-level functions delegate to a shared default. Has its own theme, verbosity gates, and optional file logger.
+2. **stdlib `logging`**: internal diagnostics inside library modules. Each module logs under its own `nclutils.<module>` logger and is silent unless the host application attaches a handler.
 
-Do not bridge these. Library modules do not call `pp`; `pp` does not call stdlib `logging` for its own output.
+Do not bridge them. Library modules do not call `pp`; `pp` does not call stdlib `logging` for its own output.
 
-## Testing conventions
+## Test style
 
-Tests follow a strict house style enforced by code review (not lint):
-
-- Use `pytest` and `pytest-mock` only. Never `unittest`.
+- Use `pytest` and `pytest-mock` only, never `unittest`.
 - Use the `mocker` fixture with `autospec=True` for mocks.
-- Write single-sentence docstrings in imperative voice starting with **"Verify"** (e.g., `"""Verify backup creates file with .bak extension."""`).
+- Write single-sentence docstrings in imperative voice starting with "Verify", for example `"""Verify backup creates file with .bak extension."""`.
 - Structure test bodies with `# Given`, `# When`, `# Then` comments.
-- Use `@pytest.mark.parametrize` for input/output variants.
+- Use `@pytest.mark.parametrize` for input and output variants.
 
 ## Commits and branches
 
-Commits are enforced by the `committed` pre-commit hook. The format is conventional commits with these allowed types: `build`, `bump`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style`, `test`. Header: `<type>(<scope>): <subject>` with imperative-mood, lowercase subject, no trailing period, ≤70 chars.
-
-Always work on a feature branch (`feat/<name>`, `fix/<name>`, `refactor/<name>`). Never commit to `main` or push to `origin/main` without explicit permission.
-
-If pre-commit modifies files during a commit, re-stage and create a new commit — never `--amend` or `--no-verify` to bypass a failing hook.
+- Conventional commits: `<type>(<scope>): <subject>`, scope optional. Types: `build`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `style`, `test`. `bump` is for release commits only.
+- Subject in imperative mood, lowercase first letter, no trailing period. Subject and body lines at most 60 characters. The `committed` hook checks every commit message. CI rejects a pull request title with any other type, and the title becomes the squash commit.
+- Work on a branch named `<type>/<name>`, using a type from the list above. Never commit to `main` or push to `origin/main` without explicit permission.
+- If a git hook modifies files during a commit, re-stage and create a new commit. Never `--amend` or `--no-verify` to get past a failing hook.
 
 ## Python compatibility
 
-The package supports Python 3.10+. When adding code that depends on newer language or stdlib features, gate it on `nclutils.utils.check_python_version(major, minor)` rather than raising the project minimum.
-
-## Context Navigation (Graphify)
-
-### 3-Layer Query Rule
-
-1. **First:** query `graphify-out/graph.json` or `graphify-out/wiki/index.md`
-   to understand code structure and connections
-2. **Second:** query the Obsidian vault for decisions, progress, and project context
-3. **Third:** only read raw code files when editing
-   or when the first two layers don't have the answer
-
-### When to rebuild the graph
-
-- After structural changes (new modules, major refactors)
-- Headless: `graphify update .` (only processes modified files)
-- Skill: `/graphify . --update` (same behavior, runs through the skill — also accepts `--obsidian` to refresh the vault)
-- The graph is persistent — NO need to rebuild every session
-
-### Do NOT
-
-- Don't manually modify files inside `graphify-out/`
-- Don't re-read the entire codebase if the graph already has the information
+The package supports Python 3.11+. When code needs a newer language or stdlib feature, gate it on `nclutils.utils.check_python_version(major, minor)` instead of raising the project minimum.

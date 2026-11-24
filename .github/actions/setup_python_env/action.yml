@@ -19,15 +19,15 @@ runs:
   using: composite
   steps:
     - name: Setup uv with cache
-      uses: astral-sh/setup-uv@v10.0.1
+      uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
       with:
-        version: "latest"
         enable-cache: true
         python-version: ${{ inputs.python-version }}
 
     - name: Install the project
       shell: bash
-      run: uv sync ${{ inputs.install-groups }}
+      # --locked fails the run when uv.lock is out of date with pyproject.toml
+      run: uv sync --locked ${{ inputs.install-groups }}
 
     - name: Show the Python version
       shell: bash

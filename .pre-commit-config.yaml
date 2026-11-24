@@ -5,9 +5,10 @@ default_stages: [pre-commit, manual]
 fail_fast: true
 repos:
   - repo: "https://github.com/commitizen-tools/commitizen"
-    rev: v4.19.2
+    rev: v4.20.1
     hooks:
       - id: commitizen
+      - id: commitizen-branch
 
   - repo: "https://github.com/pre-commit/pygrep-hooks"
     rev: v1.10.0
@@ -64,13 +65,13 @@ repos:
         entry: yamllint --strict --config-file .yamllint.yml
 
   - repo: "https://github.com/adhtruong/mirrors-typos"
-    rev: v1.51.1
+    rev: v1.52.2
     hooks:
       - id: typos
         stages: [commit-msg]
 
   - repo: "https://github.com/crate-ci/committed"
-    rev: v1.1.11
+    rev: v1.1.12
     hooks:
       - id: committed
         stages: [commit-msg]
@@ -83,8 +84,8 @@ repos:
         language: system
         types: [shell]
 
-      # Hooks below call duties, which wrap each tool in gate-cache. A gate that already passed
-      # on the same files skips, so running them again at push time costs almost nothing.
+      # Hooks below call duties. The typos and test duties wrap their tool in gate-cache, so a
+      # gate that already passed on the same files skips at push time. Ruff and ty are fast and run every time.
       - id: ruff
         name: ruff
         entry: uv run duty ruff
@@ -116,6 +117,14 @@ repos:
         types: [python]
         stages: [pre-commit, pre-push, manual]
 
+      - id: actionlint
+        name: actionlint
+        entry: uv run duty actionlint
+        language: system
+        pass_filenames: false
+        files: ^\.github/(workflows|actions)/
+        stages: [pre-commit, pre-push, manual]
+
       - id: pytest
         name: pytest
         entry: uv run duty test
@@ -129,17 +138,3 @@ repos:
           uv\.lock|
           pyproject\.toml
           )
-
-      # Workaround until commitizen fixes its commitizen-branch hook (see commitizen #1923).
-      # The upstream hook's args contain the literal "$PRE_COMMIT_FROM_REF..$PRE_COMMIT_TO_REF",
-      # but no client (pre-commit, prek) substitutes those placeholders, and `cz check` doesn't
-      # expand them either, so git receives them verbatim and fails with "ambiguous argument".
-      # Wrapping the call in `bash -c` forces the shell to expand the env vars prek/pre-commit
-      # do set. Remove this block once commitizen ships a fix upstream.
-      - id: commitizen-branch
-        name: commitizen check branch
-        entry: bash -c 'uv run --quiet cz check --rev-range "$PRE_COMMIT_FROM_REF..$PRE_COMMIT_TO_REF"' --
-        language: system
-        stages: [pre-push]
-        pass_filenames: false
-        always_run: true

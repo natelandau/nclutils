@@ -6,6 +6,7 @@
         "Programming Language :: Python :: 3.13",
         "Programming Language :: Python :: 3.14",
         "Programming Language :: Python :: 3.15",
+        "Typing :: Typed",
     ]
     dependencies = ["questionary>=2.1.1, <3.0.0", "rich>=15.0.0, <16.0.0"]
     description = "Collection of convenience functions used in Python packages and scripts."
@@ -16,25 +17,33 @@
     requires-python = ">=3.11"
     version = "4.0.0"
 
+    [project.urls]
+        Changelog     = "https://github.com/natelandau/nclutils/blob/main/CHANGELOG.md"
+        Documentation = "https://github.com/natelandau/nclutils/tree/main/docs"
+        Homepage      = "https://github.com/natelandau/nclutils"
+        Issues        = "https://github.com/natelandau/nclutils/issues"
+        Repository    = "https://github.com/natelandau/nclutils"
+
 [build-system]
     build-backend = "uv_build"
     requires      = ["uv_build>=0.13.0,<0.14"]
 
 [dependency-groups]
     dev = [
+        "actionlint-py>=1.7.12.25",
         "commitizen>=4.19.2",
         "coverage>=7.16.2",
         "duty>=1.10.1",
         "freezegun>=1.5.5",
-        "gate-cache>=0.5.0",
+        "gate-cache>=0.12.0",
         "prek>=0.5.5",
         "pytest-clarity>=1.0.1",
         "pytest-cov>=7.1.0",
         "pytest-devtools>=1.3.0",
-        "pytest-env>=1.8.0",
         "pytest-mock>=3.16.0",
-        "pytest-pretty-terminal>=1.1.0",
+        "pytest-randomly>=5.1.0",
         "pytest-sugar>=1.1.1",
+        "pytest-xdist>=3.8.0",
         "pytest>=9.1.1",
         "ruff>=0.17.0",
         "ty>=0.0.86",
@@ -42,6 +51,10 @@
         "xdoctest>=1.3.2",
         "yamllint>=1.38.0",
 ]
+
+[tool.uv]
+    # CI's setup-uv reads this and installs the newest uv it allows
+    required-version = ">=0.13.9"
 
 [tool.commitizen]
     bump_message               = "bump(release): v$current_version → v$new_version"
@@ -51,16 +64,13 @@
     version_provider           = "uv"
 
 [tool.coverage.report] # https://coverage.readthedocs.io/en/latest/config.html#report
-    exclude_lines = [
+    exclude_also = [
         '@overload',
         'assert_never',
         'def __repr__',
-        'except [\w\s\._]+ as .*:',
         'if TYPE_CHECKING:',
         'if __name__ == .__main__.:',
-        'pragma: no cover',
     ]
-    # fail_under = 50
     precision    = 1
     show_missing = true
     skip_covered = true
@@ -74,76 +84,67 @@
 [tool.coverage.xml]
     output = ".cache/coverage.xml"
 
-[tool.pytest.ini_options]
-    addopts        = "--color=yes --xdoctest --exitfirst --failed-first --strict-config --strict-markers --junitxml=.cache/pytest.xml"
-    cache_dir      = ".cache/pytest"
-    filterwarnings = ["error", "ignore::DeprecationWarning"]
-    testpaths      = ["src", "tests"]
-    xfail_strict   = true
+[tool.pytest]
+    addopts                   = ["--xdoctest", "--exitfirst", "--failed-first"]
+    cache_dir                 = ".cache/pytest"
+    filterwarnings            = ["error"]
+    strict                    = true
+    testpaths                 = ["src", "tests"]
+    tmp_path_retention_policy = "failed"
 
-[tool.ruff] # https://github.com/charliermarsh/ruff
-    exclude        = [".venv/", "tmp/"]
+[tool.ruff] # https://docs.astral.sh/ruff/settings/
+    extend-exclude = ["tmp/"]
     fix            = true
     line-length    = 100
     output-format  = "grouped"
     src            = ["src", "tests"]
-    target-version = "py311"
 
     [tool.ruff.lint]
         ignore = [
-            "ANN204", # missing return type annotation for special method `__init__`
-            "B006",   # mutable-argument-default
-            "B008",   # function-call-in-default-argument
-            "COM812", # Trailing comma missing"
-            "CPY001", # Missing copyright notice at top of file
+            "COM812", # missing-trailing-comma, conflicts with the formatter
+            "CPY001", # missing-copyright-notice
             "D107",   # undocumented-public-init
             "D213",   # multi-line-summary-second-line
-            "E501",   # line-too-long
-            "FIX002", # Line contains TODO, consider resolving the issue
-            "TD002",  # Missing author in TODO
-            "TD003",  # Missing issue link on the line following this TODO
-            "UP007",  # non-pep604-annotation
+            "E501",   # line-too-long, the formatter handles line length
+            "FIX002", # line-contains-todo
+            "TD002",  # missing-todo-author
+            "TD003",  # missing-todo-link
         ]
-        per-file-ignores = { "tests/*.py" = [
-            "A002",
-            "A003",
-            "ANN001",
-            "ANN201",
-            "ARG001",
-            "ARG002",
-            "ARG005",
-            "D102",
-            "ERA001",
-            "F403",
-            "FBT001",
-            "FBT002",
-            "PGH003",
-            "PLR0913",
-            "PLR0917",
-            "PLR2004",
-            "PLR6301",
-            "PT012",
-            "S101",
-            "S603",
-            "S607",
-            "SLF001",
-            "TRY301",
-        ], "duties.py" = [
-            "ANN001",
-            "FBT001",
-            "FBT002",
-        ], "src/nclutils/pp/emitter.py" = [
-            "ANN401",
-        ] }
         select = ["ALL"]
         unfixable = [
-            "ERA001", # Commented out code
+            "ERA001", # commented-out-code
             "F401",   # unused-import
             "F841",   # unused-variable
         ]
-        [tool.ruff.lint.mccabe]
-            # Unlike Flake8, default to a complexity level of 10.
-            max-complexity = 10
+
+        [tool.ruff.lint.per-file-ignores]
+            "duties.py" = ["ANN001", "FBT001", "FBT002"]
+            "src/nclutils/pp/emitter.py" = ["ANN401"]
+            "tests/*.py" = [
+                "A002",
+                "A003",
+                "ANN001",
+                "ANN201",
+                "ARG001",
+                "ARG002",
+                "ARG005",
+                "D102",
+                "ERA001",
+                "F403",
+                "FBT001",
+                "FBT002",
+                "PGH003",
+                "PLR0913",
+                "PLR0917",
+                "PLR2004",
+                "PLR6301",
+                "PT012",
+                "S101",
+                "S603",
+                "S607",
+                "SLF001",
+                "TRY301",
+            ]
 
         [tool.ruff.lint.pydocstyle]
             convention = "google"
@@ -151,17 +152,8 @@
         [tool.ruff.lint.pylint]
             max-args = 6
 
-    [tool.ruff.format]
-        indent-style              = "space"
-        line-ending               = "auto"
-        quote-style               = "double"
-        skip-magic-trailing-comma = false
-
 [tool.ty.terminal]
     error-on-warning = true
-
-[tool.ty.environment]
-    python-version = "3.11"
 
 [tool.ty.src]
     exclude = ["**/docs/**", "**/tests/**"]

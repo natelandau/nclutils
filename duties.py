@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import re
-import shlex
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -18,6 +17,10 @@ if TYPE_CHECKING:
 PY_SRC_PATHS = (Path(_) for _ in ("src/", "tests/", "duties.py", "scripts/") if Path(_).exists())
 PY_SRC_LIST = tuple(str(_) for _ in PY_SRC_PATHS)
 CI = os.environ.get("CI", "0") in {"1", "true", "yes", ""}
+
+# Everything git tracks that the test suite reads. A change outside these paths skips the test gate.
+TEST_GATE_PATHS = ("src/", "tests/", "pyproject.toml", "uv.lock", "duties.py")
+TEST_JUNIT_REPORT = ".cache/junit.xml"
 
 
 def strip_ansi(text: str) -> str:
@@ -47,16 +50,26 @@ def pyprefix(title: str) -> str:
     return title
 
 
-def gated(*cmd: str) -> list[str]:
+def gated(name: str, *cmd: str, paths: tuple[str, ...] = (), junit: str | None = None) -> list[str]:
     """Wrap a command in gate-cache so it skips when it already passed on the same files.
 
-    The Python version is part of the gate name because the git tree that keys the cache does not cover the interpreter.
+    The Python version is the gate's key because the git tree that keys the cache does not cover the interpreter.
+
+    Args:
+        name (str): Short, stable gate name shown by `gate-cache status` and the stats dashboard.
+        *cmd (str): The command to run.
+        paths (tuple[str, ...]): Git pathspecs the command reads. Empty means the whole repository.
+        junit (str | None): Path of the JUnit XML report the command writes, so stats record each test.
 
     Returns:
         list[str]: The command prefixed with a gate-cache invocation.
     """
-    name = f"{shlex.join(cmd)} (python{sys.version_info.major}.{sys.version_info.minor})"
-    return ["gate-cache", "--name", name, "--", *cmd]
+    key = f"py{sys.version_info.major}.{sys.version_info.minor}"
+    options = [f"--name={name}@{key}"]
+    options.extend(f"--path={path}" for path in paths)
+    if junit:
+        options.append(f"--junit={junit}")
+    return ["gate-cache", *options, "--", *cmd]
 
 
 @duty(silent=True)
@@ -74,7 +87,7 @@ def clean(ctx: Context) -> None:
 def ruff(ctx: Context) -> None:
     """Check the code quality with ruff."""
     ctx.run(
-        gated("ruff", "check", "--config", "pyproject.toml", "--no-fix", *PY_SRC_LIST),
+        ["ruff", "check", "--config", "pyproject.toml", "--no-fix", *PY_SRC_LIST],
         title=pyprefix("code quality check"),
     )
 
@@ -83,7 +96,7 @@ def ruff(ctx: Context) -> None:
 def format(ctx: Context) -> None:  # noqa: A001
     """Format the code with ruff."""
     ctx.run(
-        gated("ruff", "format", "--check", "--config", "pyproject.toml", *PY_SRC_LIST),
+        ["ruff", "format", "--check", "--config", "pyproject.toml", *PY_SRC_LIST],
         title=pyprefix("code formatting"),
     )
 
@@ -92,27 +105,33 @@ def format(ctx: Context) -> None:  # noqa: A001
 def ty(ctx: Context) -> None:
     """Check the code with ty."""
     os.environ["FORCE_COLOR"] = "1"
-    ctx.run(gated("ty", "check", "src/"), title="ty check")
+    ctx.run(["ty", "check", "src/"], title="ty check")
 
 
 @duty
 def typos(ctx: Context) -> None:
     """Check the code with typos."""
     ctx.run(
-        gated("typos", "--config", ".typos.toml"),
+        gated("typos", "typos", "--config", ".typos.toml"),
         title=pyprefix("typos check"),
     )
 
 
-@duty(skip_if=CI, skip_reason="skip prek in CI environments")
+@duty
+def actionlint(ctx: Context) -> None:
+    """Check the GitHub Actions workflows with actionlint."""
+    ctx.run(["actionlint"], title=pyprefix("actionlint"))
+
+
+@duty
 def prek(ctx: Context) -> None:
     """Run prek hooks."""
     # These hooks call the duties above, which lint already runs
-    os.environ["SKIP"] = "ruff,format,ty,typos,pytest"
-    ctx.run(gated("prek", "run", "--all-files"), title=pyprefix("prek hooks"))
+    os.environ["SKIP"] = "ruff,format,ty,typos,actionlint,pytest"
+    ctx.run(gated("prek", "prek", "run", "--all-files"), title=pyprefix("prek hooks"))
 
 
-@duty(pre=[ruff, format, ty, typos, prek], capture=CI)
+@duty(pre=[ruff, format, ty, typos, actionlint, prek], capture=CI)
 def lint(ctx: Context) -> None:
     """Run all linting duties."""
 
@@ -128,21 +147,32 @@ def update(ctx: Context) -> None:
 @duty()
 def test(ctx: Context, *cli_args: str) -> None:
     """Test package and generate coverage reports."""
-    out = ctx.run(
-        gated(
-            "pytest",
-            "tests/",
-            "src/",
-            "--config-file=pyproject.toml",
-            "--color=yes",
-            "--cov",
-            "--cov-config=pyproject.toml",
-            "--cov-report=xml",
-            "--cov-report=term",
-            *cli_args,
-        ),
-        title=pyprefix("Running tests"),
-    )
+    pytest_cmd = [
+        "pytest",
+        "tests/",
+        "src/",
+        "--config-file=pyproject.toml",
+        "--color=yes",
+        "--numprocesses=auto",
+        "--cov",
+        "--cov-config=pyproject.toml",
+        "--cov-report=xml",
+        "--cov-report=term",
+    ]
+
+    # Extra arguments usually filter the suite, and a pass on a subset must not mark the full suite as passed
+    if cli_args:
+        cmd = [*pytest_cmd, *cli_args]
+    else:
+        cmd = gated(
+            "test",
+            *pytest_cmd,
+            f"--junitxml={TEST_JUNIT_REPORT}",
+            paths=TEST_GATE_PATHS,
+            junit=TEST_JUNIT_REPORT,
+        )
+
+    out = ctx.run(cmd, title=pyprefix("Running tests"))
 
     if not CI:
         rprint(strip_ansi(out))
