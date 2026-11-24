@@ -123,7 +123,7 @@ def actionlint(ctx: Context) -> None:
     ctx.run(["actionlint"], title=pyprefix("actionlint"))
 
 
-@duty(skip_if=CI, skip_reason="skip prek in CI environments")
+@duty
 def prek(ctx: Context) -> None:
     """Run prek hooks."""
     # These hooks call the duties above, which lint already runs

@@ -19,13 +19,17 @@ permissions:
 jobs:
     test-python-code:
         runs-on: ubuntu-latest
+        timeout-minutes: 15
         strategy:
-            fail-fast: true
+            # Finish every version so a failure shows which versions it affects
+            fail-fast: false
             matrix:
                 python-version: ["3.11", "3.12", "3.13", "3.14", "3.15"]
         steps:
             - name: Checkout repository
-              uses: actions/checkout@v7
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
 
             - name: Setup Python, uv, and the package
               uses: ./.github/actions/setup_python_env
@@ -38,7 +42,7 @@ jobs:
 
             - name: Upload coverage to Codecov
               if: ${{ inputs.upload-coverage }}
-              uses: codecov/codecov-action@v7
+              uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
               with:
                   token: ${{ secrets.CODECOV_TOKEN }}
                   files: .cache/coverage.xml
@@ -46,12 +50,21 @@ jobs:
 
     lint-project:
         runs-on: ubuntu-latest
+        timeout-minutes: 15
         steps:
             - name: Checkout repository
-              uses: actions/checkout@v7
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
 
             - name: Setup Python, uv, and the package
               uses: ./.github/actions/setup_python_env
+
+            - name: Cache prek hook environments
+              uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+              with:
+                  path: ~/.cache/prek
+                  key: prek-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
 
             - name: Run all linters
               shell: bash
