@@ -6,6 +6,7 @@
         "Programming Language :: Python :: 3.13",
         "Programming Language :: Python :: 3.14",
         "Programming Language :: Python :: 3.15",
+        "Typing :: Typed",
     ]
     dependencies = ["questionary>=2.1.1, <3.0.0", "rich>=15.0.0, <16.0.0"]
     description = "Collection of convenience functions used in Python packages and scripts."
@@ -15,6 +16,13 @@
     readme = "README.md"
     requires-python = ">=3.11"
     version = "4.0.0"
+
+    [project.urls]
+        Changelog     = "https://github.com/natelandau/nclutils/blob/main/CHANGELOG.md"
+        Documentation = "https://github.com/natelandau/nclutils/tree/main/docs"
+        Homepage      = "https://github.com/natelandau/nclutils"
+        Issues        = "https://github.com/natelandau/nclutils/issues"
+        Repository    = "https://github.com/natelandau/nclutils"
 
 [build-system]
     build-backend = "uv_build"
