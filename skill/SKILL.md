@@ -307,4 +307,4 @@ When you need API details beyond the table above, read the relevant file in `ref
 
 ## Python compatibility
 
-`nclutils` supports Python 3.10+. Use `nclutils.utils.check_python_version(major, minor)` to gate any new code that needs newer language or stdlib features, rather than raising the package's Python floor.
+`nclutils` supports Python 3.11+. Use `nclutils.utils.check_python_version(major, minor)` to gate any new code that needs newer language or stdlib features, rather than raising the package's Python floor.

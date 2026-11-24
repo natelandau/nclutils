@@ -84,7 +84,7 @@ If pre-commit modifies files during a commit, re-stage and create a new commit â
 
 ## Python compatibility
 
-The package supports Python 3.10+. When adding code that depends on newer language or stdlib features, gate it on `nclutils.utils.check_python_version(major, minor)` rather than raising the project minimum.
+The package supports Python 3.11+. When adding code that depends on newer language or stdlib features, gate it on `nclutils.utils.check_python_version(major, minor)` rather than raising the project minimum.
 
 ## Context Navigation (Graphify)
 
