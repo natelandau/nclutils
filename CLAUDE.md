@@ -12,9 +12,9 @@ uv run prek install --prepare-hooks   # one-time git hook setup
 
 duty --list                     # discover all tasks
 duty test                       # run pytest with coverage
-duty lint                       # ruff + ty + typos + actionlint + pre-commit
+duty lint                       # ruff + ty + typos + actionlint + prek hooks
 duty ruff | duty format | duty ty | duty typos | duty actionlint   # individual linters
-duty update                     # refresh uv.lock and pre-commit pins
+duty update                     # refresh uv.lock and prek hook pins
 ```
 
 The `typos`, `prek`, and `test` duties wrap their tool in [`gate-cache`](https://github.com/natelandau/gate-cache), so a duty that already passed on the same files and Python version prints a skip line and exits 0. Treat a skip as a pass. The pre-commit hooks call these duties, so they share the same cache. `ruff`, `format`, and `ty` are fast and stay ungated on purpose.
@@ -80,7 +80,7 @@ Commits are enforced by the `committed` pre-commit hook. The format is conventio
 
 Always work on a feature branch (`feat/<name>`, `fix/<name>`, `refactor/<name>`). Never commit to `main` or push to `origin/main` without explicit permission.
 
-If pre-commit modifies files during a commit, re-stage and create a new commit — never `--amend` or `--no-verify` to bypass a failing hook.
+If a git hook modifies files during a commit, re-stage and create a new commit — never `--amend` or `--no-verify` to bypass a failing hook.
 
 ## Python compatibility
 
