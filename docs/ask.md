@@ -2,9 +2,6 @@
 
 Two wrappers around [questionary](https://github.com/tmbo/questionary) for the most common interactive prompts: pick one item or pick many. Import them from `nclutils.ask`.
 
-> [!NOTE]
-> `nclutils.questions` is a deprecated alias of `nclutils.ask`. It raises a `DeprecationWarning` on import and will be removed in a future major release. Import from `nclutils.ask` instead.
-
 ```python
 from nclutils.ask import choose_one_from_list
 

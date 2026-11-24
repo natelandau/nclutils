@@ -35,9 +35,9 @@ Wrong imports:
 | Wrong | Right |
 | --- | --- |
 | `from nclutils import copy_file` | `from nclutils.fs import copy_file` (same for every non-`pp` symbol) |
-| `nclutils.questions` | `nclutils.ask` (old name is deprecated, raises `DeprecationWarning`) |
-| `nclutils.network` | `nclutils.net` (deprecated, raises `DeprecationWarning`) |
-| `nclutils.text_processing` | `nclutils.text` (deprecated, raises `DeprecationWarning`) |
+| `nclutils.questions` | `nclutils.ask` (old name removed, raises `ModuleNotFoundError`) |
+| `nclutils.network` | `nclutils.net` (old name removed) |
+| `nclutils.text_processing` | `nclutils.text` (old name removed) |
 
 ## Task lookup
 

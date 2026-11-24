@@ -40,8 +40,6 @@ Returns `None` when:
 - User presses Ctrl-C (Esc does not cancel).
 - `choose_multiple_from_list`: user submits with nothing selected. Never returns `[]`.
 
-Deprecated alias `nclutils.questions`: emits `DeprecationWarning` on import ("nclutils.questions is deprecated and will be removed in a future major release. Use nclutils.ask instead."). Import from `nclutils.ask`.
-
 ## `nclutils.net`
 
 ```python
@@ -57,8 +55,6 @@ from nclutils.net import network_available
 
 network_available(address="github.com", port=443, timeout=2)
 ```
-
-Deprecated alias `nclutils.network`: emits `DeprecationWarning` on import ("nclutils.network is deprecated and will be removed in a future major release. Use nclutils.net instead."). Import from `nclutils.net`.
 
 ## `nclutils.text`
 
@@ -96,8 +92,6 @@ from nclutils.text import ensure_lines_in_file
 
 ensure_lines_in_file(".gitignore", [".env", "build/"])
 ```
-
-Deprecated alias `nclutils.text_processing`: emits `DeprecationWarning` on import ("nclutils.text_processing is deprecated and will be removed in a future major release. Use nclutils.text instead."). Import from `nclutils.text`.
 
 ## `nclutils.utils`
 
