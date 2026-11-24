@@ -31,10 +31,9 @@
         "pytest-clarity>=1.0.1",
         "pytest-cov>=7.1.0",
         "pytest-devtools>=1.3.0",
-        "pytest-env>=1.8.0",
         "pytest-mock>=3.16.0",
-        "pytest-pretty-terminal>=1.1.0",
         "pytest-sugar>=1.1.1",
+        "pytest-xdist>=3.8.0",
         "pytest>=9.1.1",
         "ruff>=0.17.0",
         "ty>=0.0.86",
@@ -74,12 +73,13 @@
 [tool.coverage.xml]
     output = ".cache/coverage.xml"
 
-[tool.pytest.ini_options]
-    addopts        = "--color=yes --xdoctest --exitfirst --failed-first --strict-config --strict-markers --junitxml=.cache/pytest.xml"
-    cache_dir      = ".cache/pytest"
-    filterwarnings = ["error", "ignore::DeprecationWarning"]
-    testpaths      = ["src", "tests"]
-    xfail_strict   = true
+[tool.pytest]
+    addopts                   = ["--xdoctest", "--exitfirst", "--failed-first"]
+    cache_dir                 = ".cache/pytest"
+    filterwarnings            = ["error"]
+    strict                    = true
+    testpaths                 = ["src", "tests"]
+    tmp_path_retention_policy = "failed"
 
 [tool.ruff] # https://github.com/charliermarsh/ruff
     exclude        = [".venv/", "tmp/"]

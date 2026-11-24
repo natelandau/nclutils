@@ -32,7 +32,9 @@ uv run pytest tests/test_strings.py::test_random_string
 uv run pytest tests/filesystem/test_copy.py -k "backup"
 ```
 
-`pytest` is configured (`pyproject.toml`) with `--xdoctest --exitfirst --failed-first --strict-config --strict-markers` and runs against both `tests/` and `src/`. Doctests in source docstrings are part of the suite.
+`pytest` is configured in the `[tool.pytest]` table of `pyproject.toml`. It runs against both `tests/` and `src/` with `--xdoctest --exitfirst --failed-first`, so doctests in source docstrings are part of the suite. Strict mode is on: unknown markers, config keys, and duplicate parametrize IDs are errors, and an `xfail` test that passes fails. Every warning is an error.
+
+`duty test` runs the suite in parallel with `pytest-xdist`, so every test must pass alone and in any order, with no state shared across tests. A direct `uv run pytest` runs serially unless you add `-n auto`.
 
 ## Architecture
 
