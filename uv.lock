@@ -332,7 +332,7 @@ toml = [
 
 [[package]]
 name = "cyclopts"
-version = "5.2.0"
+version = "5.5.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "attrs" },
@@ -340,9 +340,9 @@ dependencies = [
     { name = "rich" },
     { name = "rich-rst" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/28/c1/3debeeb6e0eb74a51d6f8cf1f273ed7c479e3321631cbf89fb9700e65e28/cyclopts-5.2.0.tar.gz", hash = "sha256:b63c1b1beaadf3ead19214385a0f90b990f152c4107c174e1724c45dc71e9541", size = 246542, upload-time = "2026-10-06T15:02:39.212Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/49/5d/cee0096dd8c5ad13ce516599c4823637d0107643666a03ddc43a9580391f/cyclopts-5.5.2.tar.gz", hash = "sha256:c0339b7ddd7b1c886f13bb8b68a6a65aa7144d3027f1d0e290be514b8fe1589b", size = 258336, upload-time = "2026-11-16T16:26:28.322Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d4/dd/3f73d04c95f6acc6a54700011637e49362e337139b518be895edf4786f87/cyclopts-5.2.0-py3-none-any.whl", hash = "sha256:5da2a5d65164e03008621fc4795946b88a722b881398b5dfa58afa6218342cff", size = 289196, upload-time = "2026-10-06T15:02:37.57Z" },
+    { url = "https://files.pythonhosted.org/packages/7a/b2/be66b75ce0a3ccc7aa3601c9e7f9cd0fbad4301183fc7105c6b9faebeaeb/cyclopts-5.5.2-py3-none-any.whl", hash = "sha256:4fbe863ebace1c65dafc6520c82217915b103d27fbd1d8fcd168f2abcca3a12a", size = 301206, upload-time = "2026-11-16T16:26:26.615Z" },
 ]
 
 [[package]]
@@ -415,16 +415,16 @@ wheels = [
 
 [[package]]
 name = "gate-cache"
-version = "0.5.0"
+version = "0.12.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cyclopts" },
-    { name = "nclutils" },
     { name = "platformdirs" },
+    { name = "rich" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/01/f0/cb94b8e3d9e8eda8124a006f888ee2878fdbacad30f833acce2f9bc9a7c3/gate_cache-0.5.0.tar.gz", hash = "sha256:63157ce588628be48840f565b65d9d722a8460b4342aad849835af07ad456ce1", size = 23171, upload-time = "2026-10-12T20:36:49.712Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c7/68/8bf8c8ada97c3010a1aa28e07ebd8f0c6a3a9273104221ac59becafa4c8b/gate_cache-0.12.0.tar.gz", hash = "sha256:91966cd5522805b6c6afcbd11072008e61b328803025e70f6e612e8cfa43d3c7", size = 376797, upload-time = "2026-11-20T03:01:13.535Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/99/54/afc55e7b97fb97408311673f856e5bf07be61456e81d1fcd02914fd91794/gate_cache-0.5.0-py3-none-any.whl", hash = "sha256:5e62df00f7040890d63709f540419a5204c858cd882432e7e495d5ef9a25083d", size = 24074, upload-time = "2026-10-12T20:36:48.841Z" },
+    { url = "https://files.pythonhosted.org/packages/2e/85/1971bbfc3fc294fea7d7dd03604c4e314bf5fa4068ddd38fca5dede16dde/gate_cache-0.12.0-py3-none-any.whl", hash = "sha256:8b19fb998fc1376862ad5a9359ca0e9a62cf25b7e18d4f9f2267b74e03e61c71", size = 403803, upload-time = "2026-11-20T03:01:12.025Z" },
 ]
 
 [[package]]
@@ -641,7 +641,7 @@ dev = [
     { name = "coverage", specifier = ">=7.16.2" },
     { name = "duty", specifier = ">=1.10.1" },
     { name = "freezegun", specifier = ">=1.5.5" },
-    { name = "gate-cache", specifier = ">=0.5.0" },
+    { name = "gate-cache", specifier = ">=0.12.0" },
     { name = "prek", specifier = ">=0.5.5" },
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "pytest-clarity", specifier = ">=1.0.1" },
@@ -678,11 +678,11 @@ wheels = [
 
 [[package]]
 name = "platformdirs"
-version = "4.13.0"
+version = "4.14.8"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/80/a8/66d45abadff219e36e2a824181b8f6a67e7ed4572934d6252c71c29d5731/platformdirs-4.13.0.tar.gz", hash = "sha256:1aa0b0d3f224c1f07c295121e312a5a24a180d6ae5a8425ea1784b3e3863e9c0", size = 61094, upload-time = "2026-10-11T02:05:24.109Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/71/18/0b0d99f5bf164f04a7a9534c3dbdbe4d5fd2b382667685ad40c192c4d3d1/platformdirs-4.14.8.tar.gz", hash = "sha256:96893d686e84e9e6f358a9ea41a8de544df66dbf2ba6cda250e7dc73acf85b9b", size = 87203, upload-time = "2026-11-20T08:14:52.63Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/8d/15/1633010b26e88e872c93b67c0b6c5e174fb74cb6fb5c1472b4d51d4a8f22/platformdirs-4.13.0-py3-none-any.whl", hash = "sha256:3dbcf4cd708f21cf876c4eaa90e58412bc4f033d87143f41b1493ff77c25b7e1", size = 32724, upload-time = "2026-10-11T02:05:22.776Z" },
+    { url = "https://files.pythonhosted.org/packages/5b/be/373cc7341f53bfd3acba3e5db62433fd960a45fcf73ad64a5f4d27e74910/platformdirs-4.14.8-py3-none-any.whl", hash = "sha256:1e34af590de4d978631b751eb2202f2fee4497537a17c1720b12fcf57b331392", size = 94267, upload-time = "2026-11-20T08:14:51.306Z" },
 ]
 
 [[package]]

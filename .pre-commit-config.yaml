@@ -83,8 +83,8 @@ repos:
         language: system
         types: [shell]
 
-      # Hooks below call duties, which wrap each tool in gate-cache. A gate that already passed
-      # on the same files skips, so running them again at push time costs almost nothing.
+      # Hooks below call duties. The typos and test duties wrap their tool in gate-cache, so a
+      # gate that already passed on the same files skips at push time. Ruff and ty are fast and run every time.
       - id: ruff
         name: ruff
         entry: uv run duty ruff

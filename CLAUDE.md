@@ -17,7 +17,13 @@ duty ruff | duty format | duty ty | duty typos   # individual linters
 duty update                     # refresh uv.lock and pre-commit pins
 ```
 
-The `ruff`, `format`, `ty`, `typos`, `prek`, and `test` duties wrap their tool in [`gate-cache`](https://github.com/natelandau/gate-cache), so a duty that already passed on the same files and Python version prints a skip line and exits 0. The pre-commit hooks call these duties, so they share the same cache. Use `GATE_CACHE_DISABLE=1 duty test` to force a real run, and `uv run gate-cache status` to see which gates passed. Wrap any new lint or test duty with the `gated()` helper in `duties.py`.
+The `typos`, `prek`, and `test` duties wrap their tool in [`gate-cache`](https://github.com/natelandau/gate-cache), so a duty that already passed on the same files and Python version prints a skip line and exits 0. Treat a skip as a pass. The pre-commit hooks call these duties, so they share the same cache. `ruff`, `format`, and `ty` are fast and stay ungated on purpose.
+
+- Run lint and the full test suite only through the duties, never by calling the tool directly, so runs read and write the shared cache.
+- The `test` gate is scoped with `--path` to `TEST_GATE_PATHS` in `duties.py`. When the suite starts reading a new tracked file or directory, add it there.
+- `duty test <args>` passes the arguments to pytest and bypasses the cache, because a filtered run must not mark the full suite as passed.
+- Use `GATE_CACHE_DISABLE=1 duty test` to force a real run, and `uv run gate-cache status` to see which gates passed.
+- Before adding or changing a gate, run `uv run gate-cache --skill` and follow it. Wrap a new gate with the `gated()` helper in `duties.py`.
 
 To run a single test, invoke pytest directly through `uv`:
 
