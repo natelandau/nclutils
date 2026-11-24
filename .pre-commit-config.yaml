@@ -116,6 +116,14 @@ repos:
         types: [python]
         stages: [pre-commit, pre-push, manual]
 
+      - id: actionlint
+        name: actionlint
+        entry: uv run duty actionlint
+        language: system
+        pass_filenames: false
+        files: ^\.github/(workflows|actions)/
+        stages: [pre-commit, pre-push, manual]
+
       - id: pytest
         name: pytest
         entry: uv run duty test

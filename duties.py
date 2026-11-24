@@ -117,15 +117,21 @@ def typos(ctx: Context) -> None:
     )
 
 
+@duty
+def actionlint(ctx: Context) -> None:
+    """Check the GitHub Actions workflows with actionlint."""
+    ctx.run(["actionlint"], title=pyprefix("actionlint"))
+
+
 @duty(skip_if=CI, skip_reason="skip prek in CI environments")
 def prek(ctx: Context) -> None:
     """Run prek hooks."""
     # These hooks call the duties above, which lint already runs
-    os.environ["SKIP"] = "ruff,format,ty,typos,pytest"
+    os.environ["SKIP"] = "ruff,format,ty,typos,actionlint,pytest"
     ctx.run(gated("prek", "prek", "run", "--all-files"), title=pyprefix("prek hooks"))
 
 
-@duty(pre=[ruff, format, ty, typos, prek], capture=CI)
+@duty(pre=[ruff, format, ty, typos, actionlint, prek], capture=CI)
 def lint(ctx: Context) -> None:
     """Run all linting duties."""
 

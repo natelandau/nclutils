@@ -30,6 +30,7 @@
 
 [dependency-groups]
     dev = [
+        "actionlint-py>=1.7.12.25",
         "commitizen>=4.19.2",
         "coverage>=7.16.2",
         "duty>=1.10.1",
