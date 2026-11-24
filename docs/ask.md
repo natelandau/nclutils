@@ -3,7 +3,7 @@
 Two wrappers around [questionary](https://github.com/tmbo/questionary) for the most common interactive prompts: pick one item or pick many. Import them from `nclutils.ask`.
 
 > [!NOTE]
-> `nclutils.questions` is a deprecated alias of `nclutils.ask`. It raises a `DeprecationWarning` on import and is scheduled for removal in v4.0.0. Import from `nclutils.ask` instead.
+> `nclutils.questions` is a deprecated alias of `nclutils.ask`. It raises a `DeprecationWarning` on import and will be removed in a future major release. Import from `nclutils.ask` instead.
 
 ```python
 from nclutils.ask import choose_one_from_list
@@ -13,7 +13,7 @@ color = choose_one_from_list(["red", "green", "blue"], "Pick a color")
 
 ## Single selection
 
-`choose_one_from_list(choices, message)` shows a select widget and returns the chosen value. It returns `None` if the choices list is empty or the user presses Ctrl-C. It also returns `None` if the chosen value is falsy, such as `0`, `False`, or `""`.
+`choose_one_from_list(choices, message)` shows a select widget and returns the chosen value. It returns `None` if the choices list is empty or the user presses Ctrl-C. A falsy value such as `0`, `False`, or `""` is returned like any other value.
 
 ```python
 from nclutils.ask import choose_one_from_list

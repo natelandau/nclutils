@@ -130,3 +130,31 @@ def test_ensure_lines_in_file_no_changes(tmp_path: Path) -> None:
         == """\
 This is a test file.\nsome text\nGallia est omnis divisa in partes tres, quarum."""
     )
+
+
+@pytest.mark.parametrize(
+    ("original", "lines", "expected"),
+    [
+        pytest.param(
+            "build\n", ["*.pyc", "dist/"], "build\n*.pyc\ndist/\n", id="regex-metacharacters"
+        ),
+        pytest.param("xcache\n", [".cache"], "xcache\n.cache\n", id="dot-is-literal"),
+        pytest.param("a\n", ["b"], "a\nb\n", id="keeps-trailing-newline"),
+        pytest.param("a", ["b"], "a\nb", id="no-trailing-newline"),
+        pytest.param("", ["b"], "b", id="empty-file"),
+    ],
+)
+def test_ensure_lines_in_file_matches_literal_lines(
+    tmp_path: Path, original: str, lines: list[str], expected: str
+) -> None:
+    """Verify lines are matched literally and appended without stray blank lines."""
+    # Given: A file with known content
+    path = tmp_path / "test.txt"
+    path.write_text(original)
+
+    # When: Ensuring the lines are present
+    changed = ensure_lines_in_file(path, lines)
+
+    # Then: Missing lines are appended as written, separated by single newlines
+    assert changed
+    assert path.read_text() == expected

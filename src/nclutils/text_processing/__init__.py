@@ -1,9 +1,9 @@
-"""Deprecated alias for nclutils.text. Removed in v4.0.0."""
+"""Deprecated alias for nclutils.text. To be removed in a future major release."""
 
 import warnings
 
 warnings.warn(
-    "nclutils.text_processing is deprecated and will be removed in v4.0.0. "
+    "nclutils.text_processing is deprecated and will be removed in a future major release. "
     "Use nclutils.text instead.",
     DeprecationWarning,
     stacklevel=2,

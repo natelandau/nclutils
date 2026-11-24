@@ -1,9 +1,9 @@
-"""Deprecated alias for nclutils.ask. Removed in v4.0.0."""
+"""Deprecated alias for nclutils.ask. To be removed in a future major release."""
 
 import warnings
 
 warnings.warn(
-    "nclutils.questions is deprecated and will be removed in v4.0.0. Use nclutils.ask instead.",
+    "nclutils.questions is deprecated and will be removed in a future major release. Use nclutils.ask instead.",
     DeprecationWarning,
     stacklevel=2,
 )

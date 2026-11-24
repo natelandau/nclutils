@@ -237,25 +237,23 @@ class TestLogFmtOverride:
 class TestVerboseElapsedTagInLogfile:
     """The `[+s.fffs]` elapsed tag from debug/trace appears inline in the file."""
 
-    def test_debug_logfile_record_includes_elapsed_tag(self, tmp_path: Path) -> None:
-        """Verify debug() inlines the elapsed tag into the file's message text."""
-        # Given an Emitter at DEBUG loglevel and DEBUG verbosity
+    @pytest.mark.parametrize("method", ["debug", "trace"])
+    def test_logfile_record_includes_plain_elapsed_tag(self, tmp_path: Path, method: str) -> None:
+        """Verify debug() and trace() write the elapsed tag to the file as plain text."""
+        # Given an Emitter that logs and shows everything
         path = tmp_path / "run.log"
         e = Emitter(
             logfile=path,
-            loglevel=LogLevel.DEBUG,
-            verbosity=Verbosity.DEBUG,
+            loglevel=LogLevel.TRACE,
+            verbosity=Verbosity.TRACE,
         )
 
-        # When debug emits
-        e.debug("step done")
+        # When the verbose level emits
+        getattr(e, method)("step done")
 
-        # Then the file line contains the inlined `[+s.fffs]` tag
+        # Then the line ends with `step done  [+s.fffs]`, with no Rich escape backslash
         line = path.read_text(encoding="utf-8").splitlines()[0]
-        assert "step done" in line
-        # Tag shape: `[+0.000s]` -- digit/dot/digits/`s]`
-
-        assert re.search(r"\[\+\d+\.\d{3}s\]", line), f"missing elapsed tag in: {line!r}"
+        assert re.search(r"step done  \[\+\d+\.\d{3}s\]$", line), f"bad elapsed tag in: {line!r}"
 
 
 class TestReconfiguration:
@@ -478,15 +476,16 @@ class TestStepLifecycleInLogfile:
         succeeded_idx = next(i for i, line in enumerate(lines) if "succeeded: build assets" in line)
         assert starting_idx < succeeded_idx
 
+    @pytest.mark.parametrize("ephemeral", [False, True], ids=["persistent", "ephemeral"])
     def test_step_failure_writes_starting_and_failed_with_continuation(
-        self, tmp_path: Path
+        self, tmp_path: Path, ephemeral: bool
     ) -> None:
-        """Verify a step calling fail(exception=) writes 'starting:' then 'failed:' at ERROR with the exception as a continuation."""
+        """Verify a step calling fail(exception=) writes 'starting:' then one 'failed:' ERROR record with the exception as a continuation."""
         path = tmp_path / "run.log"
         e = Emitter(logfile=path)
 
         msg = "boom"
-        with e.step("flaky thing") as s:
+        with e.step("flaky thing", ephemeral=ephemeral) as s:
             try:
                 raise RuntimeError(msg)
             except RuntimeError as caught:
@@ -494,9 +493,9 @@ class TestStepLifecycleInLogfile:
 
         lines = path.read_text(encoding="utf-8").splitlines()
         assert any("starting: flaky thing" in line and "INFO" in line for line in lines)
-        failed_lines = [line for line in lines if "failed: flaky thing" in line]
-        assert len(failed_lines) == 1
-        assert "ERROR" in failed_lines[0]
+        error_records = [line for line in lines if "ERROR" in line and "flaky thing" in line]
+        assert len(error_records) == 1
+        assert "failed: flaky thing" in error_records[0]
         cont_lines = [line for line in lines if "RuntimeError" in line and "boom" in line]
         assert len(cont_lines) == 1
         assert "ERROR" in cont_lines[0]
