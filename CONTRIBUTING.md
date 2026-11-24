@@ -20,7 +20,7 @@ This project uses [uv](https://docs.astral.sh/uv/) for dependency management. To
 3. Navigate to the repository: `cd nclutils`
 4. Install dependencies with uv: `uv sync`
 5. Activate your virtual environment: `source .venv/bin/activate`
-6. Install pre-commit hooks: `pre-commit install --install-hooks`
+6. Install the git hooks with [prek](https://prek.j178.dev/): `uv run prek install --prepare-hooks`
 
 ### Running Tasks
 

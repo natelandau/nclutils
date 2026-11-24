@@ -8,7 +8,7 @@ This project uses [`duty`](https://pawamoy.github.io/duty/) as the task runner a
 
 ```bash
 uv sync                         # install/refresh dependencies
-pre-commit install --install-hooks   # one-time hook setup
+uv run prek install --prepare-hooks   # one-time git hook setup
 
 duty --list                     # discover all tasks
 duty test                       # run pytest with coverage
@@ -34,7 +34,7 @@ uv run pytest tests/filesystem/test_copy.py -k "backup"
 
 `pytest` is configured in the `[tool.pytest]` table of `pyproject.toml`. It runs against both `tests/` and `src/` with `--xdoctest --exitfirst --failed-first`, so doctests in source docstrings are part of the suite. Strict mode is on: unknown markers, config keys, and duplicate parametrize IDs are errors, and an `xfail` test that passes fails. Every warning is an error.
 
-`duty test` runs the suite in parallel with `pytest-xdist`, so every test must pass alone and in any order, with no state shared across tests. A direct `uv run pytest` runs serially unless you add `-n auto`.
+`duty test` runs the suite in parallel with `pytest-xdist`, and `pytest-randomly` shuffles the test order on every run, so every test must pass alone and in any order, with no state shared across tests. A direct `uv run pytest` runs serially unless you add `-n auto`. To repeat a failing order, pass the `--randomly-seed` value that pytest prints in its header; `-p no:randomly` turns shuffling off.
 
 ## Architecture
 
@@ -76,7 +76,7 @@ Tests follow a strict house style enforced by code review (not lint):
 
 ## Commits and branches
 
-Commits are enforced by the `committed` pre-commit hook. The format is conventional commits with these allowed types: `build`, `bump`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style`, `test`. Header: `<type>(<scope>): <subject>` with imperative-mood, lowercase subject, no trailing period, ≤70 chars.
+Commits are enforced by the `committed` pre-commit hook. The format is conventional commits with these allowed types: `build`, `bump`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style`, `test`. Header: `<type>(<scope>): <subject>` with imperative-mood, lowercase subject, no trailing period, at most 60 characters. Body lines are at most 60 characters too.
 
 Always work on a feature branch (`feat/<name>`, `fix/<name>`, `refactor/<name>`). Never commit to `main` or push to `origin/main` without explicit permission.
 
