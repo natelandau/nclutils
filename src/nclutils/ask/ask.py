@@ -56,10 +56,7 @@ def choose_one_from_list(
         message: The prompt text shown to the user
 
     Returns:
-        The selected value from the choices list, or None if:
-        - No selection was made
-        - The choices list is empty
-        - The user cancelled the selection
+        The selected value from the choices list, or None if the choices list is empty or the user cancelled the prompt.
     """
     if not choices:
         return None
@@ -78,12 +75,8 @@ def choose_one_from_list(
         else:
             select_list.append(questionary.Choice(title=str(c), value=c))
 
-    selection = questionary.select(message, choices=select_list, style=CHOICE_STYLE, qmark="").ask()
-
-    if selection is None or not selection:
-        return None
-
-    return selection
+    # A falsy value such as 0 or "" is a valid selection; questionary returns None only on cancel
+    return questionary.select(message, choices=select_list, style=CHOICE_STYLE, qmark="").ask()
 
 
 @overload

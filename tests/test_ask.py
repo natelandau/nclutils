@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+import pytest
 import questionary
 from pytest_mock import MockerFixture
 
@@ -265,3 +266,21 @@ def test_choose_from_list_no_selection_multiple(mocker: MockerFixture) -> None:
 
     # Then: None is returned
     assert result is None
+
+
+@pytest.mark.parametrize("falsy_value", [0, False, ""])
+def test_choose_from_list_returns_falsy_selection(
+    mocker: MockerFixture, falsy_value: object
+) -> None:
+    """Verify a selected choice whose value is falsy is returned, not treated as a cancel."""
+    # Given: Choices whose values include a falsy value
+    choices = [("zero", falsy_value), ("one", 1)]
+    mock_select = mocker.patch("questionary.select", autospec=True)
+    mock_select.return_value.ask.return_value = falsy_value
+
+    # When: The user selects the falsy choice
+    result = choose_one_from_list(choices, "Choose a value")
+
+    # Then: The falsy value comes back
+    assert result == falsy_value
+    assert result is not None

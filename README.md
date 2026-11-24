@@ -105,7 +105,7 @@ Each large module has its own guide. The two smallest modules are described in t
 ### `nclutils.text`
 
 - `replace_in_file(path, replacements, *, use_regex=False)` applies a dict of replacements to a file in place. It returns `True` if the file changed.
-- `ensure_lines_in_file(path, lines, *, at_top=False)` adds each line that is not already in the file. It returns `True` if the file changed.
+- `ensure_lines_in_file(path, lines, *, at_top=False)` adds each line that is not already in the file, compared as exact text. It returns `True` if the file changed.
 
 ```python
 from nclutils.text import ensure_lines_in_file, replace_in_file
@@ -115,7 +115,7 @@ replace_in_file("config.toml", {"old": "new"})
 # Regex mode: each key is a pattern, matched with re.MULTILINE
 replace_in_file("config.toml", {r"^old": "new"}, use_regex=True)
 
-ensure_lines_in_file(".gitignore", ["build", "dist"])
+ensure_lines_in_file(".gitignore", ["build", "*.pyc"])
 ```
 
 ## Diagnostic logging

@@ -38,10 +38,9 @@ Returns `None` when:
 
 - `choices` is empty.
 - User presses Ctrl-C (Esc does not cancel).
-- `choose_one_from_list`: the chosen value is falsy (`0`, `False`, `""`). The code checks `not selection`. Use `(label, value)` tuples with truthy values when a falsy value is a valid answer.
 - `choose_multiple_from_list`: user submits with nothing selected. Never returns `[]`.
 
-Deprecated alias `nclutils.questions`: emits `DeprecationWarning` on import ("nclutils.questions is deprecated and will be removed in v4.0.0. Use nclutils.ask instead."). Import from `nclutils.ask`.
+Deprecated alias `nclutils.questions`: emits `DeprecationWarning` on import ("nclutils.questions is deprecated and will be removed in a future major release. Use nclutils.ask instead."). Import from `nclutils.ask`.
 
 ## `nclutils.net`
 
@@ -59,7 +58,7 @@ from nclutils.net import network_available
 network_available(address="github.com", port=443, timeout=2)
 ```
 
-Deprecated alias `nclutils.network`: emits `DeprecationWarning` on import ("nclutils.network is deprecated and will be removed in v4.0.0. Use nclutils.net instead."). Import from `nclutils.net`.
+Deprecated alias `nclutils.network`: emits `DeprecationWarning` on import ("nclutils.network is deprecated and will be removed in a future major release. Use nclutils.net instead."). Import from `nclutils.net`.
 
 ## `nclutils.text`
 
@@ -84,13 +83,11 @@ replace_in_file(path: str | Path, replacements: dict[str, str], *, use_regex: bo
 ensure_lines_in_file(path: str | Path, lines: list[str], *, at_top: bool = False) -> bool
 ```
 
-Adds each line not already present. `at_top=True` prepends.
+Adds each line not already present. A line is present when a whole line of the file equals it exactly (no regex). `at_top=True` prepends. Writes only when a line is added.
 
 Gotchas:
 
-- Each line is used twice: as a regex for the presence check (`re.search(rf"^{line}$", content, flags=re.MULTILINE)`) and as the literal text written. `"*.pyc"` raises `re.error`; `"foo.bar"` matches an existing `fooXbar` and is skipped. `re.escape(line)` fixes the check but writes the backslashes into the file (`\*\.pyc`).
-- Line with regex metacharacters: check and append it yourself instead. Line without them, or with only `.` where a false match is harmless: pass it as is.
-- Appending adds `"\n" + line` per line. File ending in `\n` -> blank line before the appended lines. Empty file -> leading blank line. No trailing newline after the last appended line.
+- Appended lines keep the file's trailing-newline convention: `"a\n"` -> `"a\nb\n"`, `"a"` -> `"a\nb"`, `""` -> `"b"`. Duplicate input lines are added once.
 - `at_top=True` prepends each line in turn, so multiple lines land in reverse order: `["a", "b"]` -> `"b\na\n..."`.
 - Raises `FileNotFoundError` and other `OSError` (unlike `replace_in_file`).
 
@@ -100,7 +97,7 @@ from nclutils.text import ensure_lines_in_file
 ensure_lines_in_file(".gitignore", [".env", "build/"])
 ```
 
-Deprecated alias `nclutils.text_processing`: emits `DeprecationWarning` on import ("nclutils.text_processing is deprecated and will be removed in v4.0.0. Use nclutils.text instead."). Import from `nclutils.text`.
+Deprecated alias `nclutils.text_processing`: emits `DeprecationWarning` on import ("nclutils.text_processing is deprecated and will be removed in a future major release. Use nclutils.text instead."). Import from `nclutils.text`.
 
 ## `nclutils.utils`
 

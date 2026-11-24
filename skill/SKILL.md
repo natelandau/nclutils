@@ -49,7 +49,7 @@ Before writing code for one of these tasks, use the listed helper.
 | Long-running step with a spinner | `with pp.step("...") as s: s.sub("...")` | Does not nest; use `s.sub()` for sub-items. |
 | Section header | `pp.header("title")` | Rule line with optional title. |
 | Aligned key/value summary | `pp.kv({"Branch": "main"})` | Hidden on console by `quiet=True`; still logged. |
-| Pick one or several items interactively | `ask.choose_one_from_list` / `choose_multiple_from_list` | Returns `None` on Ctrl-C. `choose_one_from_list` also returns `None` for a falsy choice value (`0`, `False`, `""`). |
+| Pick one or several items interactively | `ask.choose_one_from_list` / `choose_multiple_from_list` | Returns `None` on Ctrl-C. |
 | Copy a file | `fs.copy_file(src, dst)` | Backs up an existing `dst` by default. Keeps mode, not modification time. Returns `dst`. |
 | Copy a directory | `fs.copy_directory(src, dst)` | Not `shutil.copytree`: an existing `dst` is backed up and replaced, not merged into. Follows symlinks. |
 | Back up a path before changing it | `fs.backup_path(path)` | Writes `path.<timestamp>-<uid>.bak`. Returns `Path \| None`. Does not expand `~`. |
@@ -72,7 +72,7 @@ Before writing code for one of these tasks, use the listed helper.
 | Any other git command | `git.run_git("log", "--oneline", "-5")` | Returns `CompletedCommand`. |
 | Check TCP reachability | `net.network_available()` | Default `8.8.4.4:53`, 5-second timeout. |
 | Replace text in a file | `text.replace_in_file(path, {"old": "new"})` | `use_regex=True` for regex keys. Returns `True` if the file changed. |
-| Add lines to a file if missing | `text.ensure_lines_in_file(path, ["build", "dist"])` | Each line is also a regex matched as `^line$`, and is written as given. If a line has regex metacharacters (`*.pyc`), check for and append it yourself. Returns `True` if changed. |
+| Add lines to a file if missing | `text.ensure_lines_in_file(path, ["build", "*.pyc"])` | Exact whole-line match, not regex. Returns `True` if changed. |
 | Convert case | `strings.snake_case(text)` (also `camel_case`, `kebab_case`, `pascal_case`, `separator_case`) | Removes accents and apostrophes, splits on underscores. Does not split camelCase: `snake_case("fooBar")` -> `"foobar"`. |
 | Remove accents | `strings.deburr(text)` | Latin-1 letters only. |
 | Remove ANSI escape codes | `strings.strip_ansi(text)` |  |

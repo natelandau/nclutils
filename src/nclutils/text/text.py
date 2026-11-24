@@ -49,12 +49,14 @@ def replace_in_file(
 
 
 def ensure_lines_in_file(path: str | Path, lines: list[str], *, at_top: bool = False) -> bool:
-    """Ensure lines are in a file.
+    """Add each line that the file does not already contain, for idempotent edits to config files such as `.gitignore`.
+
+    A line counts as present only when a whole line of the file equals it exactly. Appended lines keep the file's trailing-newline convention.
 
     Args:
-        path (str): Path to the file to ensure the line is in.
-        lines (list[str]): The lines to ensure are in the file.
-        at_top (bool): Whether to add the lines at the top of the file. Defaults to False.
+        path (str | Path): Path to the file to edit.
+        lines (list[str]): The lines that must be present in the file.
+        at_top (bool): Insert missing lines at the top of the file instead of the end. Lines inserted at the top appear in reverse order. Defaults to False.
 
     Returns:
         bool: True if lines were added, False otherwise.
@@ -62,15 +64,19 @@ def ensure_lines_in_file(path: str | Path, lines: list[str], *, at_top: bool = F
     path = Path(path) if not isinstance(path, Path) else path
 
     original_content = path.read_text(encoding="utf-8")
-    new_content = original_content
+    present = set(original_content.splitlines())
+    missing = [line for line in dict.fromkeys(lines) if line not in present]
+    if not missing:
+        return False
 
-    for line in lines:
-        if not re.search(rf"^{line}$", new_content, flags=re.MULTILINE):
-            if at_top:
-                new_content = f"{line}\n{new_content}"
-            else:
-                new_content += f"\n{line}"
+    if at_top:
+        new_content = "".join(f"{line}\n" for line in reversed(missing)) + original_content
+    else:
+        ends_with_newline = original_content.endswith("\n")
+        separator = "\n" if original_content and not ends_with_newline else ""
+        new_content = original_content + separator + "\n".join(missing)
+        if ends_with_newline:
+            new_content += "\n"
 
     path.write_text(new_content, encoding="utf-8")
-
-    return original_content != new_content
+    return True
